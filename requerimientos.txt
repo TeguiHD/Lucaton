@@ -1,0 +1,36 @@
+#################################################################
+LUCATÓN — REQUERIMIENTOS (ÍNDICE)
+Versión: 1.8 | Fecha: 23/Sep/2025
+#################################################################
+
+Este archivo es un índice. Los requerimientos se modularizaron en la carpeta `requerimientos/` para facilitar su análisis por TRAE/Claude.
+
+Archivos clave
+- requerimientos/README.md — Índice de módulos
+- requerimientos/01-resumen-alcance.md — Resumen, alcance y opcionales
+- requerimientos/02-stack-y-configuracion.md — Stack, Tailwind (build local con pnpm), CSP, .env
+- requerimientos/03-modelo-datos-y-sql.md — Modelo y SQL (BD + índices + usuario mínimo)
+- requerimientos/04-requisitos-funcionales.md — Roles, funcionalidades, casos de uso
+- requerimientos/05-requisitos-no-funcionales-y-seguridad.md — Seguridad, rendimiento, accesibilidad, mantenibilidad, .htaccess y php.ini
+- requerimientos/06-plan-fases.md — Plan en 6 semanas
+- requerimientos/07-ia-prompts-implementacion.md — Prompts IA e implementación (PHP cURL)
+- requerimientos/08-ui-guia.md — Guía UI/UX mobile‑first
+- requerimientos/09-ui-paleta.md — Paleta de colores de marca
+- requerimientos/10-ui-componentes.md — Partials PHP reutilizables
+- requerimientos/11-ui-clases-tailwind.md — Clases Tailwind de componentes
+- requerimientos/12-endpoints.md — Endpoints MVP
+- requerimientos/13-tailwind-pnpm.md — Build local con pnpm y safelist
+- requerimientos/14-env-plantilla.md — Plantilla .env
+- requerimientos/15-criterios-tesis.md — Criterios y entregables de tesis
+ - requerimientos/00-checklist-implementacion.md — Checklist ejecutable para TRAE/Claude
+- requerimientos/16-ai-extensiones-sugeridas.md — IA adicional (moderación, alt‑text, tags, A/B, embeddings)
+- requerimientos/17-ia-seguridad-y-politicas.md — Políticas, agente global, flujo seguro, control de acceso y auditoría
+ - requerimientos/18-deploy-checklist.md — Checklist de despliegue (Apache/PHP)
+ - requerimientos/19-paginas-mvp.md — Listado de páginas mínimas del MVP
+ - requerimientos/20-plan-semanal.md — Plan semanal con entregables
+
+Decisión por defecto → Tailwind con build local (pnpm) en producción para máximo control de diseño. CDN sólo opcional en desarrollo.
+
+#################################################################
+FIN DEL ÍNDICE
+#################################################################

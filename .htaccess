@@ -1,0 +1,87 @@
+# Lucatón - Configuración Apache
+# Basado en requerimientos de seguridad y CSP
+
+# Habilitar reescritura de URLs
+RewriteEngine On
+
+# Redirigir todo el tráfico a HTTPS en producción
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Enrutamiento principal - todo va a index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Headers de seguridad (según requerimientos OWASP)
+<IfModule mod_headers.c>
+    # Content Security Policy
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';"
+    
+    # Otros headers de seguridad
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+    
+    # Remover headers que revelan información del servidor
+    Header unset Server
+    Header unset X-Powered-By
+</IfModule>
+
+## Proteger archivos sensibles (Apache 2.4+ compatible)
+<Files ".env">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+    Satisfy All
+</Files>
+
+<Files "*.log">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+    Satisfy All
+</Files>
+
+# Proteger directorios privados
+RedirectMatch 403 ^/storage/private/.*$
+RedirectMatch 403 ^/storage/logs/.*$
+RedirectMatch 403 ^/config/.*$
+RedirectMatch 403 ^/app/.*$
+
+# NOTA: Las directivas <Directory> no están permitidas en .htaccess.
+# Se agrega un .htaccess dedicado dentro de public/storage/uploads para restricciones de ejecución.
+
+# Compresión GZIP para mejor rendimiento
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+</IfModule>
+
+# Cache para assets estáticos
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+</IfModule>

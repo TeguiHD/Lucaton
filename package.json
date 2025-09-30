@@ -1,0 +1,41 @@
+{
+  "name": "lucaton-crowdfunding",
+  "version": "1.0.0",
+  "description": "Plataforma de crowdfunding social con asistencia IA para mitigar la brecha digital",
+  "scripts": {
+    "build-css": "tailwindcss -i assets/input.css -o public/assets/css/app.css --minify && node scripts/clean-css.js",
+    "watch-css": "tailwindcss -i assets/input.css -o public/assets/css/app.css --watch",
+    "dev": "pnpm run watch-css",
+    "clean-css": "node scripts/clean-css.js"
+  },
+  "keywords": [
+    "crowdfunding",
+    "social",
+    "ai",
+    "chile",
+    "accessibility",
+    "thesis"
+  ],
+  "author": "Estudiante Tesis",
+  "license": "Academic",
+  "devDependencies": {
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.18",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usuario/lucaton.git"
+  },
+  "bugs": {
+    "url": "https://github.com/usuario/lucaton/issues"
+  },
+  "homepage": "https://github.com/usuario/lucaton#readme"
+}

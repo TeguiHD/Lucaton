@@ -1,0 +1,73 @@
+# Composer dependencies
+/vendor/
+composer.phar
+composer-setup.php
+
+# Environment files (contain sensitive data)
+.env
+.env.local
+.env.production
+
+# Logs
+/storage/logs/*.log
+*.log
+
+# Cache files
+/storage/cache/*
+/.phpunit.cache/
+/storage/private/*
+
+# Uploaded files and user content
+/public/storage/uploads/*
+/public/storage/avatars/*
+/storage/ai_files/*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js dependencies (if using npm/pnpm)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+/public/assets/css/output.css
+/dist/
+/build/
+
+# Temporary files
+*.tmp
+*.temp
+
+# PHPUnit coverage reports
+/coverage/
+clover.xml
+
+# Backup files
+*.bak
+*.backup
+
+# Lock files (keep composer.lock but ignore others if needed)
+# composer.lock  # Uncomment if you don't want to track composer.lock
+
+# Keep important empty directories
+!storage/logs/.gitkeep
+!storage/cache/.gitkeep
+!storage/private/.gitkeep
+!public/storage/uploads/.gitkeep
+!public/storage/avatars/.gitkeep

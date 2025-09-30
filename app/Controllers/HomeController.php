@@ -1,0 +1,588 @@
+<?php
+class HomeController {
+    private Database $db;
+    private CampaignCategory $categoryRepository;
+    private array $categoryMap = [];
+    private array $fallbackCategories = [
+        'tecnologia' => 'Tecnología',
+        'arte' => 'Arte',
+        'musica' => 'Música',
+        'cine' => 'Cine',
+        'juegos' => 'Juegos',
+        'educacion' => 'Educación',
+        'salud' => 'Salud',
+        'medio_ambiente' => 'Medio Ambiente'
+    ];
+    private bool $hasModularSchema = false;
+    private array $campaignColumns = [];
+    private array $detailsColumns = [];
+    private array $metricsColumns = [];
+    private array $categoryColumns = [];
+    private bool $hasVisibilityColumn = false;
+    private string $ownerColumn = 'owner_id';
+
+    public function __construct() {
+        $this->db = Database::getInstance();
+        $this->categoryRepository = new CampaignCategory();
+        $this->categoryMap = $this->categoryRepository->mapBySlug();
+        $this->detectSchema();
+    }
+
+    public function index() {
+        $current_page = 'home';
+        $featured_campaigns = $this->fetchFeaturedCampaigns();
+        $impact_stats = $this->fetchImpactStats();
+        $top_categories = $this->fetchTopCategories();
+        $success_stories = $this->fetchSuccessStories();
+        $category_options = $this->getCategoryOptions();
+        $recent_campaigns = $this->fetchRecentCampaigns();
+        $urgent_campaigns = $this->filterUrgentCampaigns($recent_campaigns);
+        include VIEWS_PATH . '/public/index.php';
+    }
+
+    private function fetchFeaturedCampaigns(): array {
+        if ($this->hasModularSchema) {
+            try {
+                return $this->fetchFeaturedCampaignsModular();
+            } catch (Exception $e) {
+                Logger::warning('Failed to fetch featured campaigns (modular)', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->fetchFeaturedCampaignsLegacy();
+    }
+
+    private function fetchRecentCampaigns(): array {
+        if ($this->hasModularSchema) {
+            try {
+                return $this->fetchRecentCampaignsModular();
+            } catch (Exception $e) {
+                Logger::warning('Failed to fetch recent campaigns (modular)', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->fetchRecentCampaignsLegacy();
+    }
+
+    private function filterUrgentCampaigns(array $campaigns): array {
+        $urgent = array_filter($campaigns, function ($campaign) {
+            $daysLeft = $campaign['days_left'] ?? null;
+            $status = $campaign['status'] ?? 'draft';
+            return in_array($status, ['published', 'active'], true) && $daysLeft !== null && $daysLeft <= 5;
+        });
+
+        usort($urgent, function ($a, $b) {
+            return ($a['days_left'] ?? PHP_INT_MAX) <=> ($b['days_left'] ?? PHP_INT_MAX);
+        });
+
+        return array_slice($urgent, 0, 3);
+    }
+
+    private function fetchImpactStats(): array {
+        if ($this->hasModularSchema) {
+            try {
+                return $this->fetchImpactStatsModular();
+            } catch (Exception $e) {
+                Logger::warning('Failed to fetch impact stats (modular)', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->fetchImpactStatsLegacy();
+    }
+
+    private function fetchTopCategories(): array {
+        if ($this->hasModularSchema) {
+            try {
+                return $this->fetchTopCategoriesModular();
+            } catch (Exception $e) {
+                Logger::warning('Failed to fetch category summary (modular)', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->fetchTopCategoriesLegacy();
+    }
+
+    private function fetchSuccessStories(): array {
+        if ($this->hasModularSchema) {
+            try {
+                return $this->fetchSuccessStoriesModular();
+            } catch (Exception $e) {
+                Logger::warning('Failed to fetch success stories (modular)', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->fetchSuccessStoriesLegacy();
+    }
+
+    private function detectSchema(): void {
+        $this->campaignColumns = $this->getTableColumns('campaigns');
+        $this->detailsColumns = $this->getTableColumns('campaign_details');
+        $this->metricsColumns = $this->getTableColumns('campaign_metrics');
+        $this->categoryColumns = $this->getTableColumns('campaign_categories');
+
+        $this->hasVisibilityColumn = in_array('visibility', $this->campaignColumns, true);
+        if (in_array('owner_id', $this->campaignColumns, true)) {
+            $this->ownerColumn = 'owner_id';
+        } elseif (in_array('user_id', $this->campaignColumns, true)) {
+            $this->ownerColumn = 'user_id';
+        }
+
+        $requiredCampaign = ['summary', 'story', 'category_id', 'owner_id', 'visibility'];
+        $requiredDetails = ['campaign_id', 'beneficiary_name', 'beneficiary_type', 'location_label'];
+        $requiredMetrics = ['campaign_id', 'raised_amount', 'donor_count', 'share_count', 'view_count'];
+        $requiredCategory = ['id', 'slug', 'name'];
+
+        $this->hasModularSchema =
+            $this->hasColumns($requiredCampaign, $this->campaignColumns) &&
+            $this->hasColumns($requiredDetails, $this->detailsColumns) &&
+            $this->hasColumns($requiredMetrics, $this->metricsColumns) &&
+            $this->hasColumns($requiredCategory, $this->categoryColumns);
+    }
+
+    private function fetchFeaturedCampaignsModular(): array {
+        $rows = $this->db->fetchAll(
+            "SELECT 
+                c.id,
+                c.slug,
+                c.title,
+                c.summary,
+                c.story,
+                c.goal_amount,
+                c.status,
+                c.start_date,
+                c.end_date,
+                c.cover_image_url,
+                c.featured,
+                cm.raised_amount,
+                cm.donor_count,
+                cat.name AS category_name,
+                cat.slug AS category_slug,
+                u.first_name,
+                u.last_name,
+                u.username
+             FROM campaigns c
+             JOIN campaign_metrics cm ON cm.campaign_id = c.id
+             JOIN campaign_categories cat ON cat.id = c.category_id
+             JOIN users u ON u.id = c.owner_id
+             WHERE c.status = 'published' AND c.visibility = 'public'
+             ORDER BY c.featured DESC, cm.raised_amount DESC, c.end_date ASC
+             LIMIT 6"
+        );
+
+        $campaigns = array_map([$this, 'mapCampaignRow'], $rows);
+
+        $campaigns = array_filter($campaigns, function ($item) {
+            $progress = (int)($item['progress'] ?? 0);
+            return $progress >= 70 && $progress < 100;
+        });
+
+        usort($campaigns, function ($a, $b) {
+            return ($b['progress'] ?? 0) <=> ($a['progress'] ?? 0);
+        });
+
+        return array_slice($campaigns, 0, 3);
+    }
+
+    private function fetchFeaturedCampaignsLegacy(): array {
+        $where = ['1 = 1'];
+        if ($this->hasVisibilityColumn) {
+            $where[] = "c.visibility = 'public'";
+        }
+        if (in_array('status', $this->campaignColumns, true)) {
+            $where[] = "c.status IN ('published','active','completed','funded')";
+        }
+
+        $order = 'c.id DESC';
+        if (in_array('featured', $this->campaignColumns, true)) {
+            $order = 'c.featured DESC';
+        } elseif (in_array('created_at', $this->campaignColumns, true)) {
+            $order = 'c.created_at DESC';
+        }
+
+        $select = 'c.*';
+        $joins = '';
+        if (in_array($this->ownerColumn, $this->campaignColumns, true)) {
+            $select .= ', u.first_name, u.last_name, u.username';
+            $joins = "LEFT JOIN users u ON u.id = c.{$this->ownerColumn}";
+        }
+
+        $sql = "SELECT {$select}
+                FROM campaigns c
+                {$joins}
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY {$order}
+                LIMIT 6";
+
+        try {
+            $rows = $this->db->fetchAll($sql);
+        } catch (Exception $e) {
+            Logger::warning('Failed legacy featured query', ['error' => $e->getMessage()]);
+            return [];
+        }
+
+        $campaigns = array_map([$this, 'normalizeLegacyRow'], $rows);
+
+        $campaigns = array_filter($campaigns, function ($item) {
+            $progress = (int)($item['progress'] ?? 0);
+            return $progress >= 70 && $progress < 100;
+        });
+
+        usort($campaigns, function ($a, $b) {
+            return ($b['progress'] ?? 0) <=> ($a['progress'] ?? 0);
+        });
+
+        return array_slice($campaigns, 0, 3);
+    }
+
+    private function fetchRecentCampaignsModular(): array {
+        $rows = $this->db->fetchAll(
+            "SELECT 
+                c.id,
+                c.slug,
+                c.title,
+                c.summary,
+                c.story,
+                c.goal_amount,
+                c.status,
+                c.start_date,
+                c.end_date,
+                c.cover_image_url,
+                cm.raised_amount,
+                cm.donor_count,
+                cat.name AS category_name,
+                cat.slug AS category_slug,
+                u.first_name,
+                u.last_name,
+                u.username
+             FROM campaigns c
+             JOIN campaign_metrics cm ON cm.campaign_id = c.id
+             JOIN campaign_categories cat ON cat.id = c.category_id
+             JOIN users u ON u.id = c.owner_id
+             WHERE c.status IN ('published','completed') AND c.visibility = 'public'
+             ORDER BY c.created_at DESC
+             LIMIT 6"
+        );
+
+        return array_map([$this, 'mapCampaignRow'], $rows);
+    }
+
+    private function fetchRecentCampaignsLegacy(): array {
+        $where = ['1 = 1'];
+        if ($this->hasVisibilityColumn) {
+            $where[] = "c.visibility = 'public'";
+        }
+        if (in_array('status', $this->campaignColumns, true)) {
+            $where[] = "c.status IN ('published','active','completed','funded')";
+        }
+
+        $order = in_array('created_at', $this->campaignColumns, true) ? 'c.created_at DESC' : 'c.id DESC';
+
+        $select = 'c.*';
+        $joins = '';
+        if (in_array($this->ownerColumn, $this->campaignColumns, true)) {
+            $select .= ', u.first_name, u.last_name, u.username';
+            $joins = "LEFT JOIN users u ON u.id = c.{$this->ownerColumn}";
+        }
+
+        $sql = "SELECT {$select}
+                FROM campaigns c
+                {$joins}
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY {$order}
+                LIMIT 6";
+
+        try {
+            $rows = $this->db->fetchAll($sql);
+        } catch (Exception $e) {
+            Logger::warning('Failed legacy recent query', ['error' => $e->getMessage()]);
+            return [];
+        }
+
+        return array_map([$this, 'normalizeLegacyRow'], $rows);
+    }
+
+    private function fetchImpactStatsModular(): array {
+        $campaignStats = $this->db->fetch(
+            "SELECT 
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS active
+             FROM campaigns
+             WHERE visibility = 'public'"
+        ) ?: ['total' => 0, 'completed' => 0, 'active' => 0];
+
+        $donationStats = $this->db->fetch(
+            "SELECT COALESCE(SUM(amount),0) AS total_amount, COUNT(*) AS total_donations
+             FROM donations WHERE status = 'completed'"
+        ) ?: ['total_amount' => 0, 'total_donations' => 0];
+
+        $communities = $this->db->fetch(
+            "SELECT COUNT(DISTINCT cd.location_label) AS total
+             FROM campaign_details cd
+             JOIN campaigns c ON cd.campaign_id = c.id
+             WHERE cd.location_label IS NOT NULL AND cd.location_label <> ''"
+        ) ?: ['total' => 0];
+
+        return [
+            'supporters' => (int)$donationStats['total_donations'],
+            'raised' => (float)$donationStats['total_amount'],
+            'active_campaigns' => (int)$campaignStats['active'],
+            'hours' => (int)$communities['total'],
+            'communities' => (int)$communities['total']
+        ];
+    }
+
+    private function fetchImpactStatsLegacy(): array {
+        $campaignStats = ['total' => 0, 'completed' => 0, 'active' => 0];
+        try {
+            $campaignStats = $this->db->fetch(
+                "SELECT 
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN status IN ('completed','funded','ended') THEN 1 ELSE 0 END) AS completed,
+                    SUM(CASE WHEN status IN ('published','active') THEN 1 ELSE 0 END) AS active
+                 FROM campaigns"
+            ) ?: $campaignStats;
+        } catch (Exception $e) {
+            Logger::warning('Failed legacy campaign stats', ['error' => $e->getMessage()]);
+        }
+
+        $donationStats = ['total_amount' => 0, 'total_donations' => 0];
+        try {
+            $donationStats = $this->db->fetch(
+                "SELECT COALESCE(SUM(amount),0) AS total_amount, COUNT(*) AS total_donations
+                 FROM donations"
+            ) ?: $donationStats;
+        } catch (Exception $e) {
+            Logger::warning('Failed legacy donation stats', ['error' => $e->getMessage()]);
+        }
+
+        $communitiesTotal = 0;
+        $locationColumn = in_array('location_label', $this->campaignColumns, true) ? 'location_label' : (in_array('location', $this->campaignColumns, true) ? 'location' : null);
+        if ($locationColumn !== null) {
+            try {
+                $row = $this->db->fetch("SELECT COUNT(DISTINCT {$locationColumn}) AS total FROM campaigns WHERE {$locationColumn} IS NOT NULL AND {$locationColumn} <> ''");
+                $communitiesTotal = (int)($row['total'] ?? 0);
+            } catch (Exception $e) {
+                Logger::warning('Failed legacy communities stats', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            'supporters' => (int)($donationStats['total_donations'] ?? 0),
+            'raised' => (float)($donationStats['total_amount'] ?? 0),
+            'active_campaigns' => (int)($campaignStats['active'] ?? 0),
+            'hours' => $communitiesTotal,
+            'communities' => $communitiesTotal
+        ];
+    }
+
+    private function fetchTopCategoriesModular(): array {
+        $rows = $this->db->fetchAll(
+            "SELECT 
+                cat.slug,
+                cat.name,
+                COUNT(*) AS total,
+                SUM(CASE WHEN c.status = 'published' THEN 1 ELSE 0 END) AS active
+             FROM campaigns c
+             JOIN campaign_categories cat ON cat.id = c.category_id
+             WHERE c.visibility = 'public'
+             GROUP BY cat.id, cat.slug, cat.name
+             ORDER BY total DESC
+             LIMIT 6"
+        );
+
+        return array_map(function ($row) {
+            return [
+                'key' => $row['slug'],
+                'label' => $row['name'],
+                'total' => (int)$row['total'],
+                'active' => (int)$row['active']
+            ];
+        }, $rows);
+    }
+
+    private function fetchTopCategoriesLegacy(): array {
+        if (in_array('category', $this->campaignColumns, true)) {
+            try {
+                $rows = $this->db->fetchAll(
+                    "SELECT category AS cat, COUNT(*) AS total
+                     FROM campaigns
+                     WHERE category IS NOT NULL AND category <> ''
+                     GROUP BY category
+                     ORDER BY total DESC
+                     LIMIT 6"
+                );
+
+                return array_map(function ($row) {
+                    $label = $this->fallbackCategories[$row['cat']] ?? ucfirst(str_replace('_', ' ', $row['cat']));
+                    return [
+                        'key' => $row['cat'],
+                        'label' => $label,
+                        'total' => (int)$row['total'],
+                        'active' => (int)$row['total']
+                    ];
+                }, $rows);
+            } catch (Exception $e) {
+                Logger::warning('Failed legacy top categories', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return [];
+    }
+
+    private function fetchSuccessStoriesModular(): array {
+        $rows = $this->db->fetchAll(
+            "SELECT 
+                c.slug,
+                c.title,
+                c.story,
+                c.cover_image_url,
+                cm.raised_amount,
+                u.first_name,
+                u.last_name,
+                u.username
+             FROM campaigns c
+             JOIN campaign_metrics cm ON cm.campaign_id = c.id
+             JOIN users u ON c.owner_id = u.id
+             WHERE c.status = 'completed' AND c.visibility = 'public'
+             ORDER BY c.updated_at DESC
+             LIMIT 3"
+        );
+
+        return array_map(function ($row) {
+            $creator = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            if ($creator === '') {
+                $creator = $row['username'] ?? 'Campañista';
+            }
+
+            return [
+                'title' => $row['title'],
+                'excerpt' => substr($row['story'] ?? '', 0, 220),
+                'raised_amount' => (float)($row['raised_amount'] ?? 0),
+                'creator' => $creator,
+                'image_url' => $row['cover_image_url'] ?: APP_URL . '/public/assets/images/campaigns/escuela-rural.svg',
+                'slug' => $row['slug']
+            ];
+        }, $rows);
+    }
+
+    private function fetchSuccessStoriesLegacy(): array {
+        $whereStatus = in_array('status', $this->campaignColumns, true) ? "WHERE status IN ('completed','funded','ended')" : '';
+        $orderColumn = in_array('updated_at', $this->campaignColumns, true) ? 'updated_at' : 'id';
+        $sql = "SELECT * FROM campaigns {$whereStatus} ORDER BY {$orderColumn} DESC LIMIT 3";
+
+        try {
+            $rows = $this->db->fetchAll($sql);
+        } catch (Exception $e) {
+            Logger::warning('Failed legacy success stories', ['error' => $e->getMessage()]);
+            return [];
+        }
+
+        return array_map(function ($row) {
+            $presented = $this->normalizeLegacyRow($row);
+            return [
+                'title' => $presented['title'],
+                'excerpt' => substr($presented['story'] ?? '', 0, 220),
+                'raised_amount' => (float)($presented['raised_amount'] ?? 0),
+                'creator' => $presented['owner_name'] ?? 'Campañista',
+                'image_url' => $presented['image_url'] ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg',
+                'slug' => $presented['slug'] ?? (string)$presented['id']
+            ];
+        }, $rows);
+    }
+
+    private function normalizeLegacyRow(array $row): array {
+        if (!isset($row['summary'])) {
+            if (isset($row['short_description'])) {
+                $row['summary'] = $row['short_description'];
+            } elseif (isset($row['description'])) {
+                $row['summary'] = $row['description'];
+            } else {
+                $row['summary'] = '';
+            }
+        }
+
+        if (!isset($row['story'])) {
+            $row['story'] = $row['description'] ?? $row['summary'];
+        }
+
+        if (!isset($row['raised_amount'])) {
+            if (isset($row['current_amount'])) {
+                $row['raised_amount'] = (float)$row['current_amount'];
+            } else {
+                $row['raised_amount'] = 0.0;
+            }
+        }
+
+        if (!isset($row['cover_image_url']) && isset($row['image_url'])) {
+            $row['cover_image_url'] = $row['image_url'];
+        }
+
+        if (!isset($row['category_name']) && isset($row['category'])) {
+            $row['category_name'] = $row['category'];
+        }
+
+        if (!isset($row['category_slug']) && isset($row['category'])) {
+            $row['category_slug'] = $row['category'];
+        }
+
+        if (!isset($row['owner_id']) && isset($row[$this->ownerColumn])) {
+            $row['owner_id'] = $row[$this->ownerColumn];
+        }
+
+        if (!isset($row['location_label']) && isset($row['location'])) {
+            $row['location_label'] = $row['location'];
+        }
+
+        if (isset($row['first_name']) || isset($row['last_name']) || isset($row['username'])) {
+            $row['first_name'] = $row['first_name'] ?? null;
+            $row['last_name'] = $row['last_name'] ?? null;
+            $row['username'] = $row['username'] ?? null;
+        }
+
+        return CampaignPresenter::present($row);
+    }
+
+    private function mapCampaignRow(array $row): array {
+        return CampaignPresenter::present($row);
+    }
+
+    private function getCategoryOptions(): array {
+        if (!empty($this->categoryMap)) {
+            $options = [];
+            foreach ($this->categoryMap as $slug => $data) {
+                $options[$slug] = $data['name'];
+            }
+            return $options;
+        }
+
+        return $this->fallbackCategories;
+    }
+
+    private function getTableColumns(string $table): array {
+        try {
+            $columns = $this->db->fetchAll(sprintf('SHOW COLUMNS FROM `%s`', $table));
+        } catch (Exception $e) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($columns as $column) {
+            if (isset($column['Field'])) {
+                $names[] = $column['Field'];
+            }
+        }
+
+        return $names;
+    }
+
+    private function hasColumns(array $required, array $available): bool {
+        foreach ($required as $column) {
+            if (!in_array($column, $available, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}

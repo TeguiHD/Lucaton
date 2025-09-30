@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Emprendimiento sustentable">
+  <defs>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a5f3fc"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="540" fill="#f3f4f6"/>
+  <circle cx="780" cy="420" r="90" fill="url(#g3)" opacity=".5"/>
+  <rect x="160" y="220" width="640" height="220" rx="18" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="50%" y="200" text-anchor="middle" font-size="44" font-family="Inter, system-ui, sans-serif" fill="#111827" font-weight="700">Emprendimiento Sustentable</text>
+  <text x="50%" y="300" text-anchor="middle" font-size="26" font-family="Inter, system-ui, sans-serif" fill="#0e7490">Reciclaje comunitario</text>
+</svg>

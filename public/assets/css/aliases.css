@@ -1,0 +1,69 @@
+/* Aliases for copihue-* classes mapping to Tailwind brand palette */
+:root {
+  --copihue-50:  #fef2f2;
+  --copihue-100: #fee2e2;
+  --copihue-200: #fecaca;
+  --copihue-300: #fca5a5;
+  --copihue-400: #f87171;
+  --copihue-500: #dc2626; /* brand-500 */
+  --copihue-600: #b91c1c; /* brand-600 */
+  --copihue-700: #991b1b;
+  --copihue-800: #7f1d1d;
+  --copihue-900: #6b1d1d;
+}
+
+/* Background */
+.bg-copihue-50  { background-color: var(--copihue-50) !important; }
+.bg-copihue-100 { background-color: var(--copihue-100) !important; }
+.bg-copihue-200 { background-color: var(--copihue-200) !important; }
+.bg-copihue-400 { background-color: var(--copihue-400) !important; }
+.bg-copihue-500 { background-color: var(--copihue-500) !important; }
+.bg-copihue-600 { background-color: var(--copihue-600) !important; }
+.bg-copihue-700 { background-color: var(--copihue-700) !important; }
+.bg-copihue-800 { background-color: var(--copihue-800) !important; }
+.bg-copihue-900 { background-color: var(--copihue-900) !important; }
+
+/* Text */
+.text-copihue-50  { color: var(--copihue-50) !important; }
+.text-copihue-100 { color: var(--copihue-100) !important; }
+.text-copihue-200 { color: var(--copihue-200) !important; }
+.text-copihue-400 { color: var(--copihue-400) !important; }
+.text-copihue-500 { color: var(--copihue-500) !important; }
+.text-copihue-600 { color: var(--copihue-600) !important; }
+.text-copihue-700 { color: var(--copihue-700) !important; }
+.text-copihue-800 { color: var(--copihue-800) !important; }
+.text-copihue-900 { color: var(--copihue-900) !important; }
+
+/* Border */
+.border-copihue-500 { border-color: var(--copihue-500) !important; }
+.border-copihue-600 { border-color: var(--copihue-600) !important; }
+
+/* Hover variants */
+.hover\:text-copihue-600:hover { color: var(--copihue-600) !important; }
+.hover\:bg-copihue-600:hover { background-color: var(--copihue-600) !important; }
+.hover\:bg-copihue-700:hover { background-color: var(--copihue-700) !important; }
+
+/* Focus ring color */
+.focus\:ring-copihue-500:focus { --tw-ring-color: var(--copihue-500) !important; }
+
+/* Group hover text */
+.group:hover .group-hover\:text-copihue-600 { color: var(--copihue-600) !important; }
+
+/* Gradients */
+.from-copihue-500 { 
+  --tw-gradient-from: var(--copihue-500) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(220 38 38 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.to-copihue-600 {
+  --tw-gradient-to: var(--copihue-600) var(--tw-gradient-to-position);
+}
+.from-copihue-600 { 
+  --tw-gradient-from: var(--copihue-600) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(185 28 28 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.to-copihue-700 {
+  --tw-gradient-to: var(--copihue-700) var(--tw-gradient-to-position);
+}
+
