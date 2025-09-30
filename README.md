@@ -1,5 +1,9 @@
 # Lucatón - Plataforma de Crowdfunding Social con IA
 
+**Autor**: Nicoholas Lopetegui  
+**Contacto**: nlopetegui@pregrado.ubo.cl  
+**Universidad**: Universidad Bernardo O'Higgins  
+
 Plataforma de crowdfunding social con asistencia de inteligencia artificial para mitigar la brecha digital en Chile. Proyecto de tesis que combina propósito social, tecnología robusta y rigor académico.
 
 ## 🎯 Características Principales
@@ -27,40 +31,63 @@ Tesis/
 │   ├── 📁 Models/             # Modelos de datos
 │   ├── 📁 Middleware/         # Middleware de autenticación/autorización
 │   ├── 📁 Services/           # Servicios (IA, uploads, etc.)
-│   └── 📁 Helpers/            # Utilidades (Router, Session, etc.)
+│   ├── 📁 Helpers/            # Utilidades (Router, Session, etc.)
+│   └── 📁 Views/              # Vistas de la aplicación
+├── 📁 assets/                 # Archivos CSS de entrada
+│   └── input.css              # CSS de Tailwind sin compilar
+├── 📁 capturasPantalla/       # Capturas de pantalla del proyecto
 ├── 📁 config/                 # Configuraciones
-│   └── bootstrap.php          # Carga de configuración y autoloader
+│   ├── bootstrap.php          # Carga de configuración y autoloader
+│   └── routes.php             # Definición de rutas
+├── 📁 database/               # Base de datos
+│   ├── 📁 migrations/         # Scripts de migración SQL
+│   └── 📁 seeds/              # Datos de prueba
+├── 📁 docs/                   # Documentación
+│   ├── 📁 api/                # Documentación de API
+│   ├── 📁 architecture/       # Diagramas y arquitectura
+│   └── 📁 database/           # Documentación de BD
 ├── 📁 public/                 # Archivos públicos accesibles
 │   ├── 📁 assets/             # CSS, JS, imágenes estáticas
 │   │   ├── 📁 css/           # Tailwind compilado
 │   │   ├── 📁 js/            # JavaScript vanilla
 │   │   └── 📁 images/        # Imágenes del sitio
-│   └── 📁 storage/           # Uploads públicos
-│       └── 📁 uploads/       # Archivos subidos por usuarios
-├── 📁 storage/               # Archivos privados
-│   ├── 📁 private/           # Archivos no accesibles vía web
-│   ├── 📁 logs/              # Logs de aplicación
+│   ├── 📁 storage/           # Uploads públicos
+│   │   ├── 📁 avatars/       # Avatares de usuarios
+│   │   └── 📁 uploads/       # Archivos subidos por usuarios
+│   ├── .htaccess             # Configuración Apache para public
+│   └── index.php             # Punto de entrada público
+├── 📁 requerimientos/         # Especificaciones del proyecto
+├── 📁 scripts/                # Scripts de utilidad
+│   └── clean-css.js           # Script de limpieza CSS
+├── 📁 storage/                # Archivos privados
+│   ├── 📁 ai_files/          # Archivos generados por IA
 │   ├── 📁 cache/             # Cache temporal
-│   └── 📁 ai_files/          # Archivos generados por IA
-├── 📁 views/                 # Plantillas PHP
+│   ├── 📁 logs/              # Logs de aplicación
+│   └── 📁 private/           # Archivos no accesibles vía web
+├── 📁 tests/                  # Pruebas automatizadas
+│   ├── 📁 integration/        # Pruebas de integración
+│   └── 📁 unit/              # Pruebas unitarias
+├── 📁 views/                  # Plantillas PHP
+│   ├── 📁 admin/             # Vistas de administración
+│   ├── 📁 auth/              # Vistas de autenticación
+│   ├── 📁 components/        # Componentes reutilizables
+│   ├── 📁 emails/            # Plantillas de email
+│   ├── 📁 errors/            # Páginas de error
 │   ├── 📁 layouts/           # Layouts base
 │   ├── 📁 pages/             # Páginas principales
-│   ├── 📁 components/        # Componentes reutilizables
-│   └── 📁 admin/             # Vistas de administración
-├── 📁 database/              # Base de datos
-│   ├── 📁 migrations/        # Scripts de migración
-│   └── 📁 seeds/             # Datos de prueba
-├── 📁 tests/                 # Pruebas automatizadas
-│   ├── 📁 unit/              # Pruebas unitarias
-│   └── 📁 integration/       # Pruebas de integración
-├── 📁 docs/                  # Documentación
-│   ├── 📁 api/               # Documentación de API
-│   └── 📁 architecture/      # Diagramas y arquitectura
-├── 📁 requerimientos/        # Especificaciones del proyecto
-├── 📄 index.php              # Punto de entrada principal
-├── 📄 .htaccess              # Configuración Apache
-├── 📄 .env.example           # Plantilla de variables de entorno
-└── 📄 README.md              # Este archivo
+│   ├── 📁 public/            # Vistas públicas
+│   └── 📁 user/              # Vistas de usuario
+├── 📄 .env.example            # Plantilla de variables de entorno
+├── 📄 .gitignore              # Archivos ignorados por Git
+├── 📄 .htaccess               # Configuración Apache principal
+├── 📄 composer.json           # Dependencias PHP
+├── 📄 composer.lock           # Lock de dependencias PHP
+├── 📄 index.php               # Punto de entrada principal
+├── 📄 package.json            # Dependencias Node.js
+├── 📄 phpunit.xml             # Configuración PHPUnit
+├── 📄 pnpm-lock.yaml          # Lock de dependencias pnpm
+├── 📄 tailwind.config.js      # Configuración Tailwind CSS
+└── 📄 README.md               # Este archivo
 ```
 
 ## 🚀 Instalación y Configuración
@@ -76,7 +103,7 @@ Tesis/
 
 1. **Clonar el repositorio**
    ```bash
-   git clone [url-del-repo] Tesis
+   git clone https://github.com/TeguiHD/Lucaton.git Tesis
    cd Tesis
    ```
 
@@ -248,7 +275,11 @@ php tests/run.php
 - [ ] A/B testing
 - [ ] Documentación final
 
-## 📞 Soporte
+## 📞 Contacto
+
+**Autor**: Nicoholas Lopetegui  
+**Email**: nlopetegui@pregrado.ubo.cl  
+**Universidad**: Universidad Bernardo O'Higgins  
 
 Para preguntas sobre el proyecto:
 - **Documentación**: Ver carpeta `requerimientos/`
@@ -257,5 +288,5 @@ Para preguntas sobre el proyecto:
 
 ## 📄 Licencia
 
-Proyecto académico - Tesis de grado
-Universidad [Nombre] - 2025
+Proyecto académico - Tesis de grado  
+Universidad Bernardo O'Higgins - 2025
