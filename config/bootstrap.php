@@ -101,6 +101,11 @@ if (!empty($envAppUrl)) {
 
 define('APP_URL', $resolvedAppUrl);
 
+// Información institucional del proyecto (prototipo académico)
+define('PROJECT_OWNER_NAME', env('PROJECT_OWNER_NAME', 'Proyecto Lucatón — Tesis Universidad Bernardo O\'Higgins'));
+define('PROJECT_OWNER_EMAIL', env('PROJECT_OWNER_EMAIL', 'nlopetegui@pregrado.ubo.cl'));
+define('PROJECT_DISCLAIMER', env('PROJECT_DISCLAIMER', 'Prototipo académico sin fines comerciales. Los datos de contacto se proveen solo para fines universitarios.'));
+
 // Cargar helper de base de datos// Incluir helpers
 require_once ROOT_PATH . '/app/Helpers/Database.php';
 require_once ROOT_PATH . '/app/Helpers/Logger.php';

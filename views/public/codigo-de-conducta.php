@@ -51,6 +51,9 @@ $last_updated = '29 de septiembre de 2025';
                 <p class="mt-4 text-gray-600 max-w-3xl">
                     Lucatón reúne a personas que quieren ayudar y a quienes buscan apoyo para causas con impacto social. Para resguardar esa confianza, establecimos este código que aplica a todas las personas usuarias, equipos de campaña, donantes y colaboradores.
                 </p>
+                <p class="mt-3 text-sm text-gray-500">
+                    Este documento forma parte de <?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?>
+                </p>
             </header>
 
             <div class="px-6 sm:px-10 py-10 space-y-12 text-gray-700">
@@ -94,7 +97,7 @@ $last_updated = '29 de septiembre de 2025';
                     <ul class="mt-4 space-y-3 list-disc pl-6">
                         <li>Usa métodos de pago legítimos y evita ofrecer incentivos financieros a cambio de donaciones.</li>
                         <li>No intentes recuperar donaciones por vías fraudulentas ni compartas comprobantes que incluyan datos personales de terceros.</li>
-                        <li>Si detectas un cobro no autorizado o sospechas de fraude, contáctanos inmediatamente a <a class="text-copihue-600 font-medium" href="mailto:seguridad@lucaton.cl">seguridad@lucaton.cl</a>.</li>
+                        <li>Si detectas un cobro no autorizado o sospechas de fraude, contáctanos inmediatamente en <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>.</li>
                     </ul>
                 </section>
 
@@ -124,7 +127,7 @@ $last_updated = '29 de septiembre de 2025';
                         <p>Queremos mejorar este código junto a la comunidad. Si tienes comentarios o necesitas orientación:</p>
                         <ul class="list-disc pl-6 space-y-2">
                             <li>Visita el <a class="text-copihue-600 font-medium" href="<?= Router::url('ayuda') ?>">Centro de Ayuda</a> para resolver dudas frecuentes.</li>
-                            <li>Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:comunidad@lucaton.cl">comunidad@lucaton.cl</a> con sugerencias o denuncias.</li>
+                            <li>Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a> con sugerencias o denuncias.</li>
                             <li>Usa el formulario de <a class="text-copihue-600 font-medium" href="<?= Router::url('reportar') ?>">reportar problema</a> si detectas incumplimientos.</li>
                         </ul>
                         <p class="text-sm text-gray-500">Respondemos habitualmente en menos de 24 horas hábiles. Tu reporte puede mantenerse anónimo si lo prefieres.</p>

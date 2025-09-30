@@ -216,7 +216,7 @@ if ($hasModularCampaigns) {
 
     $ownerId = ensureUser($db, [
         'username' => 'semilla_owner',
-        'email' => 'semilla.owner@lucaton.cl',
+        'email' => 'semilla.owner@tesis-lucaton.example.com',
         'password' => 'LucatonDemo123!',
         'first_name' => 'Lucatón',
         'last_name' => 'Demo',
@@ -310,7 +310,7 @@ if ($hasNewsTables) {
 
     $authorId = ensureUser($db, [
         'username' => 'semilla_editor',
-        'email' => 'semilla.editor@lucaton.cl',
+        'email' => 'semilla.editor@tesis-lucaton.example.com',
         'password' => 'LucatonDemo123!',
         'first_name' => 'Equipo',
         'last_name' => 'Lucatón',

@@ -65,6 +65,7 @@ $last_updated = '29 de septiembre de 2025';
                     <header class="mb-8">
                         <h1 class="text-3xl font-bold text-gray-900 mb-4">Política de Cookies</h1>
                         <p class="text-sm text-gray-500">Última actualización: <?= htmlspecialchars($last_updated) ?></p>
+                        <p class="mt-2 text-sm text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                         <p class="mt-3 text-gray-600">
                             En esta página te explicamos cómo y por qué Lucatón utiliza cookies y tecnologías similares. Queremos que tomes decisiones informadas sobre tus datos y tengas el control de tu experiencia.
                         </p>
@@ -73,7 +74,7 @@ $last_updated = '29 de septiembre de 2025';
                     <div class="prose max-w-none text-gray-700">
                         <section id="intro" class="mb-10">
                             <h2 class="text-2xl font-semibold text-gray-900">1. Introducción</h2>
-                            <p>Esta política complementa nuestra <a class="text-copihue-600 font-medium" href="<?= Router::url('privacidad') ?>">Política de Privacidad</a>. Cuando visitas lucaton.cl o utilizas nuestros servicios digitales, almacenamos cookies en tu navegador para ofrecerte una experiencia segura, rápida y personalizada.</p>
+                            <p>Esta política complementa nuestra <a class="text-copihue-600 font-medium" href="<?= Router::url('privacidad') ?>">Política de Privacidad</a>. Cuando visitas <?= htmlspecialchars(APP_URL) ?> o utilizas nuestros servicios digitales, almacenamos cookies en tu navegador para ofrecerte una experiencia segura, rápida y personalizada dentro del contexto del proyecto académico.</p>
                         </section>
 
                         <section id="definition" class="mb-10">
@@ -156,7 +157,7 @@ $last_updated = '29 de septiembre de 2025';
 
                         <section id="contact" class="mb-6">
                             <h2 class="text-2xl font-semibold text-gray-900">8. Contacto</h2>
-                            <p>Si tienes dudas sobre el uso de cookies o quieres ejercer tus derechos de privacidad, escríbenos a <a class="text-copihue-600 font-medium" href="mailto:privacidad@lucaton.cl">privacidad@lucaton.cl</a>. Responderemos en un máximo de 5 días hábiles.</p>
+                            <p>Si tienes dudas sobre el uso de cookies o quieres ejercer tus derechos de privacidad, escríbenos a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                         </section>
                     </div>
                 </article>

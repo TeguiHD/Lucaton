@@ -92,17 +92,17 @@
             </div>
             <div class="content">
                 <p>Hola <strong>{{user_name}}</strong>,</p>
-                <p>Recibimos una solicitud para actualizar la contraseña de tu cuenta en Lucatón. Para confirmar que fuiste tú, ingresa el siguiente código en la pantalla de verificación:</p>
+                <p>Recibimos una solicitud para actualizar la contraseña de tu cuenta en Lucatón (prototipo académico). Para confirmar que fuiste tú, ingresa el siguiente código en la pantalla de verificación:</p>
                 <div class="code-box">
                     <span>{{code}}</span>
                 </div>
                 <p>El código vence en <strong>10 minutos</strong>. Si tú no realizaste este cambio, ignora este mensaje y comunícate con nuestro equipo de seguridad.</p>
-                <p>Gracias por mantener tu cuenta protegida,<br>Equipo de confianza Lucatón</p>
+                <p>Gracias por mantener tu cuenta protegida,<br>Equipo académico de Lucatón</p>
                 <a href="{{support_url}}" class="cta">Contactar soporte</a>
             </div>
             <div class="footer">
-                <p>Este correo se envió a {{user_email}} porque forma parte de la comunidad Lucatón. Si no solicitaste este cambio, escríbenos a <a href="mailto:seguridad@lucaton.cl">seguridad@lucaton.cl</a>.</p>
-                <p>Lucatón SpA · Santiago de Chile<br>© <?= date('Y') ?> Lucatón. Todos los derechos reservados.</p>
+                <p>Este correo se envió a {{user_email}} porque forma parte del prototipo académico Lucatón. Si no solicitaste este cambio, escríbenos a <a href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>.</p>
+                <p><?= htmlspecialchars(PROJECT_OWNER_NAME) ?><br><?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
             </div>
         </div>
     </div>

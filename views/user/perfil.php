@@ -494,7 +494,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
                             <span class="mt-1 h-2 w-2 rounded-full bg-copihue-500"></span>
                             <div>
                                 <p class="font-medium text-gray-900">Contactar soporte</p>
-                                <p>Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:soporte@lucaton.cl">soporte@lucaton.cl</a> y responderemos en menos de 24 horas hábiles.</p>
+                                <p>Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a> y responderemos dentro del marco del proyecto académico.</p>
                             </div>
                         </li>
                     </ul>

@@ -122,6 +122,7 @@ $incidents = [
                     <p class="mt-2 text-sm text-gray-600 max-w-2xl">
                         Monitoreamos la plataforma continuamente. Si ocurre un incidente, lo publicaremos aquí con actualizaciones periódicas y un resumen transparente una vez resuelto.
                     </p>
+                    <p class="mt-2 text-xs text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                 </div>
                 <div class="flex flex-col items-start md:items-end gap-2">
                     <span class="inline-flex items-center rounded-full bg-green-100 px-4 py-1 text-sm font-semibold text-green-700">
@@ -230,7 +231,7 @@ $incidents = [
                 </div>
                 <div>
                     <h2 class="text-xl font-semibold text-gray-900">¿Necesitas reportar algo urgente?</h2>
-                    <p class="mt-2 text-sm text-gray-600">Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:infra@lucaton.cl">infra@lucaton.cl</a> o llama al +56 2 1234 5678 (lun-vie 09:00-18:00).</p>
+                    <p class="mt-2 text-sm text-gray-600">Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                     <ul class="mt-4 space-y-2 text-sm text-gray-600 list-disc pl-5">
                         <li>Detalla el servicio afectado y si el problema se mantiene.</li>
                         <li>Agrega capturas o códigos de error si los tienes.</li>

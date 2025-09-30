@@ -84,6 +84,7 @@ $quick_answers = [
                     <p class="text-sm uppercase tracking-wide text-gray-500">Centro de ayuda</p>
                     <h1 class="mt-2 text-3xl font-bold text-gray-900">Resolvamos tus dudas</h1>
                     <p class="mt-3 text-sm text-gray-600">Busca guías paso a paso, respuesta a preguntas frecuentes y recomendaciones para que tu campaña sea transparente y efectiva.</p>
+                    <p class="mt-2 text-xs text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                     <div class="mt-6 flex flex-wrap gap-3">
                         <a href="<?= Router::url('reportar') ?>" class="inline-flex items-center rounded-md bg-copihue-600 px-4 py-2 text-sm font-medium text-white hover:bg-copihue-700">
                             Reportar un problema
@@ -147,7 +148,7 @@ $quick_answers = [
                 <?php endforeach; ?>
             </div>
             <div class="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-5 text-sm text-gray-600">
-                ¿No encontraste lo que buscabas? Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:soporte@lucaton.cl">soporte@lucaton.cl</a> o revisa el formulario de <a class="text-copihue-600 font-medium" href="<?= Router::url('reportar') ?>">reportar un problema</a>.
+                ¿No encontraste lo que buscabas? Escríbenos a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a> o revisa el formulario de <a class="text-copihue-600 font-medium" href="<?= Router::url('reportar') ?>">reportar un problema</a>.
             </div>
         </section>
     </main>
@@ -161,7 +162,7 @@ $quick_answers = [
 
         form.addEventListener('submit', function (event) {
             event.preventDefault();
-            alert('Estamos finalizando la indexación del contenido. Mientras tanto, navega por las categorías destacadas o escríbenos a soporte@lucaton.cl.');
+            alert('Estamos finalizando la indexación del contenido. Mientras tanto, navega por las categorías destacadas o escríbenos a <?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>.');
         });
     });
     </script>

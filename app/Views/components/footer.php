@@ -8,8 +8,8 @@
                     Lucatón
                 </h5>
                 <p class="text-muted">
-                    La plataforma de crowdfunding que conecta proyectos innovadores con personas 
-                    que quieren apoyarlos. Juntos hacemos realidad grandes ideas.
+                    Prototipo académico de crowdfunding desarrollado para la tesis de la Universidad Bernardo O'Higgins. 
+                    Reproduce escenarios reales con fines educativos y de investigación.
                 </p>
                 <div class="d-flex gap-3">
                     <a href="#" class="text-light fs-4"><i class="fab fa-facebook"></i></a>
@@ -79,15 +79,11 @@
                 <div class="text-muted">
                     <p class="mb-2">
                         <i class="fas fa-envelope me-2"></i>
-                        info@lucaton.com
-                    </p>
-                    <p class="mb-2">
-                        <i class="fas fa-phone me-2"></i>
-                        +1 (555) 123-4567
+                        <?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>
                     </p>
                     <p class="mb-2">
                         <i class="fas fa-map-marker-alt me-2"></i>
-                        123 Crowdfunding St, Ciudad
+                        Universidad Bernardo O'Higgins, Santiago de Chile (referencial)
                     </p>
                 </div>
             </div>
@@ -99,7 +95,7 @@
         <div class="row align-items-center">
             <div class="col-md-6">
                 <p class="text-muted mb-0">
-                    &copy; <?= date('Y') ?> Lucatón. Todos los derechos reservados.
+                    &copy; <?= date('Y') ?> <?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?>
                 </p>
             </div>
             <div class="col-md-6 text-md-end">

@@ -62,6 +62,7 @@ $severities = [
                     <p class="text-sm uppercase tracking-wide text-gray-500">Ayúdanos a mejorar</p>
                     <h1 class="mt-2 text-3xl font-bold text-gray-900">Reportar un problema</h1>
                     <p class="mt-2 text-sm text-gray-600">Completa el formulario con el máximo de detalle posible. Nuestro equipo revisará tu reporte y te contactará si requiere más información.</p>
+                    <p class="mt-2 text-xs text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                 </header>
 
                 <form id="report-issue-form" action="#" method="post" class="space-y-6">
@@ -99,7 +100,7 @@ $severities = [
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700" for="report-url">Enlace (opcional)</label>
-                        <input id="report-url" name="url" type="url" placeholder="https://lucaton.cl/campana/..." class="mt-1 w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
+                        <input id="report-url" name="url" type="url" placeholder="<?= htmlspecialchars(APP_URL) ?>/campana/..." class="mt-1 w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
                     </div>
 
                     <div>
@@ -130,10 +131,10 @@ $severities = [
                     <h2 class="text-lg font-semibold text-gray-900">Otras vías de contacto</h2>
                     <ul class="mt-4 space-y-3 text-sm text-gray-600">
                         <li>
-                            <strong>Correo:</strong> <a class="text-copihue-600 font-medium" href="mailto:soporte@lucaton.cl">soporte@lucaton.cl</a>
+                            <strong>Correo:</strong> <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>
                         </li>
                         <li>
-                            <strong>Teléfono:</strong> +56 9 8765 4321 (lunes a viernes, 09:00-18:00)
+                            <strong>Teléfono referencial (demo):</strong> +56 9 8765 4321 (lunes a viernes, 09:00-18:00)
                         </li>
                         <li>
                             <strong>Chat en vivo:</strong> disponible desde el panel de usuario en horario laboral.
@@ -168,7 +169,7 @@ $severities = [
                 button.textContent = 'Reporte recibido';
             }
             form.reset();
-            alert('Gracias por avisarnos. Estamos habilitando el envío automático; por ahora escríbenos a soporte@lucaton.cl si necesitas seguimiento inmediato.');
+            alert('Gracias por avisarnos. Estamos habilitando el envío automático; por ahora escríbenos a <?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?> si necesitas seguimiento inmediato.');
         });
     });
     </script>

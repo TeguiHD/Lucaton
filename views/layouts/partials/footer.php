@@ -66,8 +66,8 @@ $social_links = [
                     <span class="ml-3 text-2xl font-bold text-marino-900">Lucatón</span>
                 </div>
                 <p class="text-gray-500 text-base max-w-md">
-                    Plataforma de crowdfunding chilena que conecta proyectos innovadores con personas que quieren apoyar el cambio. 
-                    Construyendo el futuro juntos, un proyecto a la vez.
+                    Prototipo académico de crowdfunding desarrollado en la Universidad Bernardo O'Higgins para fines de tesis. 
+                    Las funcionalidades presentadas recrean escenarios reales sin constituir un servicio comercial activo.
                 </p>
                 <div class="flex space-x-6">
                     <?php foreach ($social_links as $social): ?>
@@ -169,7 +169,7 @@ $social_links = [
                     </a>
                 </div>
                 <p class="mt-8 text-base text-gray-400 md:mt-0 md:order-1">
-                    &copy; <?= date('Y') ?> Lucatón. Todos los derechos reservados. 
+                    &copy; <?= date('Y') ?> <?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?>
                     <span class="block sm:inline">Hecho con ❤️ en Chile.</span>
                 </p>
             </div>

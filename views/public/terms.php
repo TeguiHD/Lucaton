@@ -90,6 +90,7 @@ $last_updated = '29 de septiembre de 2025';
                         <p class="text-gray-600">
                             Última actualización: <?php echo $last_updated; ?>
                         </p>
+                        <p class="mt-2 text-sm text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                     </div>
 
                     <!-- Content Sections -->
@@ -101,7 +102,7 @@ $last_updated = '29 de septiembre de 2025';
                                 Al acceder y utilizar la plataforma Lucatón ("la Plataforma"), usted acepta estar sujeto a estos Términos y Condiciones ("Términos"). Si no está de acuerdo con alguna parte de estos términos, no debe utilizar nuestros servicios.
                             </p>
                             <p class="text-gray-700">
-                                Estos Términos constituyen un acuerdo legal vinculante entre usted y Lucatón SpA ("Lucatón", "nosotros", "nuestro"). Al crear una cuenta o utilizar nuestros servicios, usted confirma que ha leído, entendido y acepta cumplir con estos Términos.
+                                Estos Términos forman parte del prototipo académico desarrollado por <?= htmlspecialchars(PROJECT_OWNER_NAME) ?> ("Lucatón", "nosotros", "nuestro"). Su objetivo es demostrar funcionalidades dentro del marco de una tesis universitaria y no corresponden a una sociedad ni servicio comercial activo. Al crear una cuenta o utilizar nuestros servicios, usted confirma que ha leído, entendido y acepta cumplir con estos Términos en dicho contexto educativo.
                             </p>
                         </section>
 
@@ -305,10 +306,9 @@ $last_updated = '29 de septiembre de 2025';
                                 Para preguntas sobre estos Términos y Condiciones, puede contactarnos:
                             </p>
                             <div class="bg-gray-50 p-4 rounded-lg">
-                                <p class="text-gray-700 mb-2"><strong>Lucatón SpA</strong></p>
-                                <p class="text-gray-700 mb-2">Email: legal@lucaton.cl</p>
-                                <p class="text-gray-700 mb-2">Teléfono: +56 2 2XXX XXXX</p>
-                                <p class="text-gray-700">Dirección: [Dirección de la empresa], Santiago, Chile</p>
+                                <p class="text-gray-700 mb-2"><strong><?= htmlspecialchars(PROJECT_OWNER_NAME) ?></strong></p>
+                                <p class="text-gray-700 mb-2">Email: <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a></p>
+                                <p class="text-gray-700"><?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                             </div>
                         </section>
                     </div>

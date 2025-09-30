@@ -101,7 +101,7 @@ $faq_categories = [
         'questions' => [
             [
                 'question' => '¿Cómo puedo contactar al soporte?',
-                'answer' => 'Puedes contactarnos a través de: email (soporte@lucaton.cl), chat en vivo (disponible de lunes a viernes de 9:00 a 18:00), o teléfono (+56 2 2XXX XXXX). También puedes enviar un mensaje desde tu panel de usuario.'
+                'answer' => 'Puedes contactarnos a través del correo académico ' . PROJECT_OWNER_EMAIL . ' o utilizar los canales demostrativos del prototipo desde tu panel de usuario. Nuestro equipo responderá dentro del contexto del proyecto de tesis.'
             ],
             [
                 'question' => '¿Qué hago si tengo problemas técnicos?',
@@ -174,6 +174,7 @@ $faq_categories = [
             <p class="text-xl text-gray-600 max-w-3xl mx-auto">
                 Encuentra respuestas a las preguntas más comunes sobre nuestra plataforma de crowdfunding solidario.
             </p>
+            <p class="mt-4 text-sm text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
         </div>
 
         <!-- Search Box -->

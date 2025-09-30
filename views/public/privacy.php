@@ -88,6 +88,7 @@ $last_updated = '29 de septiembre de 2025';
                         <p class="text-gray-600">
                             Última actualización: <?php echo $last_updated; ?>
                         </p>
+                        <p class="mt-2 text-sm text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                     </div>
 
                     <!-- Content Sections -->
@@ -96,7 +97,7 @@ $last_updated = '29 de septiembre de 2025';
                         <section id="introduction" class="mb-8">
                             <h2 class="text-2xl font-semibold text-gray-900 mb-4">1. Introducción</h2>
                             <p class="text-gray-700 mb-4">
-                                En Lucatón SpA ("Lucatón", "nosotros", "nuestro"), respetamos su privacidad y nos comprometemos a proteger su información personal. Esta Política de Privacidad explica cómo recopilamos, utilizamos, compartimos y protegemos su información cuando utiliza nuestra plataforma de crowdfunding.
+                                En <?= htmlspecialchars(PROJECT_OWNER_NAME) ?> ("Lucatón", "nosotros", "nuestro"), respetamos su privacidad y nos comprometemos a proteger su información personal. Esta Política de Privacidad explica cómo recopilamos, utilizamos, compartimos y protegemos su información cuando utiliza nuestra plataforma como parte de un prototipo académico.
                             </p>
                             <p class="text-gray-700">
                                 Al utilizar nuestros servicios, usted acepta las prácticas descritas en esta Política de Privacidad. Si no está de acuerdo con estas prácticas, no utilice nuestros servicios.
@@ -173,7 +174,7 @@ $last_updated = '29 de septiembre de 2025';
 
                             <h3 class="text-lg font-medium text-gray-900 mb-2">3.5 Prioridad ética de campañas</h3>
                             <p class="text-gray-700">
-                                Utilizamos métricas agregadas y pseudonimizadas (por ejemplo, avance de recaudación, días restantes, actividad reciente) para ordenar las campañas y resaltar proyectos urgentes o verificados. No vendemos ni comercializamos espacios privilegiados y evitamos decisiones automatizadas que produzcan discriminación injusta. Puede oponerse a este uso escribiéndonos a privacidad@lucaton.cl.</p>
+                                Utilizamos métricas agregadas y pseudonimizadas (por ejemplo, avance de recaudación, días restantes, actividad reciente) para ordenar las campañas y resaltar proyectos urgentes o verificados. No vendemos ni comercializamos espacios privilegiados y evitamos decisiones automatizadas que produzcan discriminación injusta. Puede oponerse a este uso escribiéndonos a <?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>.</p>
                         </section>
 
                         <!-- 4. Compartir Información -->
@@ -255,7 +256,7 @@ $last_updated = '29 de septiembre de 2025';
                                 <li><strong>Limitación:</strong> Solicitar la restricción del procesamiento</li>
                             </ul>
                             <p class="text-gray-700">
-                                Para ejercer estos derechos, contáctenos a través de privacy@lucaton.cl. Responderemos a su solicitud dentro de 30 días.
+                                Para ejercer estos derechos, contáctenos a través de <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>. Responderemos a su solicitud dentro de 30 días.
                             </p>
                         </section>
 
@@ -308,11 +309,10 @@ $last_updated = '29 de septiembre de 2025';
                                 Si tiene preguntas sobre esta Política de Privacidad o desea ejercer sus derechos, puede contactarnos:
                             </p>
                             <div class="bg-gray-50 p-4 rounded-lg">
-                                <p class="text-gray-700 mb-2"><strong>Oficial de Protección de Datos</strong></p>
-                                <p class="text-gray-700 mb-2">Lucatón SpA</p>
-                                <p class="text-gray-700 mb-2">Email: privacy@lucaton.cl</p>
-                                <p class="text-gray-700 mb-2">Teléfono: +56 2 2XXX XXXX</p>
-                                <p class="text-gray-700">Dirección: [Dirección de la empresa], Santiago, Chile</p>
+                                <p class="text-gray-700 mb-2"><strong>Responsable del proyecto académico</strong></p>
+                                <p class="text-gray-700 mb-2"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?></p>
+                                <p class="text-gray-700 mb-2">Email: <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a></p>
+                                <p class="text-gray-700"><?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                             </div>
                         </section>
                     </div>

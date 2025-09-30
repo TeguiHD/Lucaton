@@ -8,22 +8,25 @@ $page_description = 'Escríbenos para resolver dudas sobre campañas, donaciones
 
 $contact_channels = [
     [
-        'title' => 'Soporte general',
-        'description' => 'Preguntas sobre tu cuenta, campañas o donaciones.',
-        'email' => 'soporte@lucaton.cl',
-        'sla' => 'Respuesta en menos de 24 horas hábiles',
+        'title' => 'Soporte general (prototipo)',
+        'description' => 'Escenario de prueba para validar el flujo de soporte dentro del proyecto académico.',
+        'email' => PROJECT_OWNER_EMAIL,
+        'mail_subject' => 'Lucatón Tesis - Soporte general',
+        'sla' => 'Respuesta académica en menos de 48 horas hábiles.',
     ],
     [
-        'title' => 'Alianzas y organizaciones',
-        'description' => 'Municipios, fundaciones o empresas que quieren colaborar.',
-        'email' => 'alianzas@lucaton.cl',
-        'sla' => 'Respuesta en 48 horas hábiles',
+        'title' => 'Alianzas y organizaciones (demo)',
+        'description' => 'Casos de estudio para municipalidades, fundaciones o empresas dentro del prototipo.',
+        'email' => PROJECT_OWNER_EMAIL,
+        'mail_subject' => 'Lucatón Tesis - Consulta de alianzas',
+        'sla' => 'Coordinación académica en 72 horas hábiles.',
     ],
     [
-        'title' => 'Prensa y medios',
-        'description' => 'Solicitudes de prensa, entrevistas y cobertura de campañas.',
-        'email' => 'prensa@lucaton.cl',
-        'sla' => 'Respuesta en 24 horas hábiles',
+        'title' => 'Prensa y medios (simulación)',
+        'description' => 'Contacto referencial para validar el flujo comunicacional del prototipo.',
+        'email' => PROJECT_OWNER_EMAIL,
+        'mail_subject' => 'Lucatón Tesis - Consulta de prensa',
+        'sla' => 'Respuesta académica en 48 horas hábiles.',
     ],
 ];
 ?>
@@ -69,14 +72,22 @@ $contact_channels = [
                     <p class="text-sm uppercase tracking-wide text-gray-500">Estamos para ayudarte</p>
                     <h1 class="mt-2 text-3xl font-bold text-gray-900">Hablemos</h1>
                     <p class="mt-2 text-sm text-gray-600">Cuéntanos en qué podemos apoyarte y la persona indicada de nuestro equipo se pondrá en contacto.</p>
+                    <p class="mt-2 text-xs text-gray-500"><?= htmlspecialchars(PROJECT_OWNER_NAME) ?>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?> Todos los canales comparten el correo académico <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>.</p>
 
                     <div class="mt-6 space-y-4">
-                        <?php foreach ($contact_channels as $channel): ?>
+                        <?php foreach ($contact_channels as $channel): 
+                            $channelEmail = $channel['email'] ?? PROJECT_OWNER_EMAIL;
+                            $channelSubject = $channel['mail_subject'] ?? ($channel['title'] ?? 'Consulta Lucatón Tesis');
+                            $mailtoHref = 'mailto:' . $channelEmail;
+                            if (!empty($channelSubject)) {
+                                $mailtoHref .= '?subject=' . rawurlencode($channelSubject);
+                            }
+                        ?>
                             <article class="rounded-lg border border-gray-200 p-5">
                                 <h2 class="text-lg font-semibold text-gray-900"><?= htmlspecialchars($channel['title']) ?></h2>
                                 <p class="mt-1 text-sm text-gray-600"><?= htmlspecialchars($channel['description']) ?></p>
-                                <a class="mt-3 inline-flex items-center text-copihue-600 font-semibold" href="mailto:<?= htmlspecialchars($channel['email']) ?>">
-                                    <?= htmlspecialchars($channel['email']) ?>
+                                <a class="mt-3 inline-flex items-center text-copihue-600 font-semibold" href="<?= htmlspecialchars($mailtoHref) ?>">
+                                    <?= htmlspecialchars($channelEmail) ?>
                                     <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                     </svg>
@@ -140,8 +151,8 @@ $contact_channels = [
                 <p class="mt-2 text-sm text-gray-600">Disponible para usuarios registrados desde el panel. Conversa con una persona real.</p>
             </div>
             <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold text-gray-900">Dirección</h3>
-                <p class="mt-2 text-sm text-gray-600">Santiago Centro, Región Metropolitana<br>Av. Libertador Bernardo O'Higgins 1234, oficina 506</p>
+                <h3 class="text-lg font-semibold text-gray-900">Dirección referencial</h3>
+                <p class="mt-2 text-sm text-gray-600">Universidad Bernardo O'Higgins<br>General Gana 1780, Santiago, Chile (uso académico)</p>
             </div>
         </section>
     </main>
@@ -161,7 +172,7 @@ $contact_channels = [
                 button.textContent = 'Mensaje enviado';
             }
             form.reset();
-            alert('Gracias por tu mensaje. Aún estamos integrando el envío desde la plataforma; por favor espera nuestro correo desde soporte@lucaton.cl.');
+            alert('Gracias por tu mensaje. Aún estamos integrando el envío desde la plataforma; por favor espera nuestro correo desde <?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>.');
         });
     });
     </script>

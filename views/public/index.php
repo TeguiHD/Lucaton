@@ -751,8 +751,8 @@ $ia_login_redirect = Router::url('login') . '?redirect=' . urlencode(Router::url
                                     <h3 class="text-lg font-semibold text-marino-900">Agendemos una sesión de evaluación gratuita</h3>
                                 </div>
                                 <p class="text-sm text-marino-700">Cuéntanos tu objetivo y te sugerimos la mejor ruta para financiarlo con respaldo humano + IA.</p>
-                                <a href="mailto:hola@lucaton.cl" class="inline-flex items-center gap-2 self-start rounded-full bg-marino-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-marino-800">
-                                    hola@lucaton.cl
+                                <a href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>" class="inline-flex items-center gap-2 self-start rounded-full bg-marino-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-marino-800">
+                                    <?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
                                 </a>
                             </div>
