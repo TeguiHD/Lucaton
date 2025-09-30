@@ -161,49 +161,76 @@ SESSION_LIFETIME=7200
 
 ### Públicas
 - ✅ Página de inicio con campañas destacadas
-- ✅ Detalle de campañas con información completa
-- ✅ FAQ, términos y políticas de privacidad
+- ✅ Listado de campañas con filtros y paginación
+- ✅ Detalle de campañas con información completa y evidencias
+- ✅ FAQ con preguntas frecuentes y búsqueda
+- ✅ Términos de servicio y políticas de privacidad
+- ✅ Página de contacto con formulario
+- ✅ Centro de ayuda y soporte
+- ✅ Código de conducta y reportar problemas
 
 ### Autenticación
-- ✅ Registro y login seguros
+- ✅ Registro de usuarios con verificación de email
+- ✅ Login seguro con validación y recuperación de contraseña
+- ✅ Logout con limpieza de sesión
+- ✅ Recuperación de contraseña con tokens seguros
 - ✅ Sesiones con timeout y regeneración de ID
-- ✅ Rate limiting para prevenir ataques
+- ✅ Rate limiting para prevenir ataques de fuerza bruta
+- ✅ Middleware de autenticación para rutas protegidas
 
 ### Usuario Autenticado
-- ✅ Panel de usuario con campañas propias
-- ✅ Crear campañas con asistencia IA
+- ✅ Dashboard personal con resumen de campañas y actividad
+- ✅ Panel "Mis campañas" con gestión completa (CRUD)
+- ✅ Crear campañas con asistencia de IA opcional
 - ✅ Editar campañas en estado borrador
-- ✅ Sistema de apelaciones
+- ✅ Perfil de usuario con edición de datos y avatar
+- ✅ Sistema de apelaciones para campañas rechazadas
+- ✅ Historial de actividad y notificaciones
+- ✅ Configuración de cuenta y preferencias
 
 ### Administración
-- ✅ Dashboard con estadísticas
-- ✅ Moderación de campañas
-- ✅ Gestión de usuarios
-- ✅ Logs de auditoría
+- ✅ Dashboard administrativo con métricas del sistema
+- ✅ Moderación de campañas (aprobar, rechazar, comentar)
+- ✅ Gestión completa de usuarios (ver, editar, suspender, eliminar)
+- ✅ Sistema de reportes y estadísticas avanzadas
+- ✅ Logs de auditoría y actividad del sistema
+- ✅ Configuración de parámetros del sistema
+- ✅ Herramientas de moderación de contenido
+- ✅ Gestión de noticias y notificaciones
 
 ### IA y Archivos
-- ✅ Generación de texto ético y persuasivo
-- ✅ Generación de imágenes temáticas
-- ✅ Moderación automática de contenido
-- ✅ Sistema de archivos privados/públicos
+- ✅ Integración OpenAI para generación de texto ético
+- ✅ Integración Gemini para análisis de imágenes
+- ✅ Generación de títulos y descripciones persuasivas
+- ✅ Análisis y moderación automática de contenido
+- ✅ Transparencia obligatoria en contenido asistido por IA
+- ✅ Sistema de archivos privados y públicos
+- ✅ Upload seguro con validación de tipos y tamaños
+- ✅ Rate limiting específico para requests de IA
 
 ## 🔒 Seguridad
 
 ### Medidas Implementadas
-- **OWASP Compliance**: Protección contra Top 10
-- **CSP**: Content Security Policy estricta
-- **CSRF**: Tokens en todos los formularios
-- **Rate Limiting**: Por sesión y acción
-- **Headers Seguros**: X-Frame-Options, nosniff, etc.
-- **Uploads Seguros**: Validación de tipos y tamaños
-- **Sesiones Robustas**: HTTPOnly, Secure, regeneración
+- ✅ **Autenticación robusta**: Sesiones seguras con regeneración de ID y timeout
+- ✅ **Validación de entrada**: Sanitización y validación de todos los datos de usuario
+- ✅ **Protección CSRF**: Tokens CSRF en todos los formularios
+- ✅ **Rate Limiting**: Límites de requests por IP y usuario
+- ✅ **Encriptación**: Contraseñas hasheadas con bcrypt y datos sensibles encriptados
+- ✅ **Middleware de seguridad**: Headers de seguridad y protección XSS
+- ✅ **Validación de archivos**: Tipos permitidos, tamaños máximos y escaneo de malware
+- ✅ **Logs de auditoría**: Registro completo de actividades críticas
+- ✅ **Configuración segura**: Variables de entorno y configuración de producción
+- ✅ **Protección de rutas**: Middleware de autenticación y autorización
+- ✅ **Sanitización de contenido**: Limpieza de HTML y prevención de XSS
+- ✅ **Gestión de sesiones**: Timeout automático y limpieza de sesiones expiradas
 
 ### Archivos Protegidos
-- `.env` - Variables de entorno
-- `storage/private/` - Archivos privados
-- `storage/logs/` - Logs de aplicación
-- `config/` - Configuraciones
-- `app/` - Código fuente
+- ✅ `/config/` - Configuraciones del sistema
+- ✅ `/logs/` - Archivos de registro
+- ✅ `/uploads/private/` - Archivos privados de usuarios
+- ✅ `/database/` - Esquemas y migraciones
+- ✅ `.env` - Variables de entorno sensibles
+- ✅ `/admin/` - Panel administrativo con autenticación adicional
 
 ## 🧪 Desarrollo y Testing
 
@@ -242,38 +269,49 @@ php tests/run.php
 - **Control**: Grupo sin asistencia IA
 - **Tratamiento**: Grupo con asistencia IA completa
 
-## 🚀 Roadmap de Desarrollo
+## 🗓️ Roadmap de Desarrollo
 
-### Semana 1: Fundación
-- [x] Estructura de carpetas
-- [x] Configuración básica
-- [ ] Sistema de autenticación
-- [ ] Base de datos
+### ✅ Semana 1-2: Fundamentos
+- ✅ Configuración del entorno de desarrollo
+- ✅ Estructura base del proyecto MVC
+- ✅ Sistema de autenticación y sesiones
+- ✅ Base de datos y modelos principales
+- ✅ Middleware de seguridad básico
 
-### Semana 2: Core
-- [ ] CRUD de campañas
-- [ ] Panel de usuario
-- [ ] Sistema de uploads
+### ✅ Semana 3-4: Funcionalidades Core
+- ✅ CRUD completo de campañas
+- ✅ Sistema de usuarios y perfiles
+- ✅ Panel administrativo básico
+- ✅ Validaciones y sanitización
+- ✅ Sistema de archivos y uploads
 
-### Semana 3: IA
-- [ ] Integración OpenAI/Gemini
-- [ ] Generación de contenido
-- [ ] Moderación automática
+### ✅ Semana 5-6: Integraciones IA
+- ✅ Integración con OpenAI para texto
+- ✅ Integración con Gemini para imágenes
+- ✅ Sistema de moderación automática
+- ✅ Políticas de uso ético de IA
+- ✅ Rate limiting para APIs
 
-### Semana 4: Administración
-- [ ] Panel de admin
-- [ ] Moderación manual
-- [ ] Sistema de aprobación
+### 🔄 Semana 7-8: APIs y Endpoints
+- 🔄 API REST completa
+- 🔄 Documentación de endpoints
+- 🔄 Autenticación API con tokens
+- 🔄 Versionado de API
+- 🔄 Testing de endpoints
 
-### Semana 5: Seguridad y UX
-- [ ] Implementación OWASP
-- [ ] Optimización mobile
-- [ ] Accesibilidad WCAG
+### 📋 Semana 9-10: Seguridad Avanzada
+- 📋 Implementación completa OWASP Top 10
+- 📋 Auditoría de seguridad
+- 📋 Penetration testing
+- 📋 Configuración de producción
+- 📋 Monitoreo y alertas
 
-### Semana 6: Evaluación
-- [ ] Métricas académicas
-- [ ] A/B testing
-- [ ] Documentación final
+### 📋 Semana 11-12: Testing y Optimización
+- 📋 Testing unitario y de integración
+- 📋 Testing de performance
+- 📋 Optimización de consultas
+- 📋 Caching y CDN
+- 📋 Documentación final
 
 ## 📞 Contacto
 
