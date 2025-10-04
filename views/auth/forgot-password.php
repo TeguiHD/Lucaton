@@ -36,9 +36,11 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
     <!-- Styles -->
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <style>[x-cloak]{display:none !important;}</style>
     
     <!-- Alpine.js -->
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Skip to content link -->
@@ -47,26 +49,7 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
     </a>
 
     <!-- Header -->
-    <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
-                <div class="flex items-center">
-                    <a href="<?= Router::url('/') ?>" class="flex items-center">
-                        <svg class="h-8 w-8 text-copihue-600" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        </svg>
-                        <span class="ml-2 text-xl font-bold text-gray-900">Lucatón</span>
-                    </a>
-                </div>
-                <div class="text-sm text-gray-600">
-                    ¿Recordaste tu contraseña? 
-                    <a href="<?= Router::url('login') ?>" class="font-medium text-copihue-600 hover:text-copihue-500">
-                        Inicia sesión
-                    </a>
-                </div>
-            </div>
-        </div>
-    </header>
+    <?php include __DIR__ . '/../layouts/partials/header.php'; ?>
 
     <!-- Main Content -->
     <main id="main-content" class="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -93,7 +76,14 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
             <div class="bg-white py-8 px-6 shadow rounded-lg" x-data="forgotPasswordForm()">
                 <!-- Step 1: Email Input -->
                 <div x-show="!emailSent">
-                    <form @submit.prevent="submitForm()" class="space-y-6" novalidate>
+                    <form
+                        id="forgot-password-form"
+                        method="POST"
+                        action="<?= Router::url('recuperar') ?>"
+                        @submit.prevent="submitForm()"
+                        class="space-y-6"
+                        novalidate
+                    >
                         <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
                         <!-- Email Field -->
                         <div>
@@ -105,6 +95,7 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                                 'required' => true,
                                 'attributes' => [
                                     'x-model' => 'form.email',
+                                    '@input' => 'clearGeneralError()',
                                     '@blur' => 'validateEmail()',
                                     ':class' => 'errors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""'
                                 ]
@@ -125,7 +116,7 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                                     ':class' => 'loading ? "opacity-75 cursor-not-allowed" : ""'
                                 ]
                             ]); ?>
-                            <div x-show="loading" class="flex items-center justify-center mt-2">
+                            <div x-show="loading" x-cloak class="flex items-center justify-center mt-2">
                                 <svg class="animate-spin h-5 w-5 text-copihue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -137,18 +128,20 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                 </div>
 
                 <!-- Step 2: Success Message -->
-                <div x-show="emailSent" class="text-center">
+                <div x-show="emailSent" x-cloak class="text-center">
                     <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-green-100 mb-4">
                         <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <h3 class="text-lg font-medium text-gray-900 mb-2">
-                        ¡Enlace Enviado!
-                    </h3>
-                    <p class="text-sm text-gray-600 mb-4">
-                        Hemos enviado un enlace de recuperación a <strong x-text="form.email"></strong>
-                    </p>
+                    <template x-if="successMessage">
+                        <p class="text-sm text-gray-600 mb-4" x-text="successMessage"></p>
+                    </template>
+                    <template x-if="!successMessage">
+                        <p class="text-sm text-gray-600 mb-4">
+                            Hemos enviado un enlace de recuperación a <strong x-text="form.email"></strong>
+                        </p>
+                    </template>
                     <p class="text-sm text-gray-500 mb-6">
                         Revisa tu bandeja de entrada y sigue las instrucciones para restablecer tu contraseña. 
                         El enlace expirará en 1 hora.
@@ -161,8 +154,8 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                             :disabled="resendCooldown > 0"
                             class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-copihue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <span x-show="resendCooldown === 0">Reenviar enlace</span>
-                            <span x-show="resendCooldown > 0">Reenviar en <span x-text="resendCooldown"></span>s</span>
+                            <span x-show="resendCooldown === 0" x-cloak>Reenviar enlace</span>
+                            <span x-show="resendCooldown > 0" x-cloak>Reenviar en <span x-text="resendCooldown"></span>s</span>
                         </button>
                         
                         <button
@@ -172,10 +165,17 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                             Usar otro correo electrónico
                         </button>
                     </div>
+
+                    <template x-if="demoResetUrl">
+                        <div class="mt-6 text-left text-sm text-gray-600 bg-gray-50 border border-dashed border-gray-300 rounded-md p-4">
+                            <p class="font-medium text-gray-700 mb-1">Enlace de demostración:</p>
+                            <p class="break-words"><a :href="demoResetUrl" class="text-copihue-600 underline" x-text="demoResetUrl"></a></p>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- General Error -->
-                <div x-show="errors.general" class="mt-4">
+                <div x-show="errors.general" x-cloak class="mt-4">
                     <?php echo render_alert([
                         'type' => 'error',
                         'message' => '',
@@ -233,13 +233,7 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200">
-        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-            <div class="text-center text-sm text-gray-500">
-                © <?php echo date('Y'); ?> Lucatón. Todos los derechos reservados.
-            </div>
-        </div>
-    </footer>
+    <?php include __DIR__ . '/../layouts/partials/footer.php'; ?>
 
     <script>
         function forgotPasswordForm() {
@@ -251,9 +245,13 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                 loading: false,
                 emailSent: false,
                 resendCooldown: 0,
+                resendIntervalId: null,
+                successMessage: '',
+                demoResetUrl: '',
 
                 validateEmail() {
                     const email = this.form.email.trim();
+                    this.form.email = email;
                     
                     if (!email) {
                         this.errors.email = 'El correo electrónico es requerido';
@@ -270,6 +268,16 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                     return true;
                 },
 
+                clearGeneralError() {
+                    if (this.errors.general) {
+                        delete this.errors.general;
+                    }
+                },
+
+                getFormElement() {
+                    return document.getElementById('forgot-password-form');
+                },
+
                 isFormValid() {
                     return this.form.email && Object.keys(this.errors).length === 0;
                 },
@@ -281,13 +289,15 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                     }
                     
                     this.loading = true;
-                    delete this.errors.general;
+                    this.clearGeneralError();
                     
                     try {
-                        const formData = new FormData();
-                        formData.append('email', this.form.email);
-                        
-                        const response = await fetch('/auth/forgot-password', {
+                        const formElement = this.getFormElement();
+                        const formData = formElement ? new FormData(formElement) : new FormData();
+                        formData.set('email', this.form.email);
+                        const endpoint = formElement && formElement.getAttribute('action') ? formElement.getAttribute('action') : '<?= Router::url('recuperar') ?>';
+
+                        const response = await fetch(endpoint, {
                             method: 'POST',
                             body: formData,
                             headers: {
@@ -299,9 +309,17 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                         
                         if (data.success) {
                             this.emailSent = true;
+                            this.errors = {};
                             this.startResendCooldown();
+
+                            if (data.message) {
+                                this.successMessage = data.message;
+                            }
+
+                            if (data.reset_url) {
+                                this.demoResetUrl = data.reset_url;
+                            }
                         } else {
-                            // Handle validation errors
                             if (data.errors) {
                                 this.errors = data.errors;
                             } else {
@@ -319,13 +337,16 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                 async resendEmail() {
                     if (this.resendCooldown > 0) return;
                     
+                    this.clearGeneralError();
                     this.loading = true;
                     
                     try {
-                        const formData = new FormData();
-                        formData.append('email', this.form.email);
-                        
-                        const response = await fetch('/auth/forgot-password', {
+                        const formElement = this.getFormElement();
+                        const formData = formElement ? new FormData(formElement) : new FormData();
+                        formData.set('email', this.form.email);
+                        const endpoint = formElement && formElement.getAttribute('action') ? formElement.getAttribute('action') : '<?= Router::url('recuperar') ?>';
+
+                        const response = await fetch(endpoint, {
                             method: 'POST',
                             body: formData,
                             headers: {
@@ -337,9 +358,15 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                         
                         if (data.success) {
                             this.startResendCooldown();
-                            // Show success message briefly
-                            const originalText = 'Enlace reenviado correctamente';
-                            // You could show a toast notification here
+                            this.clearGeneralError();
+
+                            if (data.message) {
+                                this.successMessage = data.message;
+                            }
+
+                            if (data.reset_url) {
+                                this.demoResetUrl = data.reset_url;
+                            }
                         } else {
                             this.errors.general = data.message || 'Error al reenviar el enlace';
                         }
@@ -352,11 +379,17 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                 },
 
                 startResendCooldown() {
+                    if (this.resendIntervalId) {
+                        clearInterval(this.resendIntervalId);
+                    }
+
                     this.resendCooldown = 60; // 60 seconds cooldown
-                    const interval = setInterval(() => {
-                        this.resendCooldown--;
+                    this.resendIntervalId = setInterval(() => {
+                        this.resendCooldown = Math.max(this.resendCooldown - 1, 0);
+
                         if (this.resendCooldown <= 0) {
-                            clearInterval(interval);
+                            clearInterval(this.resendIntervalId);
+                            this.resendIntervalId = null;
                         }
                     }, 1000);
                 },
@@ -366,6 +399,14 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
                     this.form.email = '';
                     this.errors = {};
                     this.resendCooldown = 0;
+                    this.clearGeneralError();
+                    this.successMessage = '';
+                    this.demoResetUrl = '';
+
+                    if (this.resendIntervalId) {
+                        clearInterval(this.resendIntervalId);
+                        this.resendIntervalId = null;
+                    }
                 }
             }
         }

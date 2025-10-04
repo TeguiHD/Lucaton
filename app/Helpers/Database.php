@@ -155,6 +155,11 @@ class Database {
         return $stmt->rowCount();
     }
 
+    public function execute($sql, $params = []) {
+        $stmt = $this->query($sql, $params);
+        return $stmt->rowCount();
+    }
+
     /**
      * Iniciar transacción
      */

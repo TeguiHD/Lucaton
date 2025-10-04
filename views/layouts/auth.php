@@ -101,7 +101,7 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
     <!-- JS de interacción ligera (sin CDN) -->
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801" defer></script>
+    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
     
     <!-- Additional scripts -->
     <?= $additional_scripts ?? '' ?>

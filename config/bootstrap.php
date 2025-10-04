@@ -106,6 +106,10 @@ define('PROJECT_OWNER_NAME', env('PROJECT_OWNER_NAME', 'Proyecto Lucatón — Te
 define('PROJECT_OWNER_EMAIL', env('PROJECT_OWNER_EMAIL', 'nlopetegui@pregrado.ubo.cl'));
 define('PROJECT_DISCLAIMER', env('PROJECT_DISCLAIMER', 'Prototipo académico sin fines comerciales. Los datos de contacto se proveen solo para fines universitarios.'));
 
+// Configuración básica de correo saliente
+define('MAIL_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', 'noreply@lucaton.local'));
+define('MAIL_FROM_NAME', env('MAIL_FROM_NAME', 'Lucatón'));
+
 // Cargar helper de base de datos// Incluir helpers
 require_once ROOT_PATH . '/app/Helpers/Database.php';
 require_once ROOT_PATH . '/app/Helpers/Logger.php';
@@ -123,9 +127,14 @@ require_once ROOT_PATH . '/app/Models/Donation.php';
 require_once ROOT_PATH . '/app/Models/NewsArticle.php';
 require_once ROOT_PATH . '/app/Models/NewsCategory.php';
 require_once ROOT_PATH . '/app/Models/Notification.php';
+require_once ROOT_PATH . '/app/Models/CampaignAppeal.php';
 
 // Incluir servicios
 require_once ROOT_PATH . '/app/Services/AvatarUploadService.php';
+require_once ROOT_PATH . '/app/Services/CampaignMediaUploadService.php';
+require_once ROOT_PATH . '/app/Services/CampaignLifecycleMailer.php';
+require_once ROOT_PATH . '/app/Services/CampaignMilestoneNotifier.php';
+require_once ROOT_PATH . '/app/Services/AuditLogReader.php';
 
 // Incluir controladores
 require_once ROOT_PATH . '/app/Controllers/HomeController.php';
@@ -162,6 +171,8 @@ define('RATE_LIMIT_WINDOW', (int)env('RATE_LIMIT_WINDOW', 3600));
 define('SESSION_LIFETIME', (int)env('SESSION_LIFETIME', 7200));
 define('SESSION_NAME', env('SESSION_NAME', 'lucaton_session'));
 define('CSRF_TOKEN_NAME', env('CSRF_TOKEN_NAME', 'csrf_token'));
+define('SESSION_SIGNATURE_KEY', env('SESSION_SIGNATURE_KEY', hash('sha256', APP_NAME . '|' . DB_NAME . '|' . APP_ENV)));
+define('ROLE_SIGNATURE_KEY', env('ROLE_SIGNATURE_KEY', hash('sha256', SESSION_SIGNATURE_KEY . '|role-signature')));
 
 // Configurar logs
 define('LOG_LEVEL', env('LOG_LEVEL', 'info'));

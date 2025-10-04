@@ -14,16 +14,19 @@ function render_campaign_card($campaign, $options = []) {
         'show_actions' => true,
         'card_class' => '',
         'link_class' => '',
-        'compact' => false
+        'compact' => false,
+        'show_id' => true,
     ];
 
     $options = array_merge($defaults, $options);
 
     $goal_amount = (float)($campaign['goal_amount'] ?? ($campaign['goal'] ?? 0));
     $raised_amount = (float)($campaign['raised_amount'] ?? ($campaign['current_amount'] ?? ($campaign['raised'] ?? 0)));
-    $image_url = $campaign['cover_image_url']
+    $imageCandidate = $campaign['cover_image_url']
         ?? $campaign['image_url']
         ?? $campaign['image']
+        ?? null;
+    $image_url = CampaignMediaUploadService::normalizePublicUrl($imageCandidate)
         ?? (APP_URL . '/public/assets/images/campaigns/escuela-rural.svg');
     $creator_name = $campaign['owner_name']
         ?? $campaign['creator_name']
@@ -97,11 +100,15 @@ function render_campaign_card($campaign, $options = []) {
     $html .= '<div class="p-6">';
 
     $html .= '<div class="mb-4">';
-    $html .= '<h3 class="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">';
+    $html .= '<h3 class="text-lg font-semibold text-gray-900 mb-1 line-clamp-2">';
     $html .= '<a href="' . htmlspecialchars($detail_url) . '" class="hover:text-copihue-600 transition-colors duration-200">';
     $html .= htmlspecialchars($campaign['title']);
     $html .= '</a>';
     $html .= '</h3>';
+
+    if (!empty($options['show_id']) && !empty($campaign['id'])) {
+        $html .= '<p class="text-xs font-medium uppercase tracking-wide text-gray-400">ID #' . (int)$campaign['id'] . '</p>';
+    }
 
     if (empty($options['compact']) && $summary_text !== '') {
         $excerpt = mb_substr($summary_text, 0, 150);

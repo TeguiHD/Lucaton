@@ -26,12 +26,16 @@ class NewsAdminController {
         $articles = $result['data'];
         $pagination = $result['pagination'];
         $page_title = 'Gestión de noticias';
+        $meta_description = 'Administra y publica noticias para la comunidad de Lucatón.';
+        $current_page = 'admin-news';
 
         include VIEWS_PATH . '/admin/news/index.php';
     }
 
     public function create() {
         $page_title = 'Nueva noticia';
+        $meta_description = 'Redacta una nueva noticia para la comunidad de Lucatón.';
+        $current_page = 'admin-news';
         $categories = $this->categories->all();
         $article = null;
         $errors = [];
@@ -83,6 +87,8 @@ class NewsAdminController {
         if (!empty($errors)) {
             $categories = $this->categories->all();
             $page_title = 'Nueva noticia';
+            $meta_description = 'Redacta una nueva noticia para la comunidad de Lucatón.';
+            $current_page = 'admin-news';
             $article = null;
             $old = $data;
             include VIEWS_PATH . '/admin/news/create.php';
@@ -113,6 +119,8 @@ class NewsAdminController {
         }
 
         $page_title = 'Editar noticia';
+        $meta_description = 'Actualiza la información de la noticia seleccionada.';
+        $current_page = 'admin-news';
         $categories = $this->categories->all();
         $errors = [];
         $old = $article;
@@ -161,6 +169,8 @@ class NewsAdminController {
         if (!empty($errors)) {
             $categories = $this->categories->all();
             $page_title = 'Editar noticia';
+            $meta_description = 'Actualiza la información de la noticia seleccionada.';
+            $current_page = 'admin-news';
             $old = array_merge($article, $data);
             include VIEWS_PATH . '/admin/news/edit.php';
             return;

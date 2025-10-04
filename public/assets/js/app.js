@@ -50,6 +50,7 @@ function initLucatonUI() {
 
     var pair = { button: button, menu: menu, target: target };
     state.pairs.push(pair);
+    initializeNotificationTrigger(pair);
     return pair;
   }
 
@@ -154,37 +155,309 @@ function initLucatonUI() {
     });
   }
 
-  function loadNotifications(button, menu) {
-    if (button.getAttribute('data-loading') === 'true') {
+
+  var modalCache = null;
+  var modalContext = null;
+
+  function getNotificationState(button) {
+    if (!button) {
+      return null;
+    }
+
+    if (!button.__notificationState) {
+      var limitAttr = parseInt(button.getAttribute('data-limit') || '10', 10);
+      var limit = isNaN(limitAttr) ? 10 : Math.min(Math.max(limitAttr, 1), 50);
+      button.__notificationState = {
+        limit: limit,
+        offset: 0,
+        hasMore: false,
+        notifications: [],
+        loading: false,
+        loaded: false,
+        lastFetchedAt: 0,
+        index: {}
+      };
+    }
+
+    return button.__notificationState;
+  }
+
+  function buildUrl(base, params) {
+    var url = base || '';
+    if (!params) {
+      return url;
+    }
+
+    var parts = [];
+    Object.keys(params).forEach(function (key) {
+      var value = params[key];
+      if (value === undefined || value === null) {
+        return;
+      }
+      parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+    });
+
+    if (parts.length === 0) {
+      return url;
+    }
+
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + parts.join('&');
+  }
+
+  function getNotificationElements(menu) {
+    if (!menu) {
+      return {};
+    }
+
+    return {
+      spinner: menu.querySelector('[data-notification-spinner]'),
+      list: menu.querySelector('[data-notification-list]'),
+      empty: menu.querySelector('[data-notification-empty]'),
+      error: menu.querySelector('[data-notification-error]'),
+      loadMore: menu.querySelector('[data-notification-action="load-more"]'),
+      scroll: menu.querySelector('[data-notification-scroll]')
+    };
+  }
+
+  function toggleEmptyState(element, show) {
+    if (!element) {
+      return;
+    }
+    element.classList.toggle('hidden', !show);
+  }
+
+  function clearNotificationError(element) {
+    if (!element) {
+      return;
+    }
+    element.textContent = '';
+    element.classList.add('hidden');
+  }
+
+  function updateLoadMoreButton(button, hasMore) {
+    if (!button) {
+      return;
+    }
+    button.classList.toggle('hidden', !hasMore);
+    button.disabled = !hasMore;
+  }
+
+  function findPairByMenu(menu) {
+    for (var i = 0; i < state.pairs.length; i++) {
+      if (state.pairs[i].menu === menu) {
+        return state.pairs[i];
+      }
+    }
+    return null;
+  }
+
+  function sanitizeUrl(url) {
+    if (!url) {
+      return null;
+    }
+
+    try {
+      var base = window.location.origin || document.baseURI || '';
+      var normalized = new URL(url, base);
+      if (normalized.protocol === 'http:' || normalized.protocol === 'https:') {
+        return normalized.href;
+      }
+    } catch (err) {
+      return null;
+    }
+
+    return null;
+  }
+
+  function formatNotificationMessage(notification) {
+    var safeMessage = escapeHtml(notification.message || '').replace(/\n/g, '<br>');
+    var chunks = [safeMessage];
+
+    if (notification.meta && notification.meta.url) {
+      var safeUrl = sanitizeUrl(notification.meta.url);
+      if (safeUrl) {
+        chunks.push(
+          '<p class="pt-2">' +
+            '<a href="' + safeUrl + '" class="inline-flex items-center gap-1 text-copihue-600 hover:text-copihue-700 font-medium" target="_blank" rel="noopener">' +
+              'Abrir enlace relacionado' +
+              ' <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 3h7m0 0v7m0-7L10 14" />' +
+              '</svg>' +
+            '</a>' +
+          '</p>'
+        );
+      }
+    }
+
+    return chunks.join('');
+  }
+
+  function ensureNotificationModal() {
+    if (modalCache !== null) {
+      return modalCache;
+    }
+
+    var root = document.querySelector('[data-notification-modal]');
+    if (!root) {
+      modalCache = null;
+      return null;
+    }
+
+    modalCache = {
+      root: root,
+      title: root.querySelector('[data-notification-modal-title]'),
+      type: root.querySelector('[data-notification-modal-type]'),
+      message: root.querySelector('[data-notification-modal-message]'),
+      time: root.querySelector('[data-notification-modal-time]'),
+      markButton: root.querySelector('[data-notification-modal-action="mark"]'),
+      deleteButton: root.querySelector('[data-notification-modal-action="delete"]'),
+      closeButtons: root.querySelectorAll('[data-notification-modal-close]')
+    };
+
+    if (modalCache.closeButtons) {
+      modalCache.closeButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+          event.preventDefault();
+          hideNotificationModal();
+        });
+      });
+    }
+
+    root.addEventListener('click', function (event) {
+      if (event.target === root) {
+        hideNotificationModal();
+      }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' || event.key === 'Esc') {
+        hideNotificationModal();
+      }
+    });
+
+    if (modalCache.markButton) {
+      modalCache.markButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        if (!modalContext || !modalContext.button) {
+          return;
+        }
+        var id = modalContext.notificationId;
+        markNotificationsAsRead(modalContext.button, [id], {
+          menu: modalContext.menu,
+          forceRender: true
+        }).finally(function () {
+          hideNotificationModal();
+        });
+      });
+    }
+
+    if (modalCache.deleteButton) {
+      modalCache.deleteButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        if (!modalContext || !modalContext.button) {
+          return;
+        }
+        var id = modalContext.notificationId;
+        deleteNotifications(modalContext.button, modalContext.menu, [id]).finally(function () {
+          hideNotificationModal();
+        });
+      });
+    }
+
+    return modalCache;
+  }
+
+  function showNotificationModal(notification, button, menu) {
+    var modal = ensureNotificationModal();
+    if (!modal || !modal.root) {
       return;
     }
 
-    var endpoint = button.getAttribute('data-endpoint');
-    if (!endpoint) {
+    modalContext = {
+      button: button,
+      menu: menu,
+      notificationId: notification.id
+    };
+
+    if (modal.title) {
+      modal.title.textContent = notification.title || 'Notificación';
+    }
+    if (modal.type) {
+      modal.type.textContent = (notification.type || 'info').toUpperCase();
+    }
+    if (modal.message) {
+      modal.message.innerHTML = formatNotificationMessage(notification);
+    }
+    if (modal.time) {
+      modal.time.textContent = notification.time_ago || '';
+    }
+    if (modal.markButton) {
+      if (notification.is_read) {
+        modal.markButton.classList.add('hidden');
+      } else {
+        modal.markButton.classList.remove('hidden');
+      }
+    }
+
+    modal.root.classList.remove('hidden');
+    modal.root.setAttribute('data-current-id', String(notification.id));
+    document.body.classList.add('overflow-hidden');
+  }
+
+  function hideNotificationModal() {
+    if (!modalCache || !modalCache.root) {
       return;
     }
 
-    var spinner = menu.querySelector('[data-notification-spinner]');
-    var list = menu.querySelector('[data-notification-list]');
-    var emptyState = menu.querySelector('[data-notification-empty]');
-    var errorState = menu.querySelector('[data-notification-error]');
+    modalCache.root.classList.add('hidden');
+    modalCache.root.removeAttribute('data-current-id');
+    document.body.classList.remove('overflow-hidden');
+    modalContext = null;
+  }
 
-    if (spinner) {
-      spinner.classList.remove('hidden');
-    }
-    if (list) {
-      list.classList.add('hidden');
-    }
-    if (emptyState) {
-      emptyState.classList.add('hidden');
-    }
-    if (errorState) {
-      errorState.classList.add('hidden');
+  function openNotificationDetail(button, menu, notificationId) {
+    var stateObj = getNotificationState(button);
+    if (!stateObj) {
+      return;
     }
 
-    button.setAttribute('data-loading', 'true');
+    var notification = stateObj.index && stateObj.index[notificationId];
+    if (!notification) {
+      for (var i = 0; i < stateObj.notifications.length; i++) {
+        if (stateObj.notifications[i].id === notificationId) {
+          notification = stateObj.notifications[i];
+          break;
+        }
+      }
+    }
 
-    fetch(endpoint, {
+    if (!notification) {
+      return;
+    }
+
+    var pair = findPairByMenu(menu);
+    if (pair) {
+      setToggleState(pair, false);
+    }
+
+    showNotificationModal(notification, button, menu);
+
+    if (!notification.is_read) {
+      markNotificationsAsRead(button, [notificationId], {
+        menu: menu,
+        state: stateObj,
+        forceRender: true
+      });
+    }
+  }
+
+  function refreshNotificationSummary(button) {
+    var summaryEndpoint = button.getAttribute('data-summary-endpoint');
+    if (!summaryEndpoint) {
+      return;
+    }
+
+    fetch(summaryEndpoint, {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'same-origin'
     })
@@ -195,116 +468,118 @@ function initLucatonUI() {
         return response.json();
       })
       .then(function (data) {
-        if (spinner) {
-          spinner.classList.add('hidden');
-        }
-
-        if (!data || data.success !== true) {
-          showNotificationError(errorState, 'No se pudieron cargar las notificaciones.');
-          updateBadge(button, data && typeof data.unread === 'number' ? data.unread : 0);
-          return;
-        }
-
-        var notifications = Array.isArray(data.notifications) ? data.notifications : [];
-        var unreadIds = renderNotifications(menu, notifications, typeColors);
-        updateBadge(button, data.unread || 0);
-
-        if (notifications.length === 0 && emptyState) {
-          emptyState.classList.remove('hidden');
-        }
-
-        if (unreadIds.length > 0) {
-          markNotificationsAsRead(button, unreadIds);
+        if (data && typeof data.unread === 'number') {
+          updateBadge(button, data.unread);
         }
       })
       .catch(function () {
-        if (spinner) {
-          spinner.classList.add('hidden');
-        }
-        showNotificationError(errorState, 'Error de conexión. Inténtalo nuevamente.');
-      })
-      .finally(function () {
-        button.setAttribute('data-loading', 'false');
+        // silencioso
       });
   }
 
-  function showNotificationError(container, message) {
-    if (!container) {
+  function scheduleNotificationSummary(button) {
+    if (!button) {
       return;
     }
-    container.textContent = message;
-    container.classList.remove('hidden');
-  }
 
-  function renderNotifications(menu, notifications, typeColorsMap) {
-    var list = menu.querySelector('[data-notification-list]');
-    if (!list) {
-      return [];
+    refreshNotificationSummary(button);
+
+    var intervalAttr = parseInt(button.getAttribute('data-refresh-interval') || '0', 10);
+    var interval = isNaN(intervalAttr) ? 0 : intervalAttr;
+
+    if (interval <= 0) {
+      return;
     }
 
-    list.innerHTML = '';
-    list.classList.remove('hidden');
+    if (button.__notificationSummaryTimer) {
+      return;
+    }
 
-    var unreadIds = [];
-
-    notifications.forEach(function (notification) {
-      var item = document.createElement('li');
-      item.className = 'px-4 py-3 hover:bg-gray-50 transition-colors duration-150';
-
-      var typeKey = typeof notification.type === 'string' ? notification.type : 'info';
-      var badgeClass = typeColorsMap[typeKey] || 'bg-gray-100 text-gray-700';
-      var unreadDot = !notification.is_read ? '<span class="ml-2 inline-flex h-2 w-2 rounded-full bg-copihue-500"></span>' : '';
-
-      if (!notification.is_read) {
-        unreadIds.push(notification.id);
+    button.__notificationSummaryTimer = window.setInterval(function () {
+      if (document.hidden) {
+        return;
       }
-
-      var safeTitle = escapeHtml(notification.title || '');
-      var safeMessage = escapeHtml(notification.message || '');
-      var displayMessage = safeMessage.replace(/\n/g, '<br>');
-      var timeAgo = escapeHtml(notification.time_ago || '');
-      var typeLabel = escapeHtml(typeKey.toUpperCase());
-
-      item.innerHTML =
-        '<div class="flex items-start justify-between">' +
-        '  <div class="pr-4">' +
-        '    <p class="text-sm font-semibold text-gray-900">' + safeTitle +
-        '      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + badgeClass + '">' +
-        typeLabel +
-        '      </span>' +
-        '    </p>' +
-        '    <p class="mt-1 text-sm text-gray-600">' + displayMessage + '</p>' +
-        '    <p class="mt-1 text-xs text-gray-400">' + timeAgo + '</p>' +
-        '  </div>' +
-        '  ' + unreadDot +
-        '</div>';
-
-      list.appendChild(item);
-    });
-
-    return unreadIds;
+      refreshNotificationSummary(button);
+    }, interval);
   }
 
-  function markNotificationsAsRead(button, ids) {
-    if (!Array.isArray(ids) || ids.length === 0) {
+  function handleNotificationAction(element, event) {
+    var action = element.getAttribute('data-notification-action');
+    if (!action) {
       return;
     }
+
+    var menu = element.closest('[data-menu]');
+    if (!menu) {
+      return;
+    }
+
+    var pair = findPairByMenu(menu);
+    if (!pair) {
+      return;
+    }
+
+    var button = pair.button;
+    var stateObj = getNotificationState(button);
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (action === 'refresh') {
+      loadNotifications(button, menu, { force: true, reset: true });
+      return;
+    }
+
+    if (action === 'mark-all') {
+      markNotificationsAsRead(button, [], { menu: menu, state: stateObj, forceRender: true });
+      return;
+    }
+
+    if (action === 'load-more') {
+      loadNotifications(button, menu, { append: true });
+      return;
+    }
+
+    var idAttr = element.getAttribute('data-notification-id');
+    var notificationId = parseInt(idAttr || '0', 10);
+
+    if (!notificationId) {
+      return;
+    }
+
+    if (action === 'open') {
+      openNotificationDetail(button, menu, notificationId);
+      return;
+    }
+
+    if (action === 'delete') {
+      deleteNotifications(button, menu, [notificationId]);
+    }
+  }
+
+  function markNotificationsAsRead(button, ids, options) {
+    options = options || {};
+    var stateObj = options.state || getNotificationState(button);
+    var menu = options.menu;
 
     var endpoint = button.getAttribute('data-read-endpoint');
     var csrfName = button.getAttribute('data-csrf-name');
     var csrfValue = button.getAttribute('data-csrf-value');
 
     if (!endpoint || !csrfName || !csrfValue) {
-      return;
+      return Promise.resolve(null);
     }
 
     var formData = new FormData();
     formData.append(csrfName, csrfValue);
-    ids.forEach(function (id) {
-      formData.append('ids[]', id);
-    });
 
-    fetch(endpoint, {
+    if (Array.isArray(ids) && ids.length > 0) {
+      ids.forEach(function (id) {
+        formData.append('ids[]', id);
+      });
+    }
+
+    return fetch(endpoint, {
       method: 'POST',
       body: formData,
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -319,10 +594,252 @@ function initLucatonUI() {
         if (data && typeof data.unread === 'number') {
           updateBadge(button, data.unread);
         }
+
+        if (!stateObj) {
+          return data;
+        }
+
+        var idsToMark;
+        if (Array.isArray(ids) && ids.length > 0) {
+          idsToMark = ids.map(function (id) { return parseInt(id, 10); });
+        } else {
+          idsToMark = stateObj.notifications.map(function (item) { return item.id; });
+        }
+
+        var readAt = new Date().toISOString();
+
+        stateObj.notifications.forEach(function (item) {
+          if (idsToMark.indexOf(item.id) !== -1) {
+            item.is_read = true;
+            if (!item.read_at) {
+              item.read_at = readAt;
+            }
+          }
+        });
+
+        if (menu && options.forceRender !== false) {
+          renderNotifications(button, menu, stateObj, typeColors);
+        }
+
+        return data;
       })
       .catch(function () {
-        // silencioso
+        return null;
       });
+  }
+
+  function deleteNotifications(button, menu, ids) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return Promise.resolve(null);
+    }
+
+    var endpoint = button.getAttribute('data-delete-endpoint');
+    var csrfName = button.getAttribute('data-csrf-name');
+    var csrfValue = button.getAttribute('data-csrf-value');
+
+    if (!endpoint || !csrfName || !csrfValue) {
+      return Promise.resolve(null);
+    }
+
+    var elements = getNotificationElements(menu);
+    clearNotificationError(elements.error);
+
+    var formData = new FormData();
+    formData.append(csrfName, csrfValue);
+    ids.forEach(function (id) {
+      formData.append('ids[]', id);
+    });
+
+    return fetch(endpoint, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    })
+      .then(function (response) {
+        return response.json().catch(function () {
+          return null;
+        });
+      })
+      .then(function (data) {
+        if (data && typeof data.unread === 'number') {
+          updateBadge(button, data.unread);
+        }
+        return loadNotifications(button, menu, { force: true, reset: true });
+      })
+      .catch(function () {
+        showNotificationError(elements.error, 'No se pudo eliminar la notificación.');
+        return null;
+      });
+  }
+
+  function loadNotifications(button, menu, options) {
+    options = options || {};
+    var stateObj = getNotificationState(button);
+    if (!stateObj) {
+      return Promise.resolve(null);
+    }
+
+    if (stateObj.loading && !options.force) {
+      return Promise.resolve(null);
+    }
+
+    var endpoint = button.getAttribute('data-endpoint');
+    if (!endpoint) {
+      return Promise.resolve(null);
+    }
+
+    var elements = getNotificationElements(menu);
+    if (!options.silent && elements.spinner) {
+      elements.spinner.classList.remove('hidden');
+    }
+    if (!options.silent && elements.list) {
+      elements.list.classList.add('hidden');
+    }
+    if (!options.silent) {
+      toggleEmptyState(elements.empty, false);
+      clearNotificationError(elements.error);
+    }
+
+    stateObj.loading = true;
+    button.setAttribute('data-loading', 'true');
+
+    var params = {
+      limit: stateObj.limit,
+      offset: options.append ? stateObj.offset : 0
+    };
+
+    if (options.reset) {
+      params.offset = 0;
+    }
+
+    return fetch(buildUrl(endpoint, params), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data || data.success !== true) {
+          showNotificationError(elements.error, 'No se pudieron cargar las notificaciones.');
+          updateBadge(button, data && typeof data.unread === 'number' ? data.unread : 0);
+          return data;
+        }
+
+        var items = Array.isArray(data.notifications) ? data.notifications : [];
+
+        if (options.append && stateObj.notifications.length > 0) {
+          stateObj.notifications = stateObj.notifications.concat(items);
+        } else {
+          stateObj.notifications = items;
+          if (elements.scroll) {
+            elements.scroll.scrollTop = 0;
+          }
+        }
+
+        if (typeof data.next_offset === 'number') {
+          stateObj.offset = data.next_offset;
+        } else if (options.append) {
+          stateObj.offset = stateObj.notifications.length;
+        } else {
+          stateObj.offset = items.length;
+        }
+
+        stateObj.hasMore = !!data.has_more;
+        stateObj.lastFetchedAt = Date.now();
+        stateObj.loaded = true;
+
+        renderNotifications(button, menu, stateObj, typeColors);
+        updateLoadMoreButton(elements.loadMore, stateObj.hasMore);
+        toggleEmptyState(elements.empty, stateObj.notifications.length === 0);
+        updateBadge(button, data.unread || 0);
+        return data;
+      })
+      .catch(function () {
+        showNotificationError(elements.error, 'Error de conexión. Inténtalo nuevamente.');
+        return null;
+      })
+      .finally(function () {
+        stateObj.loading = false;
+        button.setAttribute('data-loading', 'false');
+        if (elements.spinner) {
+          elements.spinner.classList.add('hidden');
+        }
+      });
+  }
+
+  function showNotificationError(container, message) {
+    if (!container) {
+      return;
+    }
+    container.textContent = message;
+    container.classList.remove('hidden');
+  }
+
+  function renderNotifications(button, menu, stateObj, typeColorsMap) {
+    var elements = getNotificationElements(menu);
+    var list = elements.list;
+    if (!list) {
+      return;
+    }
+
+    list.innerHTML = '';
+    var notifications = stateObj && Array.isArray(stateObj.notifications) ? stateObj.notifications : [];
+    stateObj.index = {};
+
+    if (notifications.length === 0) {
+      list.classList.add('hidden');
+      return;
+    }
+
+    list.classList.remove('hidden');
+
+    notifications.forEach(function (notification) {
+      stateObj.index[notification.id] = notification;
+
+      var unread = !notification.is_read;
+      var item = document.createElement('li');
+      item.className = 'group relative px-4 py-3 transition-colors duration-150' + (unread ? ' bg-copihue-50' : '');
+      item.setAttribute('data-notification-item', '');
+      item.setAttribute('data-notification-id', notification.id);
+      item.setAttribute('data-notification-read', unread ? '0' : '1');
+
+      var typeKey = typeof notification.type === 'string' ? notification.type : 'info';
+      var badgeClass = typeColorsMap[typeKey] || 'bg-gray-100 text-gray-700';
+      var safeTitle = escapeHtml(notification.title || '');
+      var messageHtml = formatNotificationMessage(notification);
+      var timeAgo = escapeHtml(notification.time_ago || '');
+      var typeLabel = escapeHtml(typeKey.toUpperCase());
+      var dotClass = unread ? 'bg-copihue-500' : 'bg-gray-300';
+
+      item.innerHTML =
+        '<div class="flex items-start gap-3">' +
+        '  <button type="button" class="flex-1 text-left" data-notification-action="open" data-notification-id="' + notification.id + '">' +
+        '    <div class="flex items-start gap-3">' +
+        '      <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full ' + dotClass + '"></span>' +
+        '      <div>' +
+        '        <p class="text-sm font-semibold text-gray-900 flex items-center gap-2">' + safeTitle +
+        '          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + badgeClass + '">' + typeLabel + '</span>' +
+        '        </p>' +
+        '        <div class="mt-1 text-sm text-gray-600 leading-snug">' + messageHtml + '</div>' +
+        '        <p class="mt-1 text-xs text-gray-400">' + timeAgo + '</p>' +
+        '      </div>' +
+        '    </div>' +
+        '  </button>' +
+        '  <button type="button" class="ml-2 shrink-0 text-gray-300 hover:text-red-500 focus:outline-none" data-notification-action="delete" data-notification-id="' + notification.id + '">' +
+        '    <span class="sr-only">Eliminar</span>' +
+        '    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
+        '      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />' +
+        '    </svg>' +
+        '  </button>' +
+        '</div>';
+
+      list.appendChild(item);
+    });
   }
 
   function updateBadge(button, unread) {
@@ -349,6 +866,24 @@ function initLucatonUI() {
       .replace(/'/g, '&#039;');
   }
 
+  function initializeNotificationTrigger(pair) {
+    if (!pair || !pair.button || !pair.menu) {
+      return;
+    }
+
+    if (!pair.button.hasAttribute('data-notification-trigger')) {
+      return;
+    }
+
+    if (pair.button.__notificationInitDone) {
+      return;
+    }
+
+    pair.button.__notificationInitDone = true;
+    getNotificationState(pair.button);
+    scheduleNotificationSummary(pair.button);
+  }
+
   function handleToggle(button) {
     var pair = getOrRegisterPair(button);
     if (!pair) {
@@ -358,12 +893,11 @@ function initLucatonUI() {
     var willOpen = pair.menu.classList.contains('hidden');
 
     closeAll(button);
+    setToggleState(pair, willOpen);
 
     if (willOpen && button.hasAttribute('data-notification-trigger')) {
-      loadNotifications(button, pair.menu);
+      loadNotifications(button, pair.menu, { force: true, reset: true });
     }
-
-    setToggleState(pair, willOpen);
   }
 
   function bindGlobalListeners() {
@@ -377,6 +911,12 @@ function initLucatonUI() {
         event.preventDefault();
         event.stopPropagation();
         handleToggle(toggleButton);
+        return;
+      }
+
+      var actionElement = event.target.closest('[data-notification-action]');
+      if (actionElement) {
+        handleNotificationAction(actionElement, event);
         return;
       }
 
@@ -399,13 +939,16 @@ function initLucatonUI() {
     for (var i = 0; i < toggles.length; i++) {
       var pair = getOrRegisterPair(toggles[i]);
       if (pair) {
+        initializeNotificationTrigger(pair);
         var isOpen = !pair.menu.classList.contains('hidden');
         setToggleState(pair, isOpen);
       }
     }
   }
 
+
   primeExistingToggles();
+  ensureNotificationModal();
   bindGlobalListeners();
   state.closeAll = closeAll;
   state.anyMenuOpen = anyMenuOpen;

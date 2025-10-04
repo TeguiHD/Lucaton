@@ -6,24 +6,47 @@
 class Campaign {
     private Database $db;
     private static $schemaCapabilities = null;
+    private static $statusHistoryColumns = null;
+    private static ?string $resolvedOwnerColumn = null;
+    private string $ownerColumn = '';
 
     public function __construct() {
         $this->db = Database::getInstance();
         if (self::$schemaCapabilities === null) {
             self::$schemaCapabilities = [
-                'owner_id' => $this->db->columnExists('campaigns', 'owner_id'),
+                'owner_id' => $this->db->columnExists('campaigns', 'owner_id')
+                    || $this->db->columnExists('campaigns', 'user_id'),
                 'status' => $this->db->columnExists('campaigns', 'status'),
                 'created_at' => $this->db->columnExists('campaigns', 'created_at'),
+                'updated_at' => $this->db->columnExists('campaigns', 'updated_at'),
+                'published_at' => $this->db->columnExists('campaigns', 'published_at'),
             ];
         }
+
+        if (self::$resolvedOwnerColumn === null) {
+            if ($this->db->columnExists('campaigns', 'owner_id')) {
+                self::$resolvedOwnerColumn = 'owner_id';
+            } elseif ($this->db->columnExists('campaigns', 'user_id')) {
+                self::$resolvedOwnerColumn = 'user_id';
+            } else {
+                self::$resolvedOwnerColumn = '';
+            }
+        }
+
+        $this->ownerColumn = self::$resolvedOwnerColumn;
     }
 
     private function supportsColumn(string $column): bool {
+        if ($column === 'owner_id') {
+            return $this->ownerColumn !== '';
+        }
+
         return self::$schemaCapabilities[$column] ?? false;
     }
 
     public function create(array $data): int {
-        if (empty($data['owner_id'])) {
+        $ownerId = $data['owner_id'] ?? $data['user_id'] ?? null;
+        if (empty($ownerId)) {
             throw new Exception('owner_id requerido');
         }
 
@@ -31,12 +54,16 @@ class Campaign {
             throw new Exception('category_id requerido');
         }
 
+        if ($this->ownerColumn === '') {
+            throw new Exception('La tabla campaigns no tiene una columna de propietario válida');
+        }
+
         $now = date('Y-m-d H:i:s');
 
         $this->db->beginTransaction();
         try {
             $campaignId = (int)$this->db->insert('campaigns', [
-                'owner_id' => $data['owner_id'],
+                $this->ownerColumn => $ownerId,
                 'category_id' => $data['category_id'],
                 'title' => $data['title'],
                 'slug' => $data['slug'],
@@ -85,7 +112,7 @@ class Campaign {
                 'campaign_id' => $campaignId,
                 'previous_status' => null,
                 'new_status' => $data['status'] ?? 'draft',
-                'changed_by' => $data['owner_id'],
+                'changed_by' => $ownerId,
                 'notes' => $data['status_notes'] ?? 'Campaña creada',
                 'created_at' => $now
             ]);
@@ -99,33 +126,60 @@ class Campaign {
     }
 
     public function findById(int $id): ?array {
-        return $this->db->fetch(
-            "SELECT c.*, cd.beneficiary_name, cd.beneficiary_type, cd.beneficiary_contact, cd.location_label,
-                    cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug
-             FROM campaigns c
-             LEFT JOIN campaign_details cd ON cd.campaign_id = c.id
-             LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
-             LEFT JOIN campaign_categories cat ON cat.id = c.category_id
-             WHERE c.id = ?",
-            [$id]
-        ) ?: null;
+        try {
+            $row = $this->db->fetch(
+                "SELECT c.*, cd.beneficiary_name, cd.beneficiary_type, cd.beneficiary_contact, cd.location_label,
+                        cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug
+                 FROM campaigns c
+                 LEFT JOIN campaign_details cd ON cd.campaign_id = c.id
+                 LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
+                 LEFT JOIN campaign_categories cat ON cat.id = c.category_id
+                 WHERE c.id = ?",
+                [$id]
+            );
+        } catch (Exception $exception) {
+            if ($this->isModularTableMissing($exception)) {
+                $row = $this->db->fetch('SELECT * FROM campaigns c WHERE c.id = ? LIMIT 1', [$id]);
+                return $row ? $this->hydrateLegacyCampaignRow($row) : null;
+            }
+
+            throw $exception;
+        }
+
+        return $row ?: null;
     }
 
     public function findBySlug(string $slug): ?array {
-        return $this->db->fetch(
-            "SELECT c.*, cd.beneficiary_name, cd.beneficiary_type, cd.beneficiary_contact, cd.location_label,
-                    cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug
-             FROM campaigns c
-             LEFT JOIN campaign_details cd ON cd.campaign_id = c.id
-             LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
-             LEFT JOIN campaign_categories cat ON cat.id = c.category_id
-             WHERE c.slug = ?",
-            [$slug]
-        ) ?: null;
+        try {
+            $row = $this->db->fetch(
+                "SELECT c.*, cd.beneficiary_name, cd.beneficiary_type, cd.beneficiary_contact, cd.location_label,
+                        cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug
+                 FROM campaigns c
+                 LEFT JOIN campaign_details cd ON cd.campaign_id = c.id
+                 LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
+                 LEFT JOIN campaign_categories cat ON cat.id = c.category_id
+                 WHERE c.slug = ?",
+                [$slug]
+            );
+        } catch (Exception $exception) {
+            if ($this->isModularTableMissing($exception)) {
+                $row = $this->db->fetch('SELECT * FROM campaigns c WHERE c.slug = ? LIMIT 1', [$slug]);
+                return $row ? $this->hydrateLegacyCampaignRow($row) : null;
+            }
+
+            throw $exception;
+        }
+
+        return $row ?: null;
     }
 
     public function findByUserId(int $userId, int $limit = 10, int $offset = 0): array {
         if (!$this->supportsColumn('owner_id')) {
+            return [];
+        }
+
+        $ownerColumn = $this->ownerColumn;
+        if ($ownerColumn === '') {
             return [];
         }
 
@@ -146,7 +200,7 @@ class Campaign {
         }
 
         $sql = $select . $joins . "
-            WHERE c.owner_id = ?
+            WHERE c.{$ownerColumn} = ?
             ORDER BY c." . ($this->supportsColumn('created_at') ? 'created_at' : 'id') . " DESC
             LIMIT ? OFFSET ?";
 
@@ -254,31 +308,158 @@ class Campaign {
             throw new Exception('Campaña no encontrada');
         }
 
+        if (!$this->supportsColumn('status')) {
+            throw new Exception('El esquema actual no permite cambiar el estado de las campañas.');
+        }
+
         $now = date('Y-m-d H:i:s');
+
+        $updatePayload = [
+            'status' => $status,
+        ];
+
+        if ($this->supportsColumn('updated_at')) {
+            $updatePayload['updated_at'] = $now;
+        }
+
+        if ($this->supportsColumn('published_at')) {
+            $updatePayload['published_at'] = $status === 'published'
+                ? $now
+                : ($campaign['published_at'] ?? null);
+        }
 
         $this->db->beginTransaction();
         try {
-            $this->db->update('campaigns', [
-                'status' => $status,
-                'updated_at' => $now,
-                'published_at' => $status === 'published' ? $now : $campaign['published_at']
-            ], 'id = ?', [$id]);
+            $this->db->update('campaigns', $updatePayload, 'id = ?', [$id]);
 
-            $this->db->insert('campaign_status_history', [
-                'campaign_id' => $id,
-                'previous_status' => $campaign['status'],
-                'new_status' => $status,
-                'changed_by' => $moderatorId,
-                'notes' => $notes,
-                'created_at' => $now
-            ]);
+            $historyColumns = $this->getStatusHistoryColumns();
+            if (!empty($historyColumns)) {
+                $historyPayload = [];
+
+                if (in_array('campaign_id', $historyColumns, true)) {
+                    $historyPayload['campaign_id'] = $id;
+                }
+                if (in_array('previous_status', $historyColumns, true)) {
+                    $historyPayload['previous_status'] = $campaign['status'] ?? null;
+                }
+                if (in_array('new_status', $historyColumns, true)) {
+                    $historyPayload['new_status'] = $status;
+                }
+                if (in_array('changed_by', $historyColumns, true)) {
+                    $historyPayload['changed_by'] = $moderatorId;
+                }
+                if (in_array('notes', $historyColumns, true)) {
+                    $historyPayload['notes'] = $notes;
+                }
+                if (in_array('created_at', $historyColumns, true)) {
+                    $historyPayload['created_at'] = $now;
+                }
+
+                if (!empty($historyPayload)) {
+                    $this->db->insert('campaign_status_history', $historyPayload);
+                }
+            }
 
             $this->db->commit();
+
+            if (in_array($status, ['completed', 'cancelled', 'archived'], true)) {
+                try {
+                    $notifier = new CampaignMilestoneNotifier();
+                    $campaign['id'] = $id;
+                    $campaign['status'] = $status;
+                    $notifier->handleCampaignClosure($campaign, $status);
+                } catch (Exception $e) {
+                    Logger::error('Failed to handle campaign closure milestone', [
+                        'campaign_id' => $id,
+                        'status' => $status,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
             return true;
         } catch (Exception $e) {
             $this->db->rollback();
             throw $e;
         }
+    }
+
+    private function getStatusHistoryColumns(): array
+    {
+        if (self::$statusHistoryColumns !== null) {
+            return self::$statusHistoryColumns;
+        }
+
+        if (!$this->db->tableExists('campaign_status_history')) {
+            self::$statusHistoryColumns = [];
+            return self::$statusHistoryColumns;
+        }
+
+        try {
+            $columns = $this->db->fetchAll('SHOW COLUMNS FROM campaign_status_history');
+        } catch (Exception $exception) {
+            Logger::warning('No se pudo inspeccionar la tabla campaign_status_history', [
+                'error' => $exception->getMessage()
+            ]);
+            self::$statusHistoryColumns = [];
+            return self::$statusHistoryColumns;
+        }
+
+        $names = [];
+        foreach ($columns as $column) {
+            if (isset($column['Field'])) {
+                $names[] = $column['Field'];
+            }
+        }
+
+        self::$statusHistoryColumns = $names;
+
+        return self::$statusHistoryColumns;
+    }
+
+    private function isModularTableMissing(Exception $exception): bool
+    {
+        $message = $exception->getMessage();
+        if (!str_contains($message, 'Base table or view not found')) {
+            return false;
+        }
+
+        return str_contains($message, 'campaign_details')
+            || str_contains($message, 'campaign_metrics')
+            || str_contains($message, 'campaign_categories');
+    }
+
+    private function hydrateLegacyCampaignRow(array $row): array
+    {
+        if ($this->ownerColumn !== '' && !isset($row['owner_id']) && isset($row[$this->ownerColumn])) {
+            $row['owner_id'] = $row[$this->ownerColumn];
+        }
+
+        if (!isset($row['raised_amount'])) {
+            $row['raised_amount'] = (float)($row['current_amount'] ?? 0);
+        }
+
+        if (!isset($row['donor_count'])) {
+            $row['donor_count'] = (int)($row['donation_count'] ?? 0);
+        }
+
+        if (!isset($row['category_name'])) {
+            if (isset($row['category'])) {
+                $row['category_name'] = $row['category'];
+            } elseif (isset($row['category_slug'])) {
+                $row['category_name'] = $row['category_slug'];
+            }
+        }
+
+        if (!isset($row['category_slug']) && isset($row['category'])) {
+            $row['category_slug'] = $row['category'];
+        }
+
+        if (!isset($row['beneficiary_name']) && isset($row['beneficiary'])) {
+            $row['beneficiary_name'] = $row['beneficiary'];
+        }
+
+        return $row;
     }
 
     public function getStats(int $id): array {

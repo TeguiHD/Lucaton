@@ -7,7 +7,7 @@ Esta guía resume la estructura vigente de la base de datos tras la revisión de
 ### `users`
 Campos destacados: `id`, `username`, `email`, `password_hash`, `first_name`, `last_name`, `role`, `status`, `email_verified_at`, `failed_login_attempts`, `locked_until`.
 
-- **Rol** controla autorización (`user`, `admin`).
+- **Rol** controla autorización (`user`, `admin`, `superadmin`).
 - **Status** (`active`, `pending_verification`, `suspended`, etc.) habilita o deshabilita flujos.
 - Índices en `email`, `username`, `status`, `role` garantizan búsquedas eficientes.
 

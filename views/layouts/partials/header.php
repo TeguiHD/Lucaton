@@ -30,13 +30,41 @@ $nav_items = [
     ]
 ];
 
+if (!isset($is_admin)) {
+    $is_admin = SessionHelper::userHasRole('admin');
+}
+
+if ($is_admin) {
+    $nav_items[] = [
+        'name' => 'Administración',
+        'href' => 'admin',
+        'current' => ($current_page === 'admin') || (strpos($current_page, 'admin-') === 0),
+        'auth_required' => true,
+        'admin_only' => true
+    ];
+}
+
 // Verificar si el usuario está autenticado
-$is_authenticated = isset($_SESSION['user_id']);
+$is_authenticated = SessionHelper::isAuthenticated();
 $user_name = $_SESSION['user_name'] ?? '';
 $user_avatar = $_SESSION['user_avatar'] ?? '';
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$user_initial = 'U';
+
+if ($user_name !== '') {
+    if (function_exists('mb_substr')) {
+        $initial = mb_substr($user_name, 0, 1, 'UTF-8');
+        if ($initial !== '') {
+            $user_initial = function_exists('mb_strtoupper') ? mb_strtoupper($initial, 'UTF-8') : strtoupper($initial);
+        }
+    } else {
+        $user_initial = strtoupper(substr($user_name, 0, 1));
+    }
+}
 $notification_api_url = $is_authenticated ? Router::url('api/notifications') : null;
 $notification_mark_url = $is_authenticated ? Router::url('api/notifications/mark-read') : null;
+$notification_summary_url = $is_authenticated ? Router::url('api/notifications/summary') : null;
+$notification_delete_url = $is_authenticated ? Router::url('api/notifications/delete') : null;
+$notification_history_url = $is_authenticated ? Router::url('notificaciones') : Router::url('login');
 $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
 ?>
 
@@ -56,13 +84,23 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                 <!-- Navegación desktop -->
                 <nav class="hidden md:ml-8 md:flex md:space-x-8" aria-label="Navegación principal">
                     <?php foreach ($nav_items as $item): ?>
-                        <?php if (!isset($item['auth_required']) || ($item['auth_required'] && $is_authenticated)): ?>
-                            <a href="<?= Router::url($item['href']) ?>" 
-                               class="<?= $item['current'] ? 'border-copihue-500 text-marino-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' ?> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
-                               <?= $item['current'] ? 'aria-current="page"' : '' ?>>
-                                <?= $item['name'] ?>
-                            </a>
-                        <?php endif; ?>
+                        <?php
+                        $requiresAuth = $item['auth_required'] ?? false;
+                        $requiresAdmin = $item['admin_only'] ?? false;
+
+                        if ($requiresAdmin && !$is_admin) {
+                            continue;
+                        }
+
+                        if ($requiresAuth && !$is_authenticated) {
+                            continue;
+                        }
+                        ?>
+                        <a href="<?= Router::url($item['href']) ?>"
+                           class="<?= $item['current'] ? 'border-copihue-500 text-marino-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' ?> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
+                           <?= $item['current'] ? 'aria-current="page"' : '' ?>>
+                            <?= $item['name'] ?>
+                        </a>
                     <?php endforeach; ?>
                 </nav>
             </div>
@@ -77,6 +115,10 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                             data-notification-trigger
                             data-endpoint="<?= htmlspecialchars($notification_api_url) ?>"
                             data-read-endpoint="<?= htmlspecialchars($notification_mark_url) ?>"
+                            data-summary-endpoint="<?= htmlspecialchars($notification_summary_url ?? '') ?>"
+                            data-delete-endpoint="<?= htmlspecialchars($notification_delete_url ?? '') ?>"
+                            data-limit="10"
+                            data-refresh-interval="60000"
                             data-csrf-name="<?= CSRF_TOKEN_NAME ?>"
                             data-csrf-value="<?= htmlspecialchars($notification_csrf ?? '') ?>"
                             class="relative bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-copihue-500"
@@ -92,12 +134,21 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                             <div class="mx-auto w-full max-w-md sm:mx-0 sm:w-80 sm:max-w-none overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-strong ring-1 ring-black/10">
                                 <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                                     <h3 class="text-sm font-semibold text-gray-900">Notificaciones</h3>
+                                    <div class="flex items-center space-x-2 text-xs">
+                                        <button type="button" data-notification-action="refresh" class="text-gray-500 hover:text-gray-700">Actualizar</button>
+                                        <span class="text-gray-300">·</span>
+                                        <button type="button" data-notification-action="mark-all" class="text-gray-500 hover:text-gray-700">Marcar todas leídas</button>
+                                    </div>
                                 </div>
-                                <div class="max-h-[65vh] sm:max-h-80 overflow-y-auto">
+                                <div class="max-h-[65vh] sm:max-h-80 overflow-y-auto" data-notification-scroll>
                                     <div data-notification-spinner class="py-6 text-center text-sm text-gray-500">Cargando...</div>
                                     <div data-notification-error class="hidden py-6 text-center text-sm text-red-500"></div>
                                     <div data-notification-empty class="hidden py-6 text-center text-sm text-gray-500">No tienes notificaciones.</div>
                                     <ul data-notification-list class="hidden divide-y divide-gray-100"></ul>
+                                </div>
+                                <div class="border-t border-gray-100 bg-gray-50 px-4 py-2 space-y-2 sm:space-y-1">
+                                    <button type="button" data-notification-action="load-more" class="hidden w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-copihue-600 hover:bg-copihue-50 border border-copihue-100">Ver más notificaciones</button>
+                                    <a href="<?= htmlspecialchars($notification_history_url) ?>" class="block text-center text-xs text-gray-500 hover:text-gray-700">Ver todo</a>
                                 </div>
                             </div>
                         </div>
@@ -113,11 +164,11 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                                 aria-haspopup="true">
                             <span class="sr-only">Abrir menú de usuario</span>
                             <?php if ($user_avatar): ?>
-                                <img class="h-8 w-8 rounded-full object-cover" src="<?= $user_avatar ?>" alt="<?= htmlspecialchars($user_name) ?>">
+                                <img class="h-8 w-8 rounded-full object-cover" src="<?= htmlspecialchars($user_avatar) ?>" alt="<?= htmlspecialchars($user_name) ?>">
                             <?php else: ?>
                                 <div class="h-8 w-8 rounded-full bg-copihue-500 flex items-center justify-center">
                                     <span class="text-sm font-medium text-white">
-                                        <?= strtoupper(substr($user_name, 0, 1)) ?>
+                                        <?= htmlspecialchars($user_initial) ?>
                                     </span>
                                 </div>
                             <?php endif; ?>
@@ -136,7 +187,7 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                              aria-orientation="vertical" 
                              aria-labelledby="user-menu-button" 
                              tabindex="-1">
-                            <a href="<?= Router::url('panel') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Mi Panel</a>
+                            <a href="<?= Router::url('panel') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Panel general</a>
                             <a href="<?= Router::url('perfil') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Mi Perfil</a>
                             <a href="<?= Router::url('mis-campanas') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Mis Campañas</a>
                             <?php if ($is_admin): ?>
@@ -195,13 +246,23 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
          id="mobile-menu">
         <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-200">
             <?php foreach ($nav_items as $item): ?>
-                <?php if (!isset($item['auth_required']) || ($item['auth_required'] && $is_authenticated)): ?>
-                    <a href="<?= Router::url($item['href']) ?>" 
-                       class="<?= $item['current'] ? 'bg-copihue-50 border-copihue-500 text-copihue-700' : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800' ?> block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors duration-200"
-                       <?= $item['current'] ? 'aria-current="page"' : '' ?>>
-                        <?= $item['name'] ?>
-                    </a>
-                <?php endif; ?>
+                <?php
+                $requiresAuth = $item['auth_required'] ?? false;
+                $requiresAdmin = $item['admin_only'] ?? false;
+
+                if ($requiresAdmin && !$is_admin) {
+                    continue;
+                }
+
+                if ($requiresAuth && !$is_authenticated) {
+                    continue;
+                }
+                ?>
+                <a href="<?= Router::url($item['href']) ?>"
+                   class="<?= $item['current'] ? 'bg-copihue-50 border-copihue-500 text-copihue-700' : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800' ?> block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors duration-200"
+                   <?= $item['current'] ? 'aria-current="page"' : '' ?>>
+                    <?= $item['name'] ?>
+                </a>
             <?php endforeach; ?>
             
             <?php if (!$is_authenticated): ?>
@@ -217,3 +278,7 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
         </div>
     </div>
 </header>
+
+<?php if ($is_authenticated): ?>
+    <?php include __DIR__ . '/notification-modal.php'; ?>
+<?php endif; ?>

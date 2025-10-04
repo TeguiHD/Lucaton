@@ -242,12 +242,6 @@
   .text-balance {
     overflow-wrap: anywhere;
   }
-
-  @supports (text-wrap: balance) {
-    .text-balance {
-      text-wrap: balance;
-    }
-  }
   
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -372,12 +366,6 @@
   /* Utilidades de texto */
   .text-pretty {
     word-break: break-word;
-  }
-
-  @supports (text-wrap: pretty) {
-    .text-pretty {
-      text-wrap: pretty;
-    }
   }
   
   /* Utilidades de scroll */

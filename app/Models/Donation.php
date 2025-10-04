@@ -82,14 +82,21 @@ class Donation {
      * Obtener donación por ID
      */
     public function findById(int $id): ?array {
-        return $this->db->fetch(
-            "SELECT d.*, c.title AS campaign_title, u.username, u.first_name, u.last_name
+        $hasSupporter = $this->supportsColumn('supporter_id');
+
+        $select = 'SELECT d.*, c.title AS campaign_title';
+        $joinUsers = '';
+        if ($hasSupporter) {
+            $select .= ', u.username, u.first_name, u.last_name';
+            $joinUsers = ' LEFT JOIN users u ON d.supporter_id = u.id';
+        }
+
+        $sql = $select . "
              FROM donations d
-             JOIN campaigns c ON d.campaign_id = c.id
-             LEFT JOIN users u ON d.supporter_id = u.id
-             WHERE d.id = ?",
-            [$id]
-        ) ?: null;
+             JOIN campaigns c ON d.campaign_id = c.id" . $joinUsers . "
+             WHERE d.id = ?";
+
+        return $this->db->fetch($sql, [$id]) ?: null;
     }
 
     /**
@@ -117,9 +124,21 @@ class Donation {
      * Donaciones asociadas a una campaña
      */
     public function findByCampaignId(int $campaignId, int $limit = 10, int $offset = 0, bool $includeAnonymous = true): array {
-        $sql = "SELECT d.*, u.username, u.first_name, u.last_name
-                FROM donations d
-                LEFT JOIN users u ON d.supporter_id = u.id
+        $hasSupporter = $this->supportsColumn('supporter_id');
+
+        $sql = 'SELECT d.*';
+        if ($hasSupporter) {
+            $sql .= ', u.username, u.first_name, u.last_name';
+        }
+        $sql .= "
+                FROM donations d";
+
+        if ($hasSupporter) {
+            $sql .= "
+                LEFT JOIN users u ON d.supporter_id = u.id";
+        }
+
+        $sql .= "
                 WHERE d.campaign_id = ?";
 
         $params = [$campaignId];
@@ -363,7 +382,44 @@ class Donation {
     }
 
     private function sendDonationNotifications(int $donationId): void {
-        // Placeholder para integración futura
-        Logger::info('Donation notification queued', ['donation_id' => $donationId]);
+        $donation = $this->findById($donationId);
+        if (!$donation) {
+            return;
+        }
+
+        try {
+            $service = new CampaignMilestoneNotifier();
+            $service->handleDonationEvent($donation);
+        } catch (Exception $e) {
+            Logger::error('Failed to dispatch donation milestone notifications', [
+                'donation_id' => $donationId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function getSupporterUserIdsForCampaign(int $campaignId): array {
+        if (!$this->supportsColumn('supporter_id')) {
+            return [];
+        }
+
+        $sql = "SELECT DISTINCT supporter_id FROM donations WHERE campaign_id = ? AND supporter_id IS NOT NULL";
+
+        $params = [$campaignId];
+        if ($this->supportsColumn('status')) {
+            $sql .= " AND status = 'completed'";
+        }
+
+        $rows = $this->db->fetchAll($sql, $params) ?: [];
+
+        $ids = [];
+        foreach ($rows as $row) {
+            $id = (int)($row['supporter_id'] ?? 0);
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+
+        return array_values($ids);
     }
 }

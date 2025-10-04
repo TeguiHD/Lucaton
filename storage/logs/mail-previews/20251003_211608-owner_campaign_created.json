@@ -1,0 +1,41 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "tu@email.com",
+            "name": "Juan Perez"
+        }
+    ],
+    "subject": "Recibimos tu campaña \"Test campaña usuario normal\"",
+    "body_text": "Hola Juan Perez,\n\nTu campaña \"Test campaña usuario normal\" quedó registrada y está en revisión por el equipo.\n\nTe avisaremos cuando pase a estado publicado. Mientras tanto puedes preparar materiales para difundirla apenas esté en línea.\n\nMeta: CLP 50 · Cierre: 04\/10\/2025",
+    "generated_at": "2025-10-03T21:16:08-03:00",
+    "context": {
+        "campaign": {
+            "id": 7,
+            "title": "Test campaña usuario normal",
+            "slug": "test-campa-a-usuario-normal",
+            "status": null,
+            "goal_amount": 50,
+            "currency": "CLP",
+            "progress": null
+        },
+        "ai_prompt": "Genera un plan breve de lanzamiento en redes para la campaña \"Test campaña usuario normal\" (ID 7, meta CLP 50). Incluye ideas para anunciar que está en revisión, contenidos para captar aliados iniciales y sugerencias de próximos pasos antes de la publicación.",
+        "meta": {
+            "milestone": "owner_campaign_created",
+            "campaign_id": 7,
+            "event": "campaign_created",
+            "requires_peer_review": false
+        }
+    },
+    "cc": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Proyecto Lucatón — Tesis Universidad Bernardo O'Higgins"
+        }
+    ],
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_created"
+}

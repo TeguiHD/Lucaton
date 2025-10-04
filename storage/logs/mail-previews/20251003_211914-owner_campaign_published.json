@@ -1,0 +1,42 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "tu@email.com",
+            "name": "Juan Perez"
+        }
+    ],
+    "subject": "Tu campaña \"Test campaña usuario normal\" ya está publicada",
+    "body_text": "Hola Juan Perez,\n\n¡Listo! Tu campaña fue aprobada y quedó visible en la plataforma.\n\nRevisa que toda la información esté correcta y comparte el enlace con tu comunidad.\n\nEnlace directo: https:\/\/localhost\/Tesis\/campana\/test-campa-a-usuario-normal\n\nMeta: CLP 50 · Cierre: 04\/10\/2025",
+    "generated_at": "2025-10-03T21:19:14-03:00",
+    "context": {
+        "campaign": {
+            "id": 7,
+            "title": "Test campaña usuario normal",
+            "slug": "test-campa-a-usuario-normal",
+            "status": "published",
+            "goal_amount": 50,
+            "currency": "CLP",
+            "progress": null,
+            "public_url": "https:\/\/localhost\/Tesis\/campana\/test-campa-a-usuario-normal"
+        },
+        "ai_prompt": "Diseña 3 publicaciones (texto, carrusel e historia) para redes sociales que celebren la publicación de \"Test campaña usuario normal\" (ID 7). Sugiere también un incentivo creativo para los primeros donantes y métricas clave a monitorear durante la primera semana.",
+        "meta": {
+            "milestone": "owner_campaign_published",
+            "campaign_id": 7,
+            "event": "campaign_approved",
+            "slug": "test-campa-a-usuario-normal"
+        }
+    },
+    "cc": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Proyecto Lucatón — Tesis Universidad Bernardo O'Higgins"
+        }
+    ],
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_published"
+}

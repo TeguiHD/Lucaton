@@ -231,6 +231,6 @@ $min_date_to = $date_from !== '' ? $date_from : '';
     </main>
 
     <?php include VIEWS_PATH . '/layouts/partials/footer.php'; ?>
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801" defer></script>
+    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
 </body>
 </html>

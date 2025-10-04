@@ -2,7 +2,23 @@
 $is_authenticated = SessionHelper::isAuthenticated();
 $notification_api_url = $is_authenticated ? Router::url('api/notifications') : null;
 $notification_mark_url = $is_authenticated ? Router::url('api/notifications/mark-read') : null;
+$notification_summary_url = $is_authenticated ? Router::url('api/notifications/summary') : null;
+$notification_delete_url = $is_authenticated ? Router::url('api/notifications/delete') : null;
+$notification_history_url = $is_authenticated ? Router::url('admin/notificaciones/historial') : Router::url('login');
 $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
+$user_name = $_SESSION['user_name'] ?? 'Admin';
+$user_avatar = $_SESSION['user_avatar'] ?? '';
+$user_initial = 'A';
+if ($user_name !== '') {
+    if (function_exists('mb_substr')) {
+        $initial = mb_substr($user_name, 0, 1, 'UTF-8');
+        if ($initial !== '') {
+            $user_initial = function_exists('mb_strtoupper') ? mb_strtoupper($initial, 'UTF-8') : strtoupper($initial);
+        }
+    } else {
+        $user_initial = strtoupper(substr($user_name, 0, 1));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-gray-100">
@@ -20,11 +36,17 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
     <!-- CSS -->
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    
+
+    <style>[x-cloak]{display:none !important;}</style>
+
+    <!-- Scripts -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+
     <!-- Additional head content -->
     <?= $additional_head ?? '' ?>
 </head>
-<body class="h-full" x-data="{ sidebarOpen: false }">
+<body class="h-full" x-data="{ sidebarOpen: false }" @keydown.window.escape="sidebarOpen = false">
     <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
         Saltar al contenido principal
@@ -33,6 +55,7 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
     <div class="min-h-full">
         <!-- Mobile sidebar overlay -->
         <div x-show="sidebarOpen" 
+             x-cloak
              x-transition:enter="transition-opacity ease-linear duration-300"
              x-transition:enter-start="opacity-0"
              x-transition:enter-end="opacity-100"
@@ -48,6 +71,7 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
 
             <!-- Mobile sidebar -->
             <div x-show="sidebarOpen"
+                 x-cloak
                  x-transition:enter="transition ease-in-out duration-300 transform"
                  x-transition:enter-start="-translate-x-full"
                  x-transition:enter-end="translate-x-0"
@@ -106,14 +130,18 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                 <div class="flex-shrink-0 flex border-t border-gray-200 p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <div class="h-8 w-8 rounded-full bg-copihue-100 flex items-center justify-center">
-                                <span class="text-sm font-medium text-copihue-700">
-                                    <?= strtoupper(substr($_SESSION['user_name'] ?? 'A', 0, 1)) ?>
-                                </span>
-                            </div>
+                            <?php if ($user_avatar): ?>
+                                <img class="h-8 w-8 rounded-full object-cover" src="<?= htmlspecialchars($user_avatar) ?>" alt="<?= htmlspecialchars($user_name) ?>">
+                            <?php else: ?>
+                                <div class="h-8 w-8 rounded-full bg-copihue-100 flex items-center justify-center">
+                                    <span class="text-sm font-medium text-copihue-700">
+                                        <?= htmlspecialchars($user_initial) ?>
+                                    </span>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <div class="ml-3">
-                            <p class="text-sm font-medium text-gray-700"><?= $_SESSION['user_name'] ?? 'Admin' ?></p>
+                            <p class="text-sm font-medium text-gray-700"><?= htmlspecialchars($user_name) ?></p>
                             <p class="text-xs font-medium text-gray-500">Administrador</p>
                         </div>
                     </div>
@@ -126,7 +154,7 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
             <!-- Top bar -->
             <div class="sticky top-0 z-10 flex-shrink-0 flex h-16 bg-white shadow border-b border-gray-200">
                 <!-- Mobile menu button -->
-                <button @click="sidebarOpen = true" 
+                <button @click="sidebarOpen = !sidebarOpen" 
                         class="px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-copihue-500 md:hidden">
                     <span class="sr-only">Abrir sidebar</span>
                     <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -152,6 +180,10 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                                 data-notification-trigger
                                 data-endpoint="<?= htmlspecialchars($notification_api_url) ?>"
                                 data-read-endpoint="<?= htmlspecialchars($notification_mark_url) ?>"
+                                data-summary-endpoint="<?= htmlspecialchars($notification_summary_url ?? '') ?>"
+                                data-delete-endpoint="<?= htmlspecialchars($notification_delete_url ?? '') ?>"
+                                data-limit="10"
+                                data-refresh-interval="60000"
                                 data-csrf-name="<?= CSRF_TOKEN_NAME ?>"
                                 data-csrf-value="<?= htmlspecialchars($notification_csrf ?? '') ?>"
                                 class="relative bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-copihue-500"
@@ -161,48 +193,57 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                                 </svg>
                                 <span data-notification-count class="hidden absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-semibold leading-none text-white bg-red-500 rounded-full"></span>
                             </button>
-            <div
-                data-menu="notifications-menu"
-                class="hidden origin-top-right absolute right-0 mt-2 w-80 rounded-lg shadow-lg bg-white ring-1 ring-black/10 focus:outline-none z-40">
+                            <div
+                                data-menu="notifications-menu"
+                                class="hidden origin-top-right absolute right-0 mt-2 w-80 rounded-lg shadow-lg bg-white ring-1 ring-black/10 focus:outline-none z-40">
                                 <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                                     <h3 class="text-sm font-semibold text-gray-900">Notificaciones</h3>
+                                    <div class="flex items-center space-x-2 text-xs">
+                                        <button type="button" data-notification-action="refresh" class="text-gray-500 hover:text-gray-700">Actualizar</button>
+                                        <span class="text-gray-300">·</span>
+                                        <button type="button" data-notification-action="mark-all" class="text-gray-500 hover:text-gray-700">Marcar todas leídas</button>
+                                    </div>
                                 </div>
-                                <div class="max-h-80 overflow-y-auto">
+                                <div class="max-h-80 overflow-y-auto" data-notification-scroll>
                                     <div data-notification-spinner class="py-6 text-center text-sm text-gray-500">Cargando...</div>
                                     <div data-notification-error class="hidden py-6 text-center text-sm text-red-500"></div>
                                     <div data-notification-empty class="hidden py-6 text-center text-sm text-gray-500">No tienes notificaciones.</div>
                                     <ul data-notification-list class="hidden divide-y divide-gray-100"></ul>
                                 </div>
+                                <div class="border-t border-gray-100 bg-gray-50 px-4 py-2 space-y-2">
+                                    <button type="button" data-notification-action="load-more" class="hidden w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-copihue-600 hover:bg-copihue-50 border border-copihue-100">Ver más notificaciones</button>
+                                    <a href="<?= htmlspecialchars($notification_history_url) ?>" class="block text-center text-xs text-gray-500 hover:text-gray-700">Ir a notificaciones</a>
+                                </div>
                             </div>
                         </div>
 
                         <!-- User menu -->
-                        <div class="ml-3 relative" x-data="{ open: false }">
-                            <button @click="open = !open" 
-                                    class="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-copihue-500" 
-                                    id="user-menu-button" 
-                                    aria-expanded="false" 
-                                    aria-haspopup="true">
+                        <div class="ml-3 relative">
+                            <button
+                                    data-toggle="admin-user-menu"
+                                    class="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-copihue-500"
+                                    id="admin-user-menu-button"
+                                    aria-expanded="false"
+                                    aria-haspopup="true"
+                                    type="button">
                                 <span class="sr-only">Abrir menú de usuario</span>
-                                <div class="h-8 w-8 rounded-full bg-copihue-100 flex items-center justify-center">
-                                    <span class="text-sm font-medium text-copihue-700">
-                                        <?= strtoupper(substr($_SESSION['user_name'] ?? 'A', 0, 1)) ?>
-                                    </span>
-                                </div>
+                                <?php if ($user_avatar): ?>
+                                    <img class="h-8 w-8 rounded-full object-cover" src="<?= htmlspecialchars($user_avatar) ?>" alt="<?= htmlspecialchars($user_name) ?>">
+                                <?php else: ?>
+                                    <div class="h-8 w-8 rounded-full bg-copihue-100 flex items-center justify-center">
+                                        <span class="text-sm font-medium text-copihue-700">
+                                            <?= htmlspecialchars($user_initial) ?>
+                                        </span>
+                                    </div>
+                                <?php endif; ?>
                             </button>
-                            
-            <div x-show="open" 
-                 @click.away="open = false"
-                 x-transition:enter="transition ease-out duration-100"
-                 x-transition:enter-start="transform opacity-0 scale-95"
-                 x-transition:enter-end="transform opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-75"
-                 x-transition:leave-start="transform opacity-100 scale-100"
-                 x-transition:leave-end="transform opacity-0 scale-95"
-                 class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black/10 focus:outline-none z-50" 
-                 role="menu" 
-                                 aria-orientation="vertical" 
-                                 aria-labelledby="user-menu-button">
+
+                            <div
+                                data-menu="admin-user-menu"
+                                class="hidden origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black/10 focus:outline-none z-50"
+                                role="menu"
+                                aria-orientation="vertical"
+                                aria-labelledby="admin-user-menu-button">
                                 <a href="<?= Router::url('/') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
                                     Ver Sitio Público
                                 </a>
@@ -252,10 +293,15 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
         </div>
     </div>
 
+    <?php if ($is_authenticated): ?>
+        <?php include __DIR__ . '/partials/notification-modal.php'; ?>
+    <?php endif; ?>
+
     <!-- JS de interacción ligera (sin CDN) -->
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801" defer></script>
+    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
     
     <!-- Additional scripts -->
-    <?= $additional_scripts ?? '' ?>
+<?= $additional_scripts ?? '' ?>
+<script src="<?= APP_URL ?>/public/assets/js/campaign-doc-modal.js?v=2025020503"></script>
 </body>
 </html>

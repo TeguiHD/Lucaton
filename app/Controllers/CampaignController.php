@@ -31,7 +31,7 @@ class CampaignController {
     }
 
     public function show($identifier) {
-        $campaign = $this->fetchCampaign($identifier);
+        $campaign = $this->fetchCampaign($identifier, true);
 
         if (!$campaign) {
             http_response_code(404);
@@ -39,9 +39,29 @@ class CampaignController {
             return;
         }
 
+        $status = $campaign['status'] ?? 'draft';
+        $visibility = strtolower((string)($campaign['visibility'] ?? 'public'));
+        $publicStatuses = $this->getPublicStatuses();
+        $isPublicStatus = in_array($status, $publicStatuses, true);
+        $isPublicVisibility = $visibility !== 'private';
+        $canPreview = $this->canPreviewCampaign($campaign);
+
+        if ((!$isPublicStatus || !$isPublicVisibility) && !$canPreview) {
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $preview_mode = (!$isPublicStatus || !$isPublicVisibility) && $canPreview;
+        $preview_notice = $preview_mode ? $this->previewNoticeForStatus($status, $campaign) : null;
+
         $current_page = 'campaigns';
         $recent_supporters = $this->donations->findByCampaignId($campaign['id'], 10, 0, true);
         $stats = $this->buildCampaignStats($campaign);
+
+        $donationFormErrors = $_SESSION['donation_form_errors'][$campaign['id']] ?? [];
+        $donationFormOld = $_SESSION['donation_form_old'][$campaign['id']] ?? [];
+        unset($_SESSION['donation_form_errors'][$campaign['id']], $_SESSION['donation_form_old'][$campaign['id']]);
 
         include VIEWS_PATH . '/public/campaign-detail.php';
     }
@@ -91,17 +111,37 @@ class CampaignController {
 
         if ($this->db->tableExists('campaigns')) {
             $campaignModel = new Campaign();
-            $campaigns = $campaignModel->findByUserId($userId, $perPage, $offset);
+            $rawCampaigns = $campaignModel->findByUserId($userId, $perPage, $offset);
+            $campaigns = array_map(static function (array $row) {
+                $presented = CampaignPresenter::present($row);
+                return array_merge($row, $presented);
+            }, $rawCampaigns);
 
-            $countResult = $this->db->fetch(
-                "SELECT COUNT(*) AS total FROM campaigns WHERE owner_id = ?",
-                [$userId]
-            );
-            $totalCampaigns = (int)($countResult['total'] ?? 0);
+            $ownerColumn = $this->ownerColumn;
+            if (in_array($ownerColumn, $this->campaignColumns, true)) {
+                $countResult = $this->db->fetch(
+                    "SELECT COUNT(*) AS total FROM campaigns WHERE {$ownerColumn} = ?",
+                    [$userId]
+                );
+                $totalCampaigns = (int)($countResult['total'] ?? 0);
+            }
         }
 
         $totalPages = max(1, (int)ceil($totalCampaigns / $perPage));
         $hasMore = $page < $totalPages;
+
+        $campaignAppeals = [];
+        if (!empty($campaigns)) {
+            $campaignIds = array_filter(array_map(static fn ($campaign) => (int)($campaign['id'] ?? 0), $campaigns));
+            if (!empty($campaignIds)) {
+                $appealModel = new CampaignAppeal();
+                $campaignAppeals = $appealModel->getLatestForCampaigns($campaignIds, $userId);
+            }
+        }
+
+        $appealFormErrors = $_SESSION['campaign_appeal_errors'] ?? [];
+        $appealFormOld = $_SESSION['campaign_appeal_old'] ?? [];
+        unset($_SESSION['campaign_appeal_errors'], $_SESSION['campaign_appeal_old']);
 
         include VIEWS_PATH . '/user/mis-campanas.php';
     }
@@ -113,6 +153,7 @@ class CampaignController {
 
         $page_title = 'Crear campaña';
         $categories = $this->getCategories();
+        $draft_media = $this->getDraftMedia((int)SessionHelper::getUserId());
         include VIEWS_PATH . '/pages/campaign-create.php';
     }
 
@@ -122,7 +163,26 @@ class CampaignController {
         }
 
         $data = $this->sanitizeCampaignInput($_POST);
+        $ownerId = (int)SessionHelper::getUserId();
+        $mediaService = new CampaignMediaUploadService();
+        $currentUser = SessionHelper::getUser();
+        $isOwnerAdmin = ($currentUser['role'] ?? 'user') === 'admin';
+
+        $draftMedia = $this->getDraftMedia($ownerId);
+        $uploadErrors = [];
+        $draftMedia = $this->synchronizeDraftMedia($data, $_FILES, $mediaService, $ownerId, $draftMedia, $uploadErrors);
+        $this->setDraftMedia($ownerId, $draftMedia);
+
+        if (!empty($uploadErrors)) {
+            return $this->campaignFormError($uploadErrors, $data);
+        }
+
+        $data['featured_image_url'] = $draftMedia['cover'] ?? null;
+
         $errors = $this->validateCampaignInput($data);
+        if (empty($data['featured_image_url'])) {
+            $errors['featured_image'] = 'Sube una imagen principal para tu campaña.';
+        }
 
         if (!empty($errors)) {
             return $this->campaignFormError($errors, $data);
@@ -138,7 +198,6 @@ class CampaignController {
             return $this->campaignFormError(['category' => 'Selecciona una categoría válida.'], $data);
         }
 
-        $ownerId = SessionHelper::getUserId();
         $slug = $this->generateUniqueSlug($data['title']);
         $now = date('Y-m-d H:i:s');
 
@@ -156,7 +215,7 @@ class CampaignController {
                     'goal_amount' => $data['goal_amount'],
                     'currency' => 'CLP',
                     'status' => 'under_review',
-                    'visibility' => 'public',
+                    'visibility' => 'private',
                     'start_date' => date('Y-m-d'),
                     'end_date' => $data['end_date'],
                     'cover_image_url' => $data['featured_image_url'] ?: null,
@@ -193,21 +252,84 @@ class CampaignController {
                     'updated_at' => $now
                 ]);
 
+                $historyNotes = $isOwnerAdmin
+                    ? 'Creada por un administrador y requiere revisión de otro administrador.'
+                    : 'Campaña creada y enviada a revisión inicial';
+
                 $this->db->insert('campaign_status_history', [
                     'campaign_id' => $campaignId,
                     'previous_status' => null,
                     'new_status' => 'under_review',
                     'changed_by' => $ownerId,
-                    'notes' => 'Campaña creada y enviada a revisión inicial',
+                    'notes' => $historyNotes,
                     'created_at' => $now
                 ]);
             } else {
-                $campaignId = $this->createLegacyCampaign($ownerId, $data, $slug, $now);
+                $campaignId = $this->createLegacyCampaign($ownerId, $data, $slug, $now, $isOwnerAdmin);
+            }
+
+            $promotion = $mediaService->promoteDraftMedia($ownerId, $campaignId, $draftMedia);
+            $finalCoverUrl = $promotion['cover'] ?? $data['featured_image_url'];
+            if ($finalCoverUrl && $finalCoverUrl !== $data['featured_image_url']) {
+                $data['featured_image_url'] = $finalCoverUrl;
+
+                $coverUpdate = [];
+                if (in_array('cover_image_url', $this->campaignColumns, true)) {
+                    $coverUpdate['cover_image_url'] = $finalCoverUrl;
+                }
+                if (in_array('image_url', $this->campaignColumns, true)) {
+                    $coverUpdate['image_url'] = $finalCoverUrl;
+                }
+
+                if (!empty($coverUpdate)) {
+                    $this->db->update('campaigns', $coverUpdate, 'id = ?', [$campaignId]);
+                }
+            }
+
+            $galleryMedia = $promotion['gallery'];
+            $attachmentMedia = $promotion['attachments'];
+
+            try {
+                $mediaService->persistManifest($campaignId, [
+                    'cover_image' => $data['featured_image_url'] ?: null,
+                    'gallery' => $galleryMedia,
+                    'attachments' => $attachmentMedia,
+                    'requires_admin_peer_review' => $isOwnerAdmin,
+                    'requested_by_admin_id' => $isOwnerAdmin ? $ownerId : null,
+                ]);
+            } catch (RuntimeException $e) {
+                $this->db->rollback();
+                return $this->campaignFormError(['supporting_files' => 'Guardamos tu campaña pero no pudimos registrar los archivos adjuntos. Intenta nuevamente.'], $data);
             }
 
             $this->db->commit();
+            $this->clearDraftMedia($ownerId);
 
-            SessionHelper::setFlash('success', 'Tu campaña fue creada y está en revisión. Te avisaremos cuando esté publicada.');
+            try {
+                $lifecycleMailer = new CampaignLifecycleMailer();
+                $lifecycleMailer->campaignCreated($campaignId, [
+                    'campaign' => [
+                        'id' => $campaignId,
+                        'title' => $data['title'],
+                        'slug' => $slug,
+                        'goal_amount' => $data['goal_amount'],
+                        'currency' => 'CLP',
+                        'end_date' => $data['end_date']
+                    ],
+                    'owner_id' => $ownerId,
+                    'is_admin_owner' => $isOwnerAdmin
+                ]);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo preparar el correo de creación de campaña', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
+
+            $successMessage = $isOwnerAdmin
+                ? 'Tu campaña fue creada y figura como privada hasta que otro administrador la apruebe.'
+                : 'Tu campaña fue creada y está en revisión. Te avisaremos cuando esté publicada.';
+            SessionHelper::setFlash('success', $successMessage);
             $this->respondAfterStore(Router::url('panel'));
         } catch (Exception $e) {
             $this->db->rollback();
@@ -221,6 +343,10 @@ class CampaignController {
     }
 
     public function edit($id) {
+        if (!SessionHelper::isAuthenticated()) {
+            Router::redirect('/login');
+        }
+
         $campaign = $this->fetchCampaign($id, true);
 
         if (!$campaign) {
@@ -229,25 +355,283 @@ class CampaignController {
             return;
         }
 
-        if ($campaign['user_id'] !== SessionHelper::getUserId()) {
+        $ownerId = (int)($campaign['owner_id'] ?? $campaign['user_id'] ?? 0);
+        $currentUserId = (int)(SessionHelper::getUserId() ?? 0);
+        $isAdmin = SessionHelper::userHasRole('admin');
+
+        if ($ownerId !== $currentUserId && !$isAdmin) {
             http_response_code(403);
             include VIEWS_PATH . '/errors/403.php';
             return;
         }
 
-        $page_title = 'Editar campaña · ' . htmlspecialchars($campaign['title']);
+        $allowedStatuses = ['draft', 'under_review', 'cancelled'];
+        $status = strtolower((string)($campaign['status'] ?? 'draft'));
+        if (!$isAdmin && !in_array($status, $allowedStatuses, true)) {
+            SessionHelper::setFlash('info', 'Las campañas publicadas o completadas no se pueden editar. Crea una actualización o contacta al equipo de Lucatón.');
+            Router::redirect('mis-campanas');
+            return;
+        }
+
+        $campaignId = (int)$campaign['id'];
         $categories = $this->getCategories();
+        $mediaService = new CampaignMediaUploadService();
+        $mediaManifest = $mediaService->readManifest($campaignId);
+
+        $formErrors = $_SESSION['campaign_edit_errors'][$campaignId] ?? [];
+        $formOld = $_SESSION['campaign_edit_old'][$campaignId] ?? [];
+        unset($_SESSION['campaign_edit_errors'][$campaignId], $_SESSION['campaign_edit_old'][$campaignId]);
+
+        $page_title = 'Editar campaña · ' . $campaign['title'];
+
         include VIEWS_PATH . '/pages/campaign-edit.php';
     }
 
     public function update($id) {
-        SessionHelper::setFlash('warning', 'La edición de campañas estará disponible pronto.');
-        Router::redirect('/panel');
+        if (!SessionHelper::isAuthenticated()) {
+            Router::redirect('/login');
+        }
+
+        $campaignId = (int)$id;
+        $campaign = $this->fetchCampaign($campaignId, true);
+
+        if (!$campaign) {
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $ownerId = (int)($campaign['owner_id'] ?? $campaign['user_id'] ?? 0);
+        $currentUserId = (int)(SessionHelper::getUserId() ?? 0);
+        $isAdmin = SessionHelper::userHasRole('admin');
+
+        if ($ownerId !== $currentUserId && !$isAdmin) {
+            http_response_code(403);
+            include VIEWS_PATH . '/errors/403.php';
+            return;
+        }
+
+        $allowedStatuses = ['draft', 'under_review', 'cancelled'];
+        $status = strtolower((string)($campaign['status'] ?? 'draft'));
+        if (!$isAdmin && !in_array($status, $allowedStatuses, true)) {
+            SessionHelper::setFlash('info', 'Las campañas publicadas o completadas no se pueden editar. Crea una actualización o contacta al equipo de Lucatón.');
+            Router::redirect('mis-campanas');
+            return;
+        }
+
+        $data = $this->sanitizeCampaignInput($_POST);
+
+        $errors = $this->validateCampaignInput($data);
+        if (isset($errors['end_date']) && !empty($campaign['end_date']) && $campaign['end_date'] === $data['end_date']) {
+            unset($errors['end_date']);
+        }
+
+        if (!empty($errors)) {
+            return $this->campaignEditError($campaignId, $errors, $data);
+        }
+
+        $categoryId = $campaign['category_id'] ?? null;
+        if ($this->hasModularSchema) {
+            $category = $this->categoryRepository->findBySlug($data['category_slug']);
+            if (!$category) {
+                return $this->campaignEditError($campaignId, ['category' => 'Selecciona una categoría válida.'], $data);
+            }
+            $categoryId = (int)$category['id'];
+        }
+
+        $mediaService = new CampaignMediaUploadService();
+        $existingCover = $campaign['cover_image_url'] ?? null;
+        $manifest = $mediaService->readManifest($campaignId);
+
+        $newCoverUrl = null;
+        $galleryMedia = [];
+        $attachmentMedia = [];
+
+        if (!empty($_FILES['featured_image']) && ($_FILES['featured_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $newCoverUrl = $mediaService->storeCoverImage($_FILES['featured_image'], $ownerId);
+            } catch (RuntimeException $e) {
+                return $this->campaignEditError($campaignId, ['featured_image' => $e->getMessage()], $data);
+            }
+        }
+
+        if (!empty($_FILES['gallery_images']) && ($_FILES['gallery_images']['error'][0] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $galleryMedia = $mediaService->storeGalleryImages($_FILES['gallery_images'], $campaignId, $ownerId);
+            } catch (RuntimeException $e) {
+                if ($newCoverUrl) {
+                    $mediaService->deletePublicUrl($newCoverUrl);
+                }
+                return $this->campaignEditError($campaignId, ['gallery_images' => $e->getMessage()], $data);
+            }
+        }
+
+        if (!empty($_FILES['supporting_files']) && ($_FILES['supporting_files']['error'][0] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $attachmentMedia = $mediaService->storeSupportingFiles($_FILES['supporting_files'], $campaignId, $ownerId);
+            } catch (RuntimeException $e) {
+                if ($newCoverUrl) {
+                    $mediaService->deletePublicUrl($newCoverUrl);
+                }
+                foreach ($galleryMedia as $item) {
+                    $mediaService->deletePublicUrl($item['url'] ?? null);
+                }
+                return $this->campaignEditError($campaignId, ['supporting_files' => $e->getMessage()], $data);
+            }
+        }
+
+        $updateData = [
+            'title' => $data['title'],
+            'summary' => $data['short_description'],
+            'story' => $data['description'],
+            'goal_amount' => $data['goal_amount'],
+            'end_date' => $data['end_date'],
+            'video_url' => $data['video_url'] ?: null,
+            'ai_assisted' => $data['ai_generated'] ? 1 : 0,
+            'beneficiary_name' => $data['beneficiary_name'],
+            'beneficiary_type' => $data['beneficiary_type'],
+            'beneficiary_contact' => $data['beneficiary_contact'] ?: null,
+            'location' => $data['location'] ?: null,
+        ];
+
+        if ($this->hasModularSchema) {
+            $updateData['category_id'] = $categoryId;
+        }
+
+        if ($newCoverUrl) {
+            $updateData['cover_image_url'] = $newCoverUrl;
+        }
+
+        try {
+            if ($this->hasModularSchema) {
+                $campaignModel = new Campaign();
+                $campaignModel->update($campaignId, $updateData);
+            } else {
+                $this->updateLegacyCampaignRecord($campaignId, $updateData, $data, $campaign, $newCoverUrl);
+            }
+
+            $manifestUpdate = [];
+            if ($newCoverUrl) {
+                $manifestUpdate['cover_image'] = $newCoverUrl;
+            }
+            if (!empty($galleryMedia)) {
+                $manifestUpdate['gallery'] = array_merge($manifest['gallery'] ?? [], $galleryMedia);
+            }
+            if (!empty($attachmentMedia)) {
+                $manifestUpdate['attachments'] = array_merge($manifest['attachments'] ?? [], $attachmentMedia);
+            }
+
+            if (!empty($manifestUpdate)) {
+                $mediaService->persistManifest($campaignId, $manifestUpdate);
+            }
+
+            if ($newCoverUrl && $existingCover && $existingCover !== $newCoverUrl) {
+                $mediaService->deletePublicUrl($existingCover);
+            }
+
+            SessionHelper::setFlash('success', 'Actualizamos tu campaña correctamente.');
+            Logger::audit('campaign_updated', $currentUserId, ['campaign_id' => $campaignId]);
+
+            $slug = $campaign['slug'] ?? $campaignId;
+            Router::redirect('/campana/' . $slug);
+        } catch (Exception $exception) {
+            Logger::error('Failed to update campaign', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            if ($newCoverUrl) {
+                $mediaService->deletePublicUrl($newCoverUrl);
+            }
+            foreach ($galleryMedia as $item) {
+                $mediaService->deletePublicUrl($item['url'] ?? null);
+            }
+
+            return $this->campaignEditError(
+                $campaignId,
+                ['general' => 'No pudimos guardar los cambios de la campaña. Intenta nuevamente.'],
+                $data,
+                500
+            );
+        }
     }
 
     public function appeal($id) {
-        SessionHelper::setFlash('warning', 'El sistema de apelaciones estará disponible pronto.');
-        Router::redirect('/panel');
+        if (!SessionHelper::isAuthenticated()) {
+            Router::redirect('/login');
+        }
+
+        $campaignId = (int)$id;
+        $campaign = $this->fetchCampaign($campaignId, true);
+
+        if (!$campaign) {
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $userId = (int)SessionHelper::getUserId();
+        $ownerId = (int)($campaign['owner_id'] ?? $campaign['user_id'] ?? 0);
+        if ($ownerId !== $userId && !SessionHelper::userHasRole('admin')) {
+            http_response_code(403);
+            include VIEWS_PATH . '/errors/403.php';
+            return;
+        }
+
+        $reason = trim($_POST['reason'] ?? '');
+        $additionalEvidence = trim($_POST['additional_evidence'] ?? '');
+        $errors = [];
+
+        if (strlen($reason) < 30) {
+            $errors['reason'] = 'Describe con más detalle por qué solicitas la revisión (mínimo 30 caracteres).';
+        }
+
+        $status = strtolower((string)($campaign['status'] ?? ''));
+        if (!in_array($status, ['cancelled', 'paused'], true)) {
+            $errors['general'] = 'Solo puedes apelar campañas rechazadas o pausadas.';
+        }
+
+        $appealModel = new CampaignAppeal();
+        if ($appealModel->userHasPending($campaignId, $userId)) {
+            $errors['general'] = 'Ya tienes una apelación en curso para esta campaña. Espera la respuesta del equipo.';
+        }
+
+        $old = [
+            'reason' => $reason,
+            'additional_evidence' => $additionalEvidence,
+        ];
+
+        if (!empty($errors)) {
+            return $this->campaignAppealError($campaignId, $errors, $old);
+        }
+
+        try {
+            $appealModel->create([
+                'campaign_id' => $campaignId,
+                'user_id' => $userId,
+                'reason' => $reason,
+                'additional_evidence' => $additionalEvidence !== '' ? $additionalEvidence : null,
+            ]);
+
+            SessionHelper::setFlash('success', 'Recibimos tu apelación. El equipo académico la revisará a la brevedad.');
+            Logger::audit('campaign_appeal_created', $userId, [
+                'campaign_id' => $campaignId,
+            ]);
+        } catch (Exception $exception) {
+            Logger::error('Failed to create campaign appeal', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return $this->campaignAppealError(
+                $campaignId,
+                ['general' => 'No pudimos registrar tu apelación. Intenta nuevamente.'],
+                $old,
+                500
+            );
+        }
+
+        Router::redirect('/mis-campanas');
     }
 
     private function fetchCampaigns(array $filters, int $limit, int $offset, string $sort): array {
@@ -262,11 +646,14 @@ class CampaignController {
         $where = ["c.visibility = 'public'"];
         $params = [];
 
-        if (!empty($filters['status'])) {
+        $publicStatuses = $this->getPublicStatuses();
+        if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
             $where[] = 'c.status = ?';
             $params[] = $filters['status'];
         } else {
-            $where[] = "c.status = 'published'";
+            $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
+            $where[] = "c.status IN ({$placeholders})";
+            $params = array_merge($params, $publicStatuses);
         }
 
         if (!empty($filters['category'])) {
@@ -297,6 +684,7 @@ class CampaignController {
                     c.start_date,
                     c.end_date,
                     c.cover_image_url,
+                    c.visibility,
                     c.video_url,
                     c.featured,
                     c.ai_assisted,
@@ -345,11 +733,14 @@ class CampaignController {
         $where = ["visibility = 'public'"];
         $params = [];
 
-        if (!empty($filters['status'])) {
+        $publicStatuses = $this->getPublicStatuses();
+        if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
             $where[] = 'status = ?';
             $params[] = $filters['status'];
         } else {
-            $where[] = "status = 'published'";
+            $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
+            $where[] = "status IN ({$placeholders})";
+            $params = array_merge($params, $publicStatuses);
         }
 
         if (!empty($filters['category'])) {
@@ -391,7 +782,9 @@ class CampaignController {
         }
 
         if (!$includeDraft) {
-            $where .= " AND c.status IN ('published','completed')";
+            $placeholders = implode(',', array_fill(0, count($this->getPublicStatuses()), '?'));
+            $where .= " AND c.status IN ({$placeholders})";
+            $params = array_merge($params, $this->getPublicStatuses());
         }
 
         $sql = "SELECT 
@@ -405,6 +798,7 @@ class CampaignController {
                     c.start_date,
                     c.end_date,
                     c.cover_image_url,
+                    c.visibility,
                     c.video_url,
                     c.featured,
                     c.ai_assisted,
@@ -455,6 +849,61 @@ class CampaignController {
         ];
     }
 
+    private function getPublicStatuses(): array {
+        return ['published', 'active', 'completed', 'funded', 'ended'];
+    }
+
+    private function canPreviewCampaign(array $campaign): bool {
+        if (SessionHelper::userHasRole('admin')) {
+            return true;
+        }
+
+        if (!SessionHelper::isAuthenticated()) {
+            return false;
+        }
+
+        $ownerId = $campaign['owner_id'] ?? $campaign['user_id'] ?? null;
+        if ($ownerId === null) {
+            return false;
+        }
+
+        return (int)$ownerId === (int)SessionHelper::getUserId();
+    }
+
+    private function previewNoticeForStatus(string $status, array $campaign): array
+    {
+        $status = strtolower($status);
+
+        $notices = [
+            'draft' => [
+                'title' => 'Tu campaña está en borrador',
+                'message' => 'Completa los datos pendientes y envíala a revisión para que el equipo académico pueda evaluarla.',
+                'tone' => 'info'
+            ],
+            'under_review' => [
+                'title' => 'Campaña en revisión',
+                'message' => 'Solo tú y el equipo de Lucatón pueden ver esta campaña mientras revisamos los antecedentes presentados.',
+                'tone' => 'warning'
+            ],
+            'cancelled' => [
+                'title' => 'Campaña rechazada',
+                'message' => 'Revisa las observaciones del equipo, ajusta la información necesaria y contáctanos para volver a enviarla a revisión.',
+                'tone' => 'error'
+            ],
+            'paused' => [
+                'title' => 'Campaña pausada',
+                'message' => 'Esta campaña no es visible públicamente. Puedes actualizarla y solicitar su reactivación cuando estés listo.',
+                'tone' => 'warning'
+            ],
+        ];
+
+        return $notices[$status] ?? [
+            'title' => 'Vista privada de campaña',
+            'message' => 'Esta campaña no está publicada. Solo los creadores y administradores pueden verla por ahora.',
+            'tone' => 'info'
+        ];
+    }
+
     private function getCategories(): array {
         if (!empty($this->categoryMap)) {
             $categories = ['' => 'Todas las categorías'];
@@ -502,19 +951,54 @@ class CampaignController {
     private function sanitizeCampaignInput(array $input): array {
         $categorySlug = trim($input['category'] ?? '');
 
+        $rawGoal = preg_replace('/[^0-9]/', '', (string)($input['goal_amount'] ?? ''));
+        $goalAmount = $rawGoal !== '' ? (float)$rawGoal : 0.0;
+
+        $beneficiaryPhone = preg_replace('/[^0-9+]/', '', trim($input['beneficiary_phone'] ?? ''));
+        $beneficiaryEmail = trim($input['beneficiary_email'] ?? '');
+
+        $contactText = trim($input['beneficiary_contact_text'] ?? '');
+
+        $contactParts = [];
+        if ($beneficiaryPhone !== '') {
+            $contactParts[] = 'Tel: ' . $beneficiaryPhone;
+        }
+        if ($beneficiaryEmail !== '') {
+            $contactParts[] = 'Email: ' . $beneficiaryEmail;
+        }
+
+        $beneficiaryContact = $contactText !== ''
+            ? $contactText
+            : implode(' | ', $contactParts);
+
+        $existingGallery = array_filter(array_map('trim', $input['existing_gallery'] ?? []));
+        $removeGallery = array_filter(array_map('trim', $input['remove_gallery'] ?? []));
+        $existingAttachments = array_filter(array_map('trim', $input['existing_attachments'] ?? []));
+        $removeAttachments = array_filter(array_map('trim', $input['remove_attachments'] ?? []));
+
         return [
             'title' => trim($input['title'] ?? ''),
             'short_description' => trim($input['short_description'] ?? ''),
             'description' => trim($input['description'] ?? ''),
-            'goal_amount' => (float)($input['goal_amount'] ?? 0),
+            'goal_amount' => $goalAmount,
+            'goal_amount_input' => $rawGoal,
             'end_date' => $input['end_date'] ?? null,
             'category' => $categorySlug,
             'category_slug' => $categorySlug,
             'location' => trim($input['location'] ?? ''),
             'beneficiary_type' => trim($input['beneficiary_type'] ?? 'individual'),
             'beneficiary_name' => trim($input['beneficiary_name'] ?? ''),
-            'beneficiary_contact' => trim($input['beneficiary_contact'] ?? ''),
-            'featured_image_url' => trim($input['featured_image_url'] ?? ''),
+            'beneficiary_phone' => $beneficiaryPhone,
+            'beneficiary_email' => $beneficiaryEmail,
+            'beneficiary_contact_text' => $contactText,
+            'beneficiary_contact' => $beneficiaryContact,
+            'featured_image_url' => null,
+            'featured_image_existing' => trim($input['featured_image_existing'] ?? ''),
+            'remove_existing_cover' => isset($input['remove_existing_cover']) && $input['remove_existing_cover'] === '1',
+            'existing_gallery' => $existingGallery,
+            'remove_gallery' => $removeGallery,
+            'existing_attachments' => is_array($existingAttachments) ? $existingAttachments : [],
+            'remove_attachments' => $removeAttachments,
             'video_url' => trim($input['video_url'] ?? ''),
             'ai_generated' => isset($input['ai_generated']) && $input['ai_generated'] === '1'
         ];
@@ -553,6 +1037,23 @@ class CampaignController {
             $errors['beneficiary_name'] = 'Indica quién será beneficiario directo de la campaña.';
         }
 
+        $hasContactText = isset($data['beneficiary_contact_text']) && trim($data['beneficiary_contact_text']) !== '';
+        if (!$hasContactText && empty($data['beneficiary_phone']) && empty($data['beneficiary_email'])) {
+            $errors['beneficiary_contact'] = 'Agrega al menos un teléfono o correo del beneficiario. Esta información solo la verá el equipo del proyecto.';
+        }
+
+        if ($hasContactText && strlen(trim($data['beneficiary_contact_text'])) < 10) {
+            $errors['beneficiary_contact'] = 'El contacto del beneficiario debe incluir la información necesaria para validar la campaña.';
+        }
+
+        if (!empty($data['beneficiary_phone']) && !preg_match('/^\+?[0-9]{7,15}$/', $data['beneficiary_phone'])) {
+            $errors['beneficiary_phone'] = 'Ingresa un teléfono válido (incluye código de país si aplica).';
+        }
+
+        if (!empty($data['beneficiary_email']) && !filter_var($data['beneficiary_email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['beneficiary_email'] = 'Ingresa un correo válido para el beneficiario.';
+        }
+
         return $errors;
     }
 
@@ -566,7 +1067,212 @@ class CampaignController {
 
         SessionHelper::setFlash('error', $errors['general'] ?? 'Corrige los campos indicados.');
         $_SESSION['old_campaign_form'] = $oldInput;
+        $_SESSION['campaign_form_errors'] = $errors;
         Router::redirect('/campana/crear');
+    }
+
+    private function getDraftMedia(int $userId): array
+    {
+        if ($userId <= 0) {
+            return [
+                'cover' => null,
+                'gallery' => [],
+                'attachments' => [],
+            ];
+        }
+
+        $stored = $_SESSION['campaign_draft_media'][$userId] ?? [];
+
+        $gallery = [];
+        foreach ($stored['gallery'] ?? [] as $item) {
+            if (is_array($item) && !empty($item['url'])) {
+                $gallery[] = $item;
+            }
+        }
+
+        $attachments = [];
+        foreach ($stored['attachments'] ?? [] as $item) {
+            if (is_array($item) && !empty($item['path'])) {
+                $attachments[$item['path']] = $item;
+            } elseif (is_string($item)) {
+                $attachments[$item] = ['path' => $item];
+            }
+        }
+
+        return [
+            'cover' => $stored['cover'] ?? null,
+            'gallery' => $gallery,
+            'attachments' => array_values($attachments),
+        ];
+    }
+
+    private function setDraftMedia(int $userId, array $media): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+
+        $normalizedAttachments = [];
+        foreach ($media['attachments'] ?? [] as $attachment) {
+            if (is_array($attachment) && !empty($attachment['path'])) {
+                $normalizedAttachments[] = $attachment;
+            }
+        }
+
+        $_SESSION['campaign_draft_media'][$userId] = [
+            'cover' => $media['cover'] ?? null,
+            'gallery' => array_values($media['gallery'] ?? []),
+            'attachments' => $normalizedAttachments,
+        ];
+    }
+
+    private function clearDraftMedia(int $userId): void
+    {
+        unset($_SESSION['campaign_draft_media'][$userId]);
+    }
+
+    private function isAllowedPublicMediaPath(string $path, int $userId): bool
+    {
+        return strpos($path, CampaignMediaUploadService::PUBLIC_BASE_DIR . '/') === 0
+            || strpos($path, CampaignMediaUploadService::DRAFT_PUBLIC_DIR . '/' . $userId . '/') === 0;
+    }
+
+    private function isAllowedPrivateMediaPath(string $path, int $userId): bool
+    {
+        return strpos($path, CampaignMediaUploadService::PRIVATE_BASE_DIR . '/') === 0
+            || strpos($path, CampaignMediaUploadService::DRAFT_PRIVATE_DIR . '/' . $userId . '/') === 0;
+    }
+
+    private function synchronizeDraftMedia(array $data, array $files, CampaignMediaUploadService $mediaService, int $userId, array $draftMedia, array &$uploadErrors): array
+    {
+        $uploadErrors = [];
+
+        // Cover removal and persistence
+        if (!empty($data['remove_existing_cover'])) {
+            if (!empty($draftMedia['cover'])) {
+                $mediaService->deleteDraftAsset($draftMedia['cover']);
+            }
+            $draftMedia['cover'] = null;
+        }
+
+        if (!empty($data['featured_image_existing']) && $this->isAllowedPublicMediaPath($data['featured_image_existing'], $userId)) {
+            $draftMedia['cover'] = $data['featured_image_existing'];
+        }
+
+        if (!empty($files['featured_image']) && ($files['featured_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $draftMedia['cover'] = $mediaService->storeDraftCover($files['featured_image'], $userId);
+            } catch (RuntimeException $exception) {
+                $uploadErrors['featured_image'] = $exception->getMessage();
+            }
+        }
+
+        // Gallery management
+        $existingGallery = array_filter($data['existing_gallery'] ?? [], function ($url) use ($userId) {
+            return $this->isAllowedPublicMediaPath($url, $userId);
+        });
+
+        $draftMedia['gallery'] = array_values(array_filter($draftMedia['gallery'], function ($item) use ($existingGallery) {
+            return in_array($item['url'], $existingGallery, true);
+        }));
+
+        foreach ($data['remove_gallery'] ?? [] as $removeUrl) {
+            if ($this->isAllowedPublicMediaPath($removeUrl, $userId)) {
+                $mediaService->deleteDraftAsset($removeUrl);
+                $draftMedia['gallery'] = array_values(array_filter($draftMedia['gallery'], function ($item) use ($removeUrl) {
+                    return $item['url'] !== $removeUrl;
+                }));
+            }
+        }
+
+        if (!empty($files['gallery_images']) && isset($files['gallery_images']['error']) && is_array($files['gallery_images']['error']) && !($this->allErrorsAreNoFile($files['gallery_images']['error']))) {
+            try {
+                $newGallery = $mediaService->storeDraftGalleryImages($files['gallery_images'], $userId, count($draftMedia['gallery']));
+                $draftMedia['gallery'] = array_merge($draftMedia['gallery'], $newGallery);
+            } catch (RuntimeException $exception) {
+                $uploadErrors['gallery_images'] = $exception->getMessage();
+            }
+        }
+
+        // Attachments management
+        $existingAttachments = array_filter($data['existing_attachments'] ?? [], function ($path) use ($userId) {
+            return $this->isAllowedPrivateMediaPath($path, $userId);
+        });
+
+        $draftMedia['attachments'] = array_filter($draftMedia['attachments'], function ($item) use ($existingAttachments) {
+            $path = is_array($item) ? ($item['path'] ?? null) : null;
+            return $path && in_array($path, $existingAttachments, true);
+        });
+
+        foreach ($data['remove_attachments'] ?? [] as $removePath) {
+            if ($this->isAllowedPrivateMediaPath($removePath, $userId)) {
+                $mediaService->deleteDraftAsset($removePath);
+                $draftMedia['attachments'] = array_filter($draftMedia['attachments'], function ($item) use ($removePath) {
+                    $path = is_array($item) ? ($item['path'] ?? null) : null;
+                    return $path !== $removePath;
+                });
+            }
+        }
+
+        if (!empty($files['supporting_files']) && isset($files['supporting_files']['error']) && is_array($files['supporting_files']['error']) && !($this->allErrorsAreNoFile($files['supporting_files']['error']))) {
+            try {
+                $newAttachments = $mediaService->storeDraftAttachments($files['supporting_files'], $userId, count($draftMedia['attachments']));
+                foreach ($newAttachments as $attachment) {
+                    $draftMedia['attachments'][] = $attachment;
+                }
+            } catch (RuntimeException $exception) {
+                $uploadErrors['supporting_files'] = $exception->getMessage();
+            }
+        }
+
+        // Normalize attachments to associative array keyed by path
+        $normalizedAttachments = [];
+        foreach ($draftMedia['attachments'] as $attachment) {
+            if (is_array($attachment) && !empty($attachment['path'])) {
+                $normalizedAttachments[$attachment['path']] = $attachment;
+            }
+        }
+        $draftMedia['attachments'] = array_values($normalizedAttachments);
+
+        return $draftMedia;
+    }
+
+    private function allErrorsAreNoFile(array $errors): bool
+    {
+        foreach ($errors as $errorCode) {
+            if ((int)$errorCode !== UPLOAD_ERR_NO_FILE) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function campaignEditError(int $campaignId, array $errors, array $oldInput, int $status = 422) {
+        if ($this->isJsonRequest()) {
+            http_response_code($status);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'errors' => $errors]);
+            exit;
+        }
+
+        SessionHelper::setFlash('error', $errors['general'] ?? 'Corrige los campos marcados para actualizar tu campaña.');
+        $_SESSION['campaign_edit_old'][$campaignId] = $oldInput;
+        $_SESSION['campaign_edit_errors'][$campaignId] = $errors;
+        Router::redirect('/campana/' . $campaignId . '/editar');
+    }
+
+    private function campaignAppealError(int $campaignId, array $errors, array $oldInput, int $status = 422) {
+        if ($this->isJsonRequest()) {
+            http_response_code($status);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'errors' => $errors]);
+            exit;
+        }
+
+        SessionHelper::setFlash('error', $errors['general'] ?? 'Revisa la información para enviar tu apelación.');
+        $_SESSION['campaign_appeal_old'][$campaignId] = $oldInput;
+        $_SESSION['campaign_appeal_errors'][$campaignId] = $errors;
+        Router::redirect('/mis-campanas#campaign-' . $campaignId);
     }
 
     private function respondAfterStore(string $redirect): void {
@@ -651,9 +1357,16 @@ class CampaignController {
             $where[] = "c.visibility = 'public'";
         }
 
-        if (!empty($filters['status']) && in_array('status', $this->campaignColumns, true)) {
-            $where[] = 'c.status = ?';
-            $params[] = $filters['status'];
+        if (in_array('status', $this->campaignColumns, true)) {
+            $publicStatuses = $this->getPublicStatuses();
+            if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
+                $where[] = 'c.status = ?';
+                $params[] = $filters['status'];
+            } else {
+                $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
+                $where[] = 'c.status IN (' . $placeholders . ')';
+                $params = array_merge($params, $publicStatuses);
+            }
         }
 
         if (!empty($filters['category'])) {
@@ -727,9 +1440,16 @@ class CampaignController {
             $where[] = "visibility = 'public'";
         }
 
-        if (!empty($filters['status']) && in_array('status', $this->campaignColumns, true)) {
-            $where[] = 'status = ?';
-            $params[] = $filters['status'];
+        if (in_array('status', $this->campaignColumns, true)) {
+            $publicStatuses = $this->getPublicStatuses();
+            if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
+                $where[] = 'status = ?';
+                $params[] = $filters['status'];
+            } else {
+                $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
+                $where[] = 'status IN (' . $placeholders . ')';
+                $params = array_merge($params, $publicStatuses);
+            }
         }
 
         if (!empty($filters['category'])) {
@@ -893,10 +1613,13 @@ class CampaignController {
         }
 
         if (!$includeDraft && in_array('status', $this->campaignColumns, true)) {
-            $conditions[] = "c.status IN ('published','active','completed','funded')";
+            $publicStatuses = $this->getPublicStatuses();
+            $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
+            $conditions[] = 'c.status IN (' . $placeholders . ')';
+            $params = array_merge($params, $publicStatuses);
         }
 
-        if ($this->hasVisibilityColumn) {
+        if (!$includeDraft && $this->hasVisibilityColumn) {
             $conditions[] = "c.visibility <> 'private'";
         }
 
@@ -927,7 +1650,7 @@ class CampaignController {
         return $this->transformLegacyRow($campaign);
     }
 
-    private function createLegacyCampaign(int $ownerId, array $data, string $slug, string $now): int {
+    private function createLegacyCampaign(int $ownerId, array $data, string $slug, string $now, bool $requiresPeerReview = false): int {
         $payload = ['title' => $data['title']];
 
         if (in_array($this->ownerColumn, $this->campaignColumns, true)) {
@@ -968,10 +1691,10 @@ class CampaignController {
         }
 
         if (in_array('status', $this->campaignColumns, true)) {
-            $payload['status'] = 'pending_review';
+            $payload['status'] = 'under_review';
         }
         if ($this->hasVisibilityColumn) {
-            $payload['visibility'] = 'public';
+            $payload['visibility'] = 'private';
         }
 
         if (in_array('location', $this->campaignColumns, true)) {
@@ -1015,7 +1738,94 @@ class CampaignController {
         }
 
         $insertId = $this->db->insert('campaigns', $payload);
+
+        if ($this->db->tableExists('campaign_status_history')) {
+            $historyNotes = $requiresPeerReview
+                ? 'Creada por un administrador y requiere revisión de otro administrador.'
+                : 'Campaña creada y enviada a revisión inicial';
+
+            $this->db->insert('campaign_status_history', [
+                'campaign_id' => $insertId,
+                'previous_status' => null,
+                'new_status' => 'under_review',
+                'changed_by' => $ownerId,
+                'notes' => $historyNotes,
+                'created_at' => $now,
+            ]);
+        }
+
         return (int)$insertId;
+    }
+
+    private function updateLegacyCampaignRecord(int $campaignId, array $updateData, array $data, array $existing, ?string $newCoverUrl): void {
+        $payload = [];
+
+        if (in_array('title', $this->campaignColumns, true)) {
+            $payload['title'] = $updateData['title'];
+        }
+        if (in_array('summary', $this->campaignColumns, true)) {
+            $payload['summary'] = $updateData['summary'];
+        }
+        if (in_array('short_description', $this->campaignColumns, true)) {
+            $payload['short_description'] = $updateData['summary'];
+        }
+        if (in_array('story', $this->campaignColumns, true)) {
+            $payload['story'] = $updateData['story'];
+        }
+        if (in_array('description', $this->campaignColumns, true)) {
+            $payload['description'] = $updateData['story'];
+        }
+
+        if (in_array('goal_amount', $this->campaignColumns, true)) {
+            $payload['goal_amount'] = $updateData['goal_amount'];
+        }
+
+        $categorySlug = $data['category_slug'] ?: ($existing['category_slug'] ?? $existing['category'] ?? 'otras-causas');
+        $categoryLabel = $this->fallbackCategories[$categorySlug] ?? ucfirst(str_replace('-', ' ', $categorySlug));
+        if (in_array('category_slug', $this->campaignColumns, true)) {
+            $payload['category_slug'] = $categorySlug;
+        }
+        if (in_array('category', $this->campaignColumns, true)) {
+            $payload['category'] = $categoryLabel;
+        }
+
+        if (in_array('end_date', $this->campaignColumns, true)) {
+            $payload['end_date'] = $updateData['end_date'];
+        }
+
+        if (in_array('location', $this->campaignColumns, true)) {
+            $payload['location'] = $updateData['location'];
+        }
+        if (in_array('beneficiary_name', $this->campaignColumns, true)) {
+            $payload['beneficiary_name'] = $updateData['beneficiary_name'];
+        }
+        if (in_array('beneficiary_contact', $this->campaignColumns, true)) {
+            $payload['beneficiary_contact'] = $updateData['beneficiary_contact'];
+        }
+
+        if ($newCoverUrl) {
+            if (in_array('cover_image_url', $this->campaignColumns, true)) {
+                $payload['cover_image_url'] = $newCoverUrl;
+            }
+            if (in_array('image_url', $this->campaignColumns, true)) {
+                $payload['image_url'] = $newCoverUrl;
+            }
+        }
+
+        if (in_array('video_url', $this->campaignColumns, true)) {
+            $payload['video_url'] = $updateData['video_url'];
+        }
+
+        if (in_array('ai_generated', $this->campaignColumns, true)) {
+            $payload['ai_generated'] = $updateData['ai_assisted'];
+        } elseif (in_array('ai_assisted', $this->campaignColumns, true)) {
+            $payload['ai_assisted'] = $updateData['ai_assisted'];
+        }
+
+        if (!empty($payload)) {
+            $payload['updated_at'] = date('Y-m-d H:i:s');
+            $this->db->update('campaigns', $payload, 'id = ?', [$campaignId]);
+        }
     }
 
     private function transformLegacyRow(array $row): array {

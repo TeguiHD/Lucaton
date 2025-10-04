@@ -9,7 +9,8 @@ try {
 
   css = css
     .replace(/-webkit-text-size-adjust:\s*100%;?/g, '')
-    .replace(/-moz-osx-font-smoothing:\s*grayscale;?/g, '');
+    .replace(/-moz-osx-font-smoothing:\s*grayscale;?/g, '')
+    .replace(/\s*text-wrap:[^;]+;?/g, '');
 
   if (css.length !== originalLength) {
     fs.writeFileSync(cssPath, css, 'utf8');

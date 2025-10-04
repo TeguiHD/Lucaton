@@ -7,6 +7,9 @@ $totalCampaigns = $totalCampaigns ?? 0;
 $page = $page ?? 1;
 $totalPages = $totalPages ?? 1;
 $hasMore = $hasMore ?? false;
+$campaignAppeals = $campaignAppeals ?? [];
+$appealFormErrors = $appealFormErrors ?? [];
+$appealFormOld = $appealFormOld ?? [];
 
 $page_title = 'Mis campañas — Lucatón';
 $page_description = 'Administra tus campañas, consulta su estado y accede rápidamente a sus estadísticas.';
@@ -24,6 +27,15 @@ $statusLabels = [
     'paused' => ['label' => 'Pausada', 'class' => 'bg-yellow-100 text-yellow-800'],
     'cancelled' => ['label' => 'Cancelada', 'class' => 'bg-red-100 text-red-800'],
     'archived' => ['label' => 'Archivada', 'class' => 'bg-gray-100 text-gray-600'],
+    'pending_review' => ['label' => 'En revisión', 'class' => 'bg-amber-100 text-amber-800'],
+];
+
+$publicStatuses = ['published', 'active', 'completed'];
+$statusGuidance = [
+    'draft' => 'Esta campaña es un borrador. Ajusta los detalles pendientes y envíala a revisión cuando estés listo.',
+    'under_review' => 'Estamos revisando los antecedentes. Solo tú y el equipo de Lucatón pueden ver esta campaña por ahora.',
+    'cancelled' => 'La campaña fue rechazada. Revisa las observaciones del equipo y actualiza la información antes de solicitar una nueva evaluación.',
+    'paused' => 'La campaña está pausada y no es visible públicamente. Puedes solicitar su reactivación una vez que actualices los datos necesarios.',
 ];
 ?>
 
@@ -38,7 +50,7 @@ $statusLabels = [
     <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
@@ -132,7 +144,8 @@ $statusLabels = [
                     <?php foreach ($campaigns as $campaign): ?>
                         <?php
                             $statusKey = $campaign['status'] ?? 'draft';
-                            $status = $statusLabels[$statusKey] ?? ['label' => ucfirst($statusKey), 'class' => 'bg-gray-100 text-gray-700'];
+                            $status = $statusLabels[$statusKey] ?? ['label' => ucfirst(str_replace('_', ' ', $statusKey)), 'class' => 'bg-gray-100 text-gray-700'];
+                            $isRestricted = !in_array($statusKey, $publicStatuses, true);
                             $goal = (float)($campaign['goal_amount'] ?? 0);
                             $raised = (float)($campaign['raised_amount'] ?? 0);
                             $progress = $goal > 0 ? min(100, round(($raised / $goal) * 100)) : 0;
@@ -142,30 +155,77 @@ $statusLabels = [
                             $campaignSummary = $campaign['summary'] ?? '';
                             $campaignId = $campaign['id'] ?? null;
                             $campaignSlug = $campaign['slug'] ?? null;
-                            $viewUrl = $campaignSlug ? Router::url('campana/' . $campaignSlug) : Router::url('campana/' . $campaignId);
+                            $visibilityLabel = $campaign['visibility'] ?? '';
+                            $coverCandidate = $campaign['cover_image_url'] ?? ($campaign['image_url'] ?? null);
+                            $cardImageUrl = CampaignMediaUploadService::normalizePublicUrl($coverCandidate)
+                                ?? (APP_URL . '/public/assets/images/campaigns/placeholder.jpg');
+                            $aiFlag = isset($campaign['ai_assisted']) ? (bool)$campaign['ai_assisted'] : null;
+                            if ($visibilityLabel === 'private') {
+                                $visibilityLabel = 'Privada';
+                            } elseif ($visibilityLabel === 'public') {
+                                $visibilityLabel = 'Pública';
+                            } elseif ($visibilityLabel) {
+                                $visibilityLabel = ucfirst($visibilityLabel);
+                            }
+                            $viewUrl = null;
+                            if ($campaignSlug || $campaignId) {
+                                $viewUrl = $campaignSlug ? Router::url('campana/' . $campaignSlug) : Router::url('campana/' . $campaignId);
+                            }
                             $editUrl = $campaignId ? Router::url('campana/' . $campaignId . '/editar') : null;
                         ?>
-                        <article class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                            <div class="flex flex-col gap-4 p-6 md:flex-row md:items-start md:justify-between">
+                        <?php
+                            $appealRecord = $campaignAppeals[$campaignId] ?? null;
+                            $appealStatus = strtolower((string)($appealRecord['status'] ?? ''));
+                            $appealOldData = $appealFormOld[$campaignId] ?? [];
+                            $appealErrors = $appealFormErrors[$campaignId] ?? [];
+                            $canAppeal = in_array($statusKey, ['cancelled', 'paused'], true);
+                        ?>
+                        <article id="campaign-<?= $campaignId ?>" class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="flex flex-col gap-4 p-6 md:flex-row md:items-start">
+                                <div class="w-full md:w-48 flex-shrink-0">
+                                    <img src="<?= htmlspecialchars($cardImageUrl) ?>" alt="Imagen de <?= htmlspecialchars($campaignTitle) ?>" class="h-40 w-full rounded-lg object-cover shadow-sm">
+                                </div>
                                 <div class="flex-1">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium <?= $status['class'] ?>">
                                             <?= htmlspecialchars($status['label']) ?>
                                         </span>
-                                        <?php if (!empty($campaign['visibility']) && $campaign['visibility'] !== 'public'): ?>
+                                        <?php if ($visibilityLabel && strtolower($campaign['visibility'] ?? '') !== 'public'): ?>
                                             <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                                                Visibilidad: <?= htmlspecialchars($campaign['visibility']) ?>
+                                                Visibilidad: <?= htmlspecialchars($visibilityLabel) ?>
                                             </span>
                                         <?php endif; ?>
                                         <span class="inline-flex items-center text-xs text-gray-500">
                                             Creada el <?= htmlspecialchars($createdAt) ?>
                                         </span>
+                                        <?php if ($aiFlag !== null): ?>
+                                            <span class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                                                IA asistida: <?= $aiFlag ? 'Sí' : 'No' ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
-                                    <h2 class="mt-3 text-xl font-semibold text-gray-900">
-                                        <a href="<?= htmlspecialchars($viewUrl) ?>" class="hover:text-copihue-600 transition-colors">
-                                            <?= htmlspecialchars($campaignTitle) ?>
-                                        </a>
-                                    </h2>
+                                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                                        <h2 class="text-xl font-semibold text-gray-900">
+                                            <?php if ($viewUrl): ?>
+                                                <a href="<?= htmlspecialchars($viewUrl) ?>" class="hover:text-copihue-600 transition-colors">
+                                                    <?= htmlspecialchars($campaignTitle) ?>
+                                                </a>
+                                            <?php else: ?>
+                                                <?= htmlspecialchars($campaignTitle) ?>
+                                            <?php endif; ?>
+                                        </h2>
+                                        <?php if ($campaignId): ?>
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">ID #<?= (int)$campaignId ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($isRestricted): ?>
+                                        <div class="mt-2 flex items-start gap-2 text-xs text-amber-600">
+                                            <svg class="h-4 w-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.38 0 2.5-1.12 2.5-2.5S13.38 6 12 6 9.5 7.12 9.5 8.5 10.62 11 12 11zm0 0v4m-6 4h12a2 2 0 002-2v-3.586a1 1 0 00-.293-.707l-6.414-6.414a1 1 0 00-1.414 0L4.293 12.707A1 1 0 004 13.414V17a2 2 0 002 2z" />
+                                            </svg>
+                                            <span><?= htmlspecialchars($statusGuidance[$statusKey] ?? 'Esta campaña aún no está publicada. Solo tú y el equipo de Lucatón pueden verla.') ?></span>
+                                        </div>
+                                    <?php endif; ?>
                                     <?php if (!empty($campaignSummary)): ?>
                                         <p class="mt-2 text-sm text-gray-600 leading-6">
                                             <?= htmlspecialchars($campaignSummary) ?>
@@ -199,15 +259,58 @@ $statusLabels = [
                                         <div class="h-full rounded-full bg-copihue-500" style="width: <?= $progress ?>%"></div>
                                     </div>
                                     <div class="flex flex-col gap-2 text-sm">
-                                        <a href="<?= htmlspecialchars($viewUrl) ?>" class="inline-flex items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:border-copihue-500 hover:text-copihue-600">
-                                            Ver campaña
-                                        </a>
-                                        <?php if ($editUrl): ?>
-                                            <a href="<?= htmlspecialchars($editUrl) ?>" class="inline-flex items-center justify-center rounded-md bg-copihue-600 px-3 py-2 text-sm font-medium text-white hover:bg-copihue-700">
+                                        <?php if ($viewUrl): ?>
+                                            <a href="<?= htmlspecialchars($viewUrl) ?>" class="btn inline-flex items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:border-copihue-500 hover:text-copihue-600">
+                                                <?= $isRestricted ? 'Ver vista privada' : 'Ver campaña' ?>
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center justify-center rounded-md border border-dashed border-amber-300 px-3 py-2 text-sm font-medium text-amber-600">
+                                                En revisión interna
+                                            </span>
+                                        <?php endif; ?>
+                                        <?php if ($editUrl && in_array($statusKey, ['draft', 'under_review', 'cancelled'], true)): ?>
+                                            <a href="<?= htmlspecialchars($editUrl) ?>" class="btn inline-flex items-center justify-center rounded-md bg-copihue-600 px-3 py-2 text-sm font-medium text-white hover:bg-copihue-700 hover:text-white focus:text-white">
                                                 Editar campaña
                                             </a>
                                         <?php endif; ?>
                                     </div>
+                                    <?php if ($canAppeal): ?>
+                                        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                                            <h3 class="font-semibold text-amber-900">¿Necesitas apelar esta campaña?</h3>
+                                            <?php if (in_array($appealStatus, ['pending', 'under_review'], true)): ?>
+                                                <p class="mt-2">Tu apelación está en revisión. Te notificaremos cuando el equipo académico responda.</p>
+                                                <p class="mt-1 text-xs text-amber-700">Enviada el <?= !empty($appealRecord['created_at']) ? date('d/m/Y H:i', strtotime($appealRecord['created_at'])) : '—' ?>.</p>
+                                            <?php elseif ($appealStatus === 'approved'): ?>
+                                                <p class="mt-2 text-emerald-700">Tu apelación fue aprobada. Revisa tu bandeja para seguir los próximos pasos.</p>
+                                            <?php else: ?>
+                                                <?php if (!empty($appealErrors['general'])): ?>
+                                                    <div class="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+                                                        <?= htmlspecialchars($appealErrors['general']) ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <form method="POST" action="<?= Router::url('campana/' . $campaignId . '/apelar') ?>" class="mt-2 space-y-3" novalidate>
+                                                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
+                                                    <div>
+                                                        <label for="appeal-reason-<?= $campaignId ?>" class="block text-xs font-medium text-amber-900">Cuéntanos por qué debemos revisar el caso</label>
+                                                        <textarea id="appeal-reason-<?= $campaignId ?>" name="reason" rows="3" required class="mt-1 w-full rounded-md border <?= isset($appealErrors['reason']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-amber-200 focus:border-amber-400 focus:ring-amber-400' ?> bg-white px-3 py-2 text-sm" placeholder="Describe la información adicional o correcciones realizadas."><?= htmlspecialchars($appealOldData['reason'] ?? '') ?></textarea>
+                                                        <?php if (isset($appealErrors['reason'])): ?>
+                                                            <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($appealErrors['reason']) ?></p>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div>
+                                                        <label for="appeal-evidence-<?= $campaignId ?>" class="block text-xs font-medium text-amber-900">Evidencia adicional (opcional)</label>
+                                                        <textarea id="appeal-evidence-<?= $campaignId ?>" name="additional_evidence" rows="2" class="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:ring-amber-400" placeholder="Enlaces, referencias o datos de contacto actualizados."><?= htmlspecialchars($appealOldData['additional_evidence'] ?? '') ?></textarea>
+                                                    </div>
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-xs text-amber-700">El equipo responderá dentro de 48 horas hábiles.</span>
+                                                        <button type="submit" class="inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">
+                                                            Enviar apelación
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </article>

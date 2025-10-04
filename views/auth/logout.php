@@ -67,7 +67,7 @@ $page_description = 'Cierra tu sesión de forma segura en Lucatón.';
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
     
     <!-- Alpine.js -->
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Skip to content link -->

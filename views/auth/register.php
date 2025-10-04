@@ -53,7 +53,7 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
 </script>
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Skip to content link -->
@@ -196,12 +196,12 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
                             <input
                                 id="password"
                                 name="password"
+                                type="password"
                                 placeholder="••••••••"
                                 required
                                 autocomplete="new-password"
                                 class="form-input block w-full rounded-md border-gray-300 shadow-sm focus:border-copihue-500 focus:ring-copihue-500 sm:text-sm pr-12"
                                 :class="errors.password ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''"
-                                :type="showPassword ? 'text' : 'password'"
                                 x-model="form.password"
                                 @input="validatePassword()"
                                 @blur="validatePassword()"
@@ -209,17 +209,19 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
                             <div class="absolute inset-y-0 right-0 flex items-center pr-3 z-10">
                                 <button
                                     type="button"
-                                    @click="showPassword = !showPassword"
-                                    :aria-label="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
-                                    :title="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
-                                    :aria-pressed="showPassword"
                                     class="inline-flex items-center justify-center rounded-md p-1 text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-copihue-500 bg-white bg-opacity-75"
+                                    data-password-toggle="#password"
+                                    data-password-label-hidden="Mostrar contraseña"
+                                    data-password-label-visible="Ocultar contraseña"
+                                    aria-label="Mostrar contraseña"
+                                    title="Mostrar contraseña"
+                                    aria-pressed="false"
                                 >
-                                    <svg x-show="!showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg data-password-icon="hidden" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                     </svg>
-                                    <svg x-show="showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg data-password-icon="visible" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                                     </svg>
                                 </button>
@@ -291,29 +293,31 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
                             <input
                                 id="password_confirmation"
                                 name="password_confirmation"
+                                type="password"
                                 placeholder="••••••••"
                                 required
                                 autocomplete="new-password"
                                 class="form-input block w-full rounded-md border-gray-300 shadow-sm focus:border-copihue-500 focus:ring-copihue-500 sm:text-sm pr-12"
                                 :class="errors.password_confirmation ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''"
-                                :type="showPasswordConfirm ? 'text' : 'password'"
                                 x-model="form.password_confirmation"
                                 @blur="validatePasswordConfirmation()"
                             >
                             <div class="absolute inset-y-0 right-0 flex items-center pr-3 z-10">
                                 <button
                                     type="button"
-                                    @click="showPasswordConfirm = !showPasswordConfirm"
-                                    :aria-label="showPasswordConfirm ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'"
-                                    :title="showPasswordConfirm ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'"
-                                    :aria-pressed="showPasswordConfirm"
                                     class="inline-flex items-center justify-center rounded-md p-1 text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-copihue-500 bg-white bg-opacity-75"
+                                    data-password-toggle="#password_confirmation"
+                                    data-password-label-hidden="Mostrar confirmación de contraseña"
+                                    data-password-label-visible="Ocultar confirmación de contraseña"
+                                    aria-label="Mostrar confirmación de contraseña"
+                                    title="Mostrar confirmación de contraseña"
+                                    aria-pressed="false"
                                 >
-                                    <svg x-show="!showPasswordConfirm" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg data-password-icon="hidden" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                     </svg>
-                                    <svg x-show="showPasswordConfirm" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg data-password-icon="visible" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                                     </svg>
                                 </button>
@@ -405,7 +409,7 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
                             'full_width' => true,
                             'form_type' => 'submit',
                             'attributes' => [
-                                ':disabled' => 'loading || !isFormValid()',
+                                ':disabled' => 'loading',
                                 ':class' => 'loading ? "opacity-75 cursor-not-allowed" : ""'
                             ]
                         ]); ?>
@@ -522,8 +526,6 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
                 },
                 errors: initialErrors,
                 loading: false,
-                showPassword: false,
-                showPasswordConfirm: false,
 
                 get passwordCriteria() {
                     const password = this.form.password || '';
@@ -651,16 +653,6 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
 
                 showProviderUnavailable(provider) {
                     this.errors.general = `La opción de registro con ${provider} estará disponible próximamente.`;
-                },
-
-                isFormValid() {
-                    return this.form.first_name && 
-                           this.form.last_name && 
-                           this.form.email && 
-                           this.form.password && 
-                           this.form.password_confirmation && 
-                           this.form.terms &&
-                           Object.keys(this.errors).length === 0;
                 },
 
                 async submitForm() {

@@ -1,0 +1,35 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Nicoholas Lopetegui"
+        }
+    ],
+    "subject": "Recibimos tu campaña \"Campaña de prueba\"",
+    "body_text": "Hola Nicoholas Lopetegui,\n\nTu campaña \"Campaña de prueba\" quedó registrada y está en revisión por el equipo.\n\nTe avisaremos cuando pase a estado publicado. Mientras tanto puedes preparar materiales para difundirla apenas esté en línea.\n\nMeta: CLP 100.000.000 · Cierre: 04\/10\/2025",
+    "generated_at": "2025-10-03T19:39:39-03:00",
+    "context": {
+        "campaign": {
+            "id": 5,
+            "title": "Campaña de prueba",
+            "slug": "campa-a-de-prueba",
+            "status": null,
+            "goal_amount": 100000000,
+            "currency": "CLP",
+            "progress": null
+        },
+        "ai_prompt": "Genera un plan breve de lanzamiento en redes para la campaña \"Campaña de prueba\" (ID 5, meta CLP 100.000.000). Incluye ideas para anunciar que está en revisión, contenidos para captar aliados iniciales y sugerencias de próximos pasos antes de la publicación.",
+        "meta": {
+            "milestone": "owner_campaign_created",
+            "campaign_id": 5,
+            "event": "campaign_created",
+            "requires_peer_review": false
+        }
+    },
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_created"
+}

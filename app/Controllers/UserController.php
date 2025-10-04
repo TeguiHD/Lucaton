@@ -16,7 +16,16 @@ class UserController {
         $database = Database::getInstance();
 
         $hasCampaignsTable = $database->tableExists('campaigns');
-        $campaignsHaveOwner = $hasCampaignsTable && $database->columnExists('campaigns', 'owner_id');
+        $campaignOwnerColumn = null;
+        if ($hasCampaignsTable) {
+            if ($database->columnExists('campaigns', 'owner_id')) {
+                $campaignOwnerColumn = 'owner_id';
+            } elseif ($database->columnExists('campaigns', 'user_id')) {
+                $campaignOwnerColumn = 'user_id';
+            }
+        }
+
+        $campaignsHaveOwner = $campaignOwnerColumn !== null;
         $campaignsHaveStatus = $hasCampaignsTable && $database->columnExists('campaigns', 'status');
         $campaignsHaveCreatedAt = $hasCampaignsTable && $database->columnExists('campaigns', 'created_at');
         $hasCampaignMetricsTable = $database->tableExists('campaign_metrics');
@@ -35,9 +44,15 @@ class UserController {
             return;
         }
 
-        $campaigns = ($hasCampaignsTable && $campaignsHaveOwner)
-            ? $campaignModel->findByUserId($userId, 6, 0)
-            : [];
+        if ($hasCampaignsTable && $campaignsHaveOwner) {
+            $rawCampaigns = $campaignModel->findByUserId($userId, 6, 0);
+            $campaigns = array_map(static function (array $row) {
+                $presented = CampaignPresenter::present($row);
+                return array_merge($row, $presented);
+            }, $rawCampaigns);
+        } else {
+            $campaigns = [];
+        }
 
         $campaignStats = $this->resolveCampaignStats(
             $database,
@@ -45,6 +60,7 @@ class UserController {
             $campaignsHaveOwner,
             $campaignsHaveStatus,
             $hasCampaignMetricsTable,
+            $campaignOwnerColumn,
             $userId
         );
 
@@ -87,7 +103,7 @@ class UserController {
                         c.title AS campaign_title
                  FROM donations d
                  INNER JOIN campaigns c ON c.id = d.campaign_id
-                 WHERE c.owner_id = ? AND d.status = 'completed'
+                 WHERE c.{$campaignOwnerColumn} = ? AND d.status = 'completed'
                  ORDER BY d.created_at DESC
                  LIMIT 5",
                 [$userId]
@@ -148,11 +164,13 @@ class UserController {
             }, $notificationModel->getForUser($userId, 5));
         }
 
+        $normalizedUserAvatar = SessionHelper::normalizeAvatarUrl($userRecord['avatar_url'] ?? null);
+
         $user = [
             'id' => (int)$userRecord['id'],
             'name' => trim(($userRecord['first_name'] ?? '') . ' ' . ($userRecord['last_name'] ?? '')) ?: ($userRecord['username'] ?? 'Usuario'),
             'email' => $userRecord['email'] ?? '',
-            'avatar' => $userRecord['avatar_url'] ?? APP_URL . '/public/assets/images/avatars/default.jpg',
+            'avatar' => $normalizedUserAvatar ?? APP_URL . '/public/assets/images/avatars/default.jpg',
             'created_at' => $userRecord['created_at'] ?? '',
             'verified' => !empty($userRecord['email_verified_at']),
             'total_campaigns' => (int)$campaignStats['total_campaigns'],
@@ -191,6 +209,10 @@ class UserController {
             return;
         }
 
+        SessionHelper::updateUserProfile($userRecord);
+        $sessionUser = SessionHelper::getUser() ?? [];
+        $normalizedAvatar = $sessionUser['avatar'] ?? SessionHelper::normalizeAvatarUrl($userRecord['avatar_url'] ?? null);
+
         $userProfile = [
             'id' => (int)$userRecord['id'],
             'first_name' => $userRecord['first_name'] ?? '',
@@ -201,7 +223,7 @@ class UserController {
             'phone' => $userRecord['phone'] ?? '',
             'bio' => $userRecord['bio'] ?? '',
             'location' => $userRecord['location'] ?? '',
-            'avatar_url' => $userRecord['avatar_url'] ?? APP_URL . '/public/assets/images/avatars/default.jpg',
+            'avatar_url' => $normalizedAvatar ?? APP_URL . '/public/assets/images/avatars/default.jpg',
             'created_at' => $userRecord['created_at'] ?? '',
             'email_verified_at' => $userRecord['email_verified_at'] ?? null,
             'role' => $userRecord['role'] ?? 'user',
@@ -411,6 +433,13 @@ class UserController {
 
             if (empty($profileUpdates) && !$nameChangeRequested) {
                 SessionHelper::setFlash('info', 'No detectamos cambios para actualizar.');
+            }
+
+            if (!empty($profileUpdates) || $nameChangeRequested) {
+                $updatedRecord = $userModel->findById($userId);
+                if ($updatedRecord) {
+                    SessionHelper::updateUserProfile($updatedRecord);
+                }
             }
         } catch (Exception $e) {
             Logger::error('Error updating profile', [
@@ -635,6 +664,7 @@ class UserController {
         bool $campaignsHaveOwner,
         bool $campaignsHaveStatus,
         bool $hasCampaignMetricsTable,
+        ?string $campaignOwnerColumn,
         int $userId
     ): array {
         $defaults = [
@@ -644,7 +674,7 @@ class UserController {
             'successful_campaigns' => 0,
         ];
 
-        if (!$hasCampaignsTable || !$campaignsHaveOwner) {
+        if (!$hasCampaignsTable || !$campaignsHaveOwner || empty($campaignOwnerColumn)) {
             return $defaults;
         }
 
@@ -658,7 +688,7 @@ class UserController {
                                 COALESCE(SUM(CASE WHEN c.status IN ('completed', 'published') THEN 1 ELSE 0 END), 0) AS successful_campaigns
                          FROM campaigns c
                          LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
-                         WHERE c.owner_id = ?",
+                         WHERE c.{$campaignOwnerColumn} = ?",
                         [$userId]
                     );
                 } else {
@@ -669,7 +699,7 @@ class UserController {
                                 0 AS successful_campaigns
                          FROM campaigns c
                          LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
-                         WHERE c.owner_id = ?",
+                         WHERE c.{$campaignOwnerColumn} = ?",
                         [$userId]
                     );
                 }
@@ -681,7 +711,7 @@ class UserController {
                                 0 AS total_supporters,
                                 COALESCE(SUM(CASE WHEN status IN ('completed', 'published') THEN 1 ELSE 0 END), 0) AS successful_campaigns
                          FROM campaigns
-                         WHERE owner_id = ?",
+                         WHERE {$campaignOwnerColumn} = ?",
                         [$userId]
                     );
                 } else {
@@ -691,7 +721,7 @@ class UserController {
                                 0 AS total_supporters,
                                 0 AS successful_campaigns
                          FROM campaigns
-                         WHERE owner_id = ?",
+                         WHERE {$campaignOwnerColumn} = ?",
                         [$userId]
                     );
                 }

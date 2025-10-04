@@ -114,18 +114,28 @@ class AuthController {
         $resetUrl = null;
         $tokenGenerated = false;
 
+        $message = 'Si el correo existe en nuestra plataforma, recibirás un enlace para restablecer tu contraseña.';
+
+        if (APP_ENV === 'development' || APP_ENV === 'local') {
+            $message .= ' (Demo: revisa la consola del servidor para ver el enlace simulado).';
+        }
+
         try {
             $token = $this->users->generatePasswordResetToken($email);
             $resetUrl = Router::url('recuperar/restablecer/' . $token);
             $tokenGenerated = true;
 
-            $this->logPasswordResetLink($email, $resetUrl);
+            if (APP_ENV === 'development' || APP_ENV === 'local') {
+                Logger::info('Password reset demo link', [
+                    'email' => $email,
+                    'reset_url' => $resetUrl
+                ]);
+            } else {
+                $this->logPasswordResetLink($email, $resetUrl);
+            }
         } catch (Exception $e) {
-            // Evitar enumeración de usuarios: responder como si se hubiera enviado
             Logger::notice('Password reset requested for non-existent email', ['email' => $email]);
         }
-
-        $message = 'Si el correo existe en nuestra plataforma, recibirás un enlace para restablecer tu contraseña.';
 
         if ($this->isJsonRequest()) {
             $payload = ['message' => $message];
@@ -138,7 +148,7 @@ class AuthController {
 
         $flashMessage = $message;
         if ($tokenGenerated && (APP_ENV === 'development' || APP_ENV === 'local')) {
-            $flashMessage .= ' Puedes usar este enlace temporal: ' . $resetUrl;
+            $flashMessage .= ' (Demo: enlace simulado en los logs).';
         }
 
         SessionHelper::setFlash('success', $flashMessage);

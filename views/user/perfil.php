@@ -70,7 +70,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
     <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
     <script defer src="<?= APP_URL ?>/public/assets/js/profile.js?v=2025020101"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">

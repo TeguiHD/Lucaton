@@ -61,7 +61,10 @@ class AvatarUploadService {
 
         @chmod($destination, 0644);
 
-        return rtrim(APP_URL, '/') . self::STORAGE_DIR . '/' . $uniqueName;
+        // Persist a path relative to the application root to avoid pinning avatars
+        // to the host/port used at upload time. Consumers can resolve it against
+        // the current APP_URL, ensuring portability across environments.
+        return self::STORAGE_DIR . '/' . $uniqueName;
     }
 
     /**

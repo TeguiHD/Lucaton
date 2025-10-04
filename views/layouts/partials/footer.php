@@ -177,4 +177,4 @@ $social_links = [
     </div>
 </footer>
 <!-- JS de interacción ligera (sin CDN) -->
-<script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801" defer></script>
+<script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>

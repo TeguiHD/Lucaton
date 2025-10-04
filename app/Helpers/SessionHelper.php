@@ -5,6 +5,12 @@
  */
 
 class SessionHelper {
+    private const ROLE_REVALIDATE_SECONDS = 600;
+    private const ROLE_HIERARCHY = [
+        'user' => 10,
+        'admin' => 50,
+        'superadmin' => 100,
+    ];
     
     /**
      * Iniciar sesión segura
@@ -66,13 +72,18 @@ class SessionHelper {
      * Establecer datos de usuario en sesión
      */
     public static function setUser($user) {
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['user_email'] = $user['email'] ?? '';
-        $_SESSION['user_name'] = self::resolveDisplayName($user);
-        $_SESSION['user_role'] = $user['role'] ?? ($user['rol'] ?? 'user');
+        $userId = (int)($user['id'] ?? 0);
+        $role = self::normalizeRole($user['role'] ?? ($user['rol'] ?? 'user'));
+
+        $_SESSION['user_id'] = $userId;
+        $_SESSION['user_role'] = $role;
+        $_SESSION['user_role_signature'] = self::signRole($userId, $role);
+        $_SESSION['user_role_verified_at'] = time();
         $_SESSION['user_status'] = $user['status'] ?? 'active';
         $_SESSION['email_verified'] = !empty($user['email_verified_at']);
         $_SESSION['login_time'] = time();
+
+        self::storeUserProfileFields($user);
 
         // Regenerar ID de sesión después del login
         session_regenerate_id(true);
@@ -93,14 +104,37 @@ class SessionHelper {
             return null;
         }
         
+        $avatar = $_SESSION['user_avatar'] ?? null;
+
         return [
             'id' => $_SESSION['user_id'],
             'email' => $_SESSION['user_email'] ?? '',
             'name' => $_SESSION['user_name'] ?? '',
-            'role' => $_SESSION['user_role'] ?? 'user',
+            'role' => self::getUserRole() ?? 'user',
             'status' => $_SESSION['user_status'] ?? 'active',
-            'email_verified' => !empty($_SESSION['email_verified'])
+            'email_verified' => !empty($_SESSION['email_verified']),
+            'avatar' => $avatar,
+            'avatar_url' => $avatar,
         ];
+    }
+
+    public static function getUserRole(): ?string {
+        if (!self::isAuthenticated()) {
+            return null;
+        }
+
+        $sessionRole = $_SESSION['user_role'] ?? null;
+
+        if ($sessionRole === null || !self::hasValidRoleSignature($sessionRole)) {
+            return self::refreshUserRole();
+        }
+
+        $lastVerified = (int)($_SESSION['user_role_verified_at'] ?? 0);
+        if ($lastVerified === 0 || (time() - $lastVerified) > self::ROLE_REVALIDATE_SECONDS) {
+            return self::refreshUserRole();
+        }
+
+        return $sessionRole;
     }
     
     /**
@@ -114,7 +148,11 @@ class SessionHelper {
      * Verificar si el usuario es administrador
      */
     public static function isAdmin() {
-        return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+        return self::userHasRole('admin');
+    }
+
+    public static function isSuperAdmin(): bool {
+        return self::userHasRole('superadmin');
     }
     
     /**
@@ -299,7 +337,7 @@ class SessionHelper {
 
         return count($_SESSION[$key]) >= $limit;
     }
-    
+
     /**
      * Obtener intentos restantes para rate limiting
      */
@@ -319,10 +357,128 @@ class SessionHelper {
         return max(0, $limit - count($_SESSION[$key]));
     }
 
+    public static function userHasRole(string $role): bool {
+        if (!self::isAuthenticated()) {
+            return false;
+        }
+
+        $expected = self::normalizeRole($role);
+        $sessionRole = self::normalizeRole($_SESSION['user_role'] ?? null);
+
+        if (self::roleSatisfies($sessionRole, $expected) && self::hasValidRoleSignature($sessionRole)) {
+            $lastVerified = (int)($_SESSION['user_role_verified_at'] ?? 0);
+            if ($lastVerified > 0 && (time() - $lastVerified) <= self::ROLE_REVALIDATE_SECONDS) {
+                return true;
+            }
+        }
+
+        $currentRole = self::refreshUserRole();
+        return $currentRole !== null && self::roleSatisfies($currentRole, $expected);
+    }
+
+    private static function hasValidRoleSignature(string $role): bool {
+        if (!isset($_SESSION['user_id'])) {
+            return false;
+        }
+
+        $signature = $_SESSION['user_role_signature'] ?? '';
+        if ($signature === '') {
+            return false;
+        }
+
+        $expected = self::signRole((int)$_SESSION['user_id'], self::normalizeRole($role));
+        return hash_equals($expected, $signature);
+    }
+
+    private static function signRole(int $userId, string $role): string {
+        $key = ROLE_SIGNATURE_KEY ?: (SESSION_SIGNATURE_KEY ?: 'lucaton-signature');
+        return hash_hmac('sha256', $userId . '|' . $role, $key);
+    }
+
+    private static function refreshUserRole(): ?string {
+        $userId = $_SESSION['user_id'] ?? null;
+        if (!$userId) {
+            return null;
+        }
+
+        try {
+            $userModel = new User();
+            $record = $userModel->findById((int)$userId);
+        } catch (Exception $exception) {
+            Logger::warning('Unable to refresh user role', [
+                'user_id' => $userId,
+                'error' => $exception->getMessage(),
+            ]);
+            return null;
+        }
+
+        if (!$record) {
+            self::logout();
+            return null;
+        }
+
+        $role = self::normalizeRole($record['role'] ?? ($record['rol'] ?? 'user'));
+
+        $_SESSION['user_role'] = $role;
+        $_SESSION['user_role_signature'] = self::signRole((int)$userId, $role);
+        $_SESSION['user_role_verified_at'] = time();
+
+        self::storeUserProfileFields($record);
+        if (isset($record['email_verified_at'])) {
+            $_SESSION['email_verified'] = !empty($record['email_verified_at']);
+        }
+
+        return $role;
+    }
+
+    private static function normalizeRole($role): string {
+        $normalized = strtolower(trim((string)$role));
+        return $normalized !== '' ? $normalized : 'user';
+    }
+
+    private static function getRoleRank(string $role): int {
+        $normalized = self::normalizeRole($role);
+        return self::ROLE_HIERARCHY[$normalized] ?? 0;
+    }
+
+    private static function roleSatisfies(string $currentRole, string $requiredRole): bool {
+        return self::getRoleRank($currentRole) >= self::getRoleRank($requiredRole);
+    }
+
+    /**
+     * Refresca campos visibles del usuario autenticado sin regenerar la sesión.
+     */
+    public static function updateUserProfile(array $user): void {
+        if (!self::isAuthenticated()) {
+            return;
+        }
+
+        $sessionUserId = (int)($_SESSION['user_id'] ?? 0);
+        $payloadUserId = (int)($user['id'] ?? 0);
+
+        if ($sessionUserId === 0 || $payloadUserId === 0 || $sessionUserId !== $payloadUserId) {
+            return;
+        }
+
+        self::storeUserProfileFields($user);
+
+        if (isset($user['email_verified_at'])) {
+            $_SESSION['email_verified'] = !empty($user['email_verified_at']);
+        }
+
+        if (isset($user['status'])) {
+            $_SESSION['user_status'] = $user['status'];
+        }
+    }
+
     /**
      * Resolver un nombre amigable para mostrar en la interfaz
      */
     private static function resolveDisplayName($user) {
+        if (is_object($user)) {
+            $user = get_object_vars($user);
+        }
+
         if (!empty($user['first_name']) || !empty($user['last_name'])) {
             return trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
         }
@@ -336,6 +492,166 @@ class SessionHelper {
         }
 
         return $user['email'] ?? 'Usuario';
+    }
+
+    /**
+     * Guarda en sesión los campos básicos del perfil (nombre, email, avatar, estado).
+     */
+    private static function storeUserProfileFields($user): void
+    {
+        if (is_object($user)) {
+            $user = get_object_vars($user);
+        }
+
+        if (!is_array($user)) {
+            return;
+        }
+
+        $email = $user['email'] ?? null;
+        if ($email !== null) {
+            $_SESSION['user_email'] = $email;
+        } elseif (!isset($_SESSION['user_email'])) {
+            $_SESSION['user_email'] = '';
+        }
+
+        $_SESSION['user_name'] = self::resolveDisplayName($user);
+
+        if (isset($user['status'])) {
+            $_SESSION['user_status'] = $user['status'];
+        }
+
+        if (self::payloadHasAvatar($user)) {
+            $avatarValue = self::extractAvatarValue($user);
+            $normalizedAvatar = self::normalizeAvatarUrl($avatarValue);
+
+            if ($normalizedAvatar !== null) {
+                $_SESSION['user_avatar'] = $normalizedAvatar;
+            } else {
+                unset($_SESSION['user_avatar']);
+            }
+        }
+    }
+
+    /**
+     * Normaliza una URL de avatar relativa o absoluta para alinearla al APP_URL actual.
+     */
+    public static function normalizeAvatarUrl(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $avatar = trim($value);
+        if ($avatar === '') {
+            return null;
+        }
+
+        $normalizedAppUrl = rtrim(APP_URL, '/');
+        $appBasePath = parse_url($normalizedAppUrl, PHP_URL_PATH) ?? '';
+        $appBasePath = rtrim($appBasePath, '/');
+        $appEndsWithPublic = $appBasePath !== '' && substr($appBasePath, -7) === '/public';
+
+        $stripBasePath = static function (string $path) use ($appBasePath): string {
+            $normalizedPath = '/' . ltrim($path, '/');
+
+            if ($appBasePath !== '' && $appBasePath !== '/') {
+                $baseWithSlash = $appBasePath[0] === '/' ? $appBasePath : '/' . $appBasePath;
+                $baseWithSlash = rtrim($baseWithSlash, '/');
+
+                if (strpos($normalizedPath, $baseWithSlash . '/') === 0) {
+                    $normalizedPath = substr($normalizedPath, strlen($baseWithSlash));
+                    if ($normalizedPath === '' || $normalizedPath[0] !== '/') {
+                        $normalizedPath = '/' . ltrim($normalizedPath, '/');
+                    }
+                }
+            }
+
+            return $normalizedPath;
+        };
+
+        $buildAbsolute = static function (string $path) use ($normalizedAppUrl, $stripBasePath, $appEndsWithPublic): string {
+            $normalizedPath = $stripBasePath($path);
+
+            if (!$appEndsWithPublic && strpos($normalizedPath, '/storage/avatars/') === 0 && strpos($normalizedPath, '/public/storage/avatars/') !== 0) {
+                $normalizedPath = '/public' . $normalizedPath;
+            }
+
+            return $normalizedAppUrl . $normalizedPath;
+        };
+
+        $managedPrefixes = ['/public/storage/avatars/', '/storage/avatars/'];
+
+        if (preg_match('/^https?:\/\//i', $avatar)) {
+            $avatarPath = parse_url($avatar, PHP_URL_PATH) ?: '';
+            if ($avatarPath !== '') {
+                $normalizedPath = $stripBasePath($avatarPath);
+                foreach ($managedPrefixes as $prefix) {
+                    if (strpos($normalizedPath, $prefix) === 0) {
+                        return $buildAbsolute($normalizedPath);
+                    }
+                }
+            }
+            return $avatar;
+        }
+
+        if (strpos($avatar, '//') === 0) {
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https:' : 'http:';
+            $rebuilt = $scheme . $avatar;
+            $avatarPath = parse_url($rebuilt, PHP_URL_PATH) ?: '';
+            if ($avatarPath !== '') {
+                $normalizedPath = $stripBasePath($avatarPath);
+                foreach ($managedPrefixes as $prefix) {
+                    if (strpos($normalizedPath, $prefix) === 0) {
+                        return $buildAbsolute($normalizedPath);
+                    }
+                }
+            }
+            return $rebuilt;
+        }
+
+        return $buildAbsolute($avatar);
+    }
+
+    private static function payloadHasAvatar($user): bool
+    {
+        if (is_array($user)) {
+            return array_key_exists('avatar_url', $user) || array_key_exists('avatar', $user);
+        }
+
+        if (is_object($user)) {
+            return property_exists($user, 'avatar_url') || property_exists($user, 'avatar');
+        }
+
+        return false;
+    }
+
+    private static function extractAvatarValue($user): ?string
+    {
+        if (is_array($user)) {
+            if (array_key_exists('avatar_url', $user)) {
+                return $user['avatar_url'];
+            }
+
+            if (array_key_exists('avatar', $user)) {
+                return $user['avatar'];
+            }
+
+            return null;
+        }
+
+        if (is_object($user)) {
+            if (property_exists($user, 'avatar_url')) {
+                return $user->avatar_url;
+            }
+
+            if (property_exists($user, 'avatar')) {
+                return $user->avatar;
+            }
+
+            return null;
+        }
+
+        return null;
     }
 }
 ?>

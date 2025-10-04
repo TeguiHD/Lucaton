@@ -41,10 +41,8 @@ class CampaignPresenter {
         $categorySlug = $row['category_slug'] ?? null;
 
         $ownerId = $row['user_id'] ?? $row['owner_id'] ?? null;
-        $image = $row['cover_image_url'] ?? $row['image_url'] ?? $row['image'] ?? null;
-        if (empty($image)) {
-            $image = $defaultImage;
-        }
+        $ownerAvatar = SessionHelper::normalizeAvatarUrl($row['avatar_url'] ?? ($row['creator_avatar'] ?? null));
+        $image = self::normalizeImageUrl($row['cover_image_url'] ?? $row['image_url'] ?? $row['image'] ?? null, $defaultImage);
 
         $donorCount = (int)($row['donor_count'] ?? $row['supporters_count'] ?? 0);
         $shareCount = (int)($row['share_count'] ?? 0);
@@ -72,7 +70,7 @@ class CampaignPresenter {
             'video_url' => $row['video_url'] ?? null,
             'owner_id' => $ownerId !== null ? (int)$ownerId : null,
             'owner_name' => $ownerName,
-            'owner_avatar' => $row['avatar_url'] ?? $row['creator_avatar'] ?? null,
+            'owner_avatar' => $ownerAvatar,
             'category_id' => isset($row['category_id']) ? (int)$row['category_id'] : null,
             'category_name' => $categoryName,
             'category_slug' => $categorySlug,
@@ -87,6 +85,7 @@ class CampaignPresenter {
             'view_count' => $viewCount,
             'average_donation' => $averageDonation,
             'last_donation_at' => $row['last_donation_at'] ?? null,
+            'visibility' => $row['visibility'] ?? null,
         ];
 
         // Backwards-compatibility aliases for legacy templates still in transition.
@@ -98,6 +97,11 @@ class CampaignPresenter {
         $presented['supporters_count'] = $presented['donor_count'];
 
         return $presented;
+    }
+
+    private static function normalizeImageUrl(?string $value, string $fallback): string {
+        $resolved = CampaignMediaUploadService::normalizePublicUrl($value);
+        return $resolved ?? $fallback;
     }
 
     public static function statusMeta(string $status): array {

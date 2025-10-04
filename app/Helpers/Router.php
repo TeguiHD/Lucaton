@@ -103,16 +103,23 @@ class Router {
     }
 
     private function adminMiddleware() {
-        if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
-            http_response_code(403);
-            if (file_exists(VIEWS_PATH . '/errors/403.php')) {
-                include VIEWS_PATH . '/errors/403.php';
-            } else {
-                echo '<h1>403 - Acceso denegado</h1>';
-            }
-            exit;
+        if (!SessionHelper::isAuthenticated()) {
+            SessionHelper::setFlash('warning', 'Debes iniciar sesión como administrador para continuar.');
+            $_SESSION['intended_url'] = $_SERVER['REQUEST_URI'] ?? null;
+            self::redirect('/login');
         }
-        return true;
+
+        if (SessionHelper::userHasRole('admin')) {
+            return true;
+        }
+
+        http_response_code(403);
+        if (file_exists(VIEWS_PATH . '/errors/403.php')) {
+            include VIEWS_PATH . '/errors/403.php';
+        } else {
+            echo '<h1>403 - Acceso denegado</h1>';
+        }
+        exit;
     }
 
     private function csrfMiddleware() {

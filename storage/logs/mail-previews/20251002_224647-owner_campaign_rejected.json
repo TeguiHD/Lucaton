@@ -1,0 +1,35 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Nicoholas Lopetegui"
+        }
+    ],
+    "subject": "Tu campaña \"Test Aprobación de campañas\" necesita ajustes",
+    "body_text": "Hola Nicoholas Lopetegui,\n\nRevisamos tu campaña y por ahora no puede publicarse. Te dejamos el detalle para que hagas los ajustes necesarios.\n\nObservaciones del equipo: Test de rechazo de campaña\n\nUna vez que hayas aplicado los cambios, vuelve a enviarla para revisión desde el panel.",
+    "generated_at": "2025-10-02T22:46:47-03:00",
+    "context": {
+        "campaign": {
+            "id": 4,
+            "title": "Test Aprobación de campañas",
+            "slug": "test-aprobaci-n-de-campa-as",
+            "status": "cancelled",
+            "goal_amount": 1,
+            "currency": "CLP",
+            "progress": null
+        },
+        "ai_prompt": "Resume en lenguaje constructivo las observaciones para la campaña \"Test Aprobación de campañas\" (ID 4) y entrega un checklist de mejoras. Propón mensajes para informar al equipo interno y planificar la nueva presentación.",
+        "meta": {
+            "milestone": "owner_campaign_rejected",
+            "campaign_id": 4,
+            "event": "campaign_rejected",
+            "reason": "Test de rechazo de campaña"
+        }
+    },
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_rejected"
+}

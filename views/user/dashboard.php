@@ -97,7 +97,7 @@ $buttonIcons = [
     <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025012801"></script>
+    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
@@ -185,7 +185,9 @@ $buttonIcons = [
                                         $raisedAmount = (float)($campaign['raised_amount'] ?? 0);
                                         $progress = $goalAmount > 0 ? min(100, ($raisedAmount / $goalAmount) * 100) : 0;
                                         $progressLabel = number_format($progress, 0);
-                                        $imageUrl = $campaign['cover_image_url'] ?? (APP_URL . '/public/assets/images/campaigns/placeholder.jpg');
+                            $imageCandidate = $campaign['cover_image_url'] ?? ($campaign['image_url'] ?? null);
+                            $imageUrl = CampaignMediaUploadService::normalizePublicUrl($imageCandidate)
+                                ?? (APP_URL . '/public/assets/images/campaigns/placeholder.jpg');
                                         $status = $campaign['status'] ?? 'draft';
                                         $statusMeta = $statusLabels[$status] ?? ['label' => ucfirst($status), 'class' => 'bg-gray-100 text-gray-700'];
                                         $campaignUrl = !empty($campaign['slug']) ? Router::url('campana/' . $campaign['slug']) : '#';
@@ -203,45 +205,69 @@ $buttonIcons = [
                                                 <img class="h-16 w-16 rounded-lg object-cover" src="<?= htmlspecialchars($imageUrl) ?>" alt="Imagen de <?= htmlspecialchars($campaign['title'] ?? 'Campaña') ?>">
                                             </div>
                                             <div class="flex-1 min-w-0">
-                                                <div class="flex items-center justify-between">
-                                                    <h3 class="text-sm font-semibold text-gray-900 truncate">
-                                                        <a href="<?= htmlspecialchars($campaignUrl) ?>" class="hover:text-copihue-600">
-                                                            <?= htmlspecialchars($campaign['title'] ?? 'Campaña sin título') ?>
-                                                        </a>
-                                                    </h3>
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="flex items-center gap-2 min-w-0">
+                                                        <h3 class="text-sm font-semibold text-gray-900 truncate">
+                                                            <a href="<?= htmlspecialchars($campaignUrl) ?>" class="hover:text-copihue-600">
+                                                                <?= htmlspecialchars($campaign['title'] ?? 'Campaña sin título') ?>
+                                                            </a>
+                                                        </h3>
+                                                        <?php if (!empty($campaign['id'])): ?>
+                                                            <span class="hidden sm:inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 flex-shrink-0">ID #<?= (int)$campaign['id'] ?></span>
+                                                        <?php endif; ?>
+                                                    </div>
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= htmlspecialchars($statusMeta['class']) ?>">
                                                         <?= htmlspecialchars($statusMeta['label']) ?>
                                                     </span>
                                                 </div>
+                                                <?php if (!empty($campaign['id'])): ?>
+                                                    <span class="sm:hidden inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 mt-1">ID #<?= (int)$campaign['id'] ?></span>
+                                                <?php endif; ?>
                                                 <?php if (!empty($campaign['summary'])): ?>
                                                     <p class="mt-1 text-sm text-gray-500 line-clamp-2">
                                                         <?= htmlspecialchars($campaign['summary']) ?>
                                                     </p>
                                                 <?php endif; ?>
-                                                <div class="mt-3">
-                                                    <div class="flex items-center justify-between text-sm text-gray-600">
-                                                        <span><?= $formatCurrency($raisedAmount) ?> de <?= $formatCurrency($goalAmount) ?></span>
-                                                        <span><?= $progressLabel ?>%</span>
-                                                    </div>
-                                                    <div class="mt-2 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                                        <div class="bg-gradient-to-r from-copihue-500 to-copihue-600 h-2" style="width: <?= $progress ?>%"></div>
-                                                    </div>
-                                                    <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
-                                                        <span><?= number_format((int)($campaign['donor_count'] ?? 0)) ?> aportes</span>
-                                                        <?php if ($daysLeft !== null): ?>
-                                                            <span><?= $daysLeft ?> días restantes</span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <?php if ($categoryLabel): ?>
-                                                        <div class="mt-1 text-xs text-copihue-600 font-medium">
-                                                            <?= htmlspecialchars($categoryLabel) ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
+                                    <div class="mt-3">
+                                        <div class="flex items-center justify-between text-sm text-gray-600">
+                                            <span><?= $formatCurrency($raisedAmount) ?> de <?= $formatCurrency($goalAmount) ?></span>
+                                            <span><?= $progressLabel ?>%</span>
                                         </div>
-                                    </article>
-                                <?php endforeach; ?>
+                                        <div class="mt-2 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                            <div class="bg-gradient-to-r from-copihue-500 to-copihue-600 h-2" style="width: <?= $progress ?>%"></div>
+                                        </div>
+                                        <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
+                                            <span><?= number_format((int)($campaign['donor_count'] ?? 0)) ?> aportes</span>
+                                            <?php if ($daysLeft !== null): ?>
+                                                <span><?= $daysLeft ?> días restantes</span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php if ($categoryLabel): ?>
+                                            <div class="mt-1 text-xs text-copihue-600 font-medium">
+                                                <?= htmlspecialchars($categoryLabel) ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div class="mt-4 flex flex-wrap items-center gap-2">
+                                            <?php if ($campaignUrl && $campaignUrl !== '#'): ?>
+                                                <a href="<?= htmlspecialchars($campaignUrl) ?>" class="btn inline-flex items-center rounded-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:border-copihue-500 hover:text-copihue-600">
+                                                    Ver campaña
+                                                </a>
+                                            <?php endif; ?>
+                                            <?php
+                                                $canEditDashboard = in_array(strtolower((string)$campaign['status']), ['draft', 'under_review', 'cancelled'], true);
+                                                $editUrl = !empty($campaign['id']) ? Router::url('campana/' . $campaign['id'] . '/editar') : null;
+                                            ?>
+                                            <?php if ($canEditDashboard && $editUrl): ?>
+                                                <a href="<?= htmlspecialchars($editUrl) ?>" class="btn inline-flex items-center rounded-md bg-copihue-600 px-3 py-2 text-xs font-medium text-white hover:bg-copihue-700 hover:text-white focus:text-white">
+                                                    Editar
+                                                </a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
                     </div>
