@@ -42,8 +42,9 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
     <!-- Styles -->
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    
-    
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+
 </head>
 <body class="bg-gray-50">
     <!-- Skip to content link -->
@@ -242,25 +243,25 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
         </div>
 
         <!-- Resultados y estadísticas -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-            <div class="mb-4 sm:mb-0">
-                <h2 class="text-xl font-semibold text-gray-900">
-                    <?php if (!empty($search_query) || !empty($category_filter) || !empty($status_filter)): ?>
-                        Resultados de búsqueda
-                    <?php else: ?>
-                        Todas las Campañas
-                    <?php endif; ?>
-                </h2>
-                <p class="text-sm text-gray-600 mt-1">
-                    <?php if ($totalCampaigns > 0): ?>
-                        Mostrando <?= $from_item ?>-<?= $to_item ?> de <?= $totalCampaigns ?> campañas
-                    <?php else: ?>
-                        No se encontraron campañas
-                    <?php endif; ?>
-                </p>
-            </div>
-            
-            <?php if ($totalCampaigns > 0): ?>
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold text-gray-900">
+                <?php if (!empty($search_query) || !empty($category_filter) || !empty($status_filter)): ?>
+                    Resultados de búsqueda
+                <?php else: ?>
+                    Todas las Campañas
+                <?php endif; ?>
+            </h2>
+            <p class="text-sm text-gray-600 mt-1">
+                <?php if ($totalCampaigns > 0): ?>
+                    Mostrando <?= $from_item ?>-<?= $to_item ?> de <?= $totalCampaigns ?> campañas
+                <?php else: ?>
+                    No se encontraron campañas
+                <?php endif; ?>
+            </p>
+        </div>
+
+        <?php if ($totalCampaigns > 0): ?>
+            <div x-data="{ view: 'grid' }" class="space-y-6">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-2 text-sm text-gray-500 mr-4">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,41 +269,63 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                         </svg>
                         <span>Actualizado hace unos minutos</span>
                     </div>
-                    
+
                     <!-- View Toggle -->
-                    <div class="flex items-center space-x-2" x-data="{ view: 'grid' }">
+                    <div class="flex items-center space-x-2">
                         <span class="text-sm text-gray-500">Vista:</span>
-                        <button @click="view = 'grid'" :class="view === 'grid' ? 'bg-copihue-100 text-copihue-600' : 'text-gray-400 hover:text-gray-500'" class="p-2 rounded-md">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                            </svg>
-                        </button>
-                        <button @click="view = 'list'" :class="view === 'list' ? 'bg-copihue-100 text-copihue-600' : 'text-gray-400 hover:text-gray-500'" class="p-2 rounded-md">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                            </svg>
-                        </button>
-                    </div>
+                            <button @click="view = 'grid'" :class="view === 'grid' ? 'bg-copihue-100 text-copihue-600' : 'text-gray-400 hover:text-gray-500'" class="p-2 rounded-md">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                </svg>
+                            </button>
+                            <button @click="view = 'list'" :class="view === 'list' ? 'bg-copihue-100 text-copihue-600' : 'text-gray-400 hover:text-gray-500'" class="p-2 rounded-md">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                                </svg>
+                            </button>
+                        </div>
                 </div>
-            <?php endif; ?>
-        </div>
 
-        <!-- Campaigns Grid -->
-        <div x-data="{ view: 'grid' }">
-            <!-- Grid View -->
-            <div x-show="view === 'grid'" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                <?php foreach ($campaigns as $campaign): ?>
-                    <?php echo render_campaign_card($campaign); ?>
-                <?php endforeach; ?>
-            </div>
+                <div>
+                    <div x-show="view === 'grid'" x-cloak class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                        <?php foreach ($campaigns as $campaign): ?>
+                            <?php echo render_campaign_card($campaign); ?>
+                        <?php endforeach; ?>
+                    </div>
 
-            <!-- List View -->
-            <div x-show="view === 'list'" class="space-y-6">
-                <?php foreach ($campaigns as $campaign): ?>
+                    <div x-show="view === 'list'" x-cloak class="space-y-6">
+                        <?php foreach ($campaigns as $campaign): ?>
                     <div class="bg-white shadow rounded-lg overflow-hidden">
                         <div class="sm:flex">
                             <div class="sm:flex-shrink-0">
-                                <img class="h-48 w-full object-cover sm:h-32 sm:w-48" src="<?php echo htmlspecialchars($campaign['image_url']); ?>" alt="<?php echo htmlspecialchars($campaign['title']); ?>">
+                                <?php
+                                    $listImageCandidates = [
+                                        $campaign['image_url'] ?? null,
+                                        $campaign['cover_image_url'] ?? null,
+                                        $campaign['featured_image_url'] ?? null,
+                                        $campaign['featured_image'] ?? null,
+                                        $campaign['banner_image_url'] ?? null,
+                                        $campaign['banner_url'] ?? null,
+                                        $campaign['main_image_url'] ?? null,
+                                        $campaign['image'] ?? null,
+                                        $campaign['owner_avatar'] ?? null,
+                                        $campaign['creator_avatar'] ?? null,
+                                    ];
+
+                                    $listImage = APP_URL . '/public/assets/images/campaigns/escuela-rural.svg';
+                                    foreach ($listImageCandidates as $candidate) {
+                                        if (empty($candidate)) {
+                                            continue;
+                                        }
+
+                                        $normalized = CampaignMediaUploadService::normalizePublicUrl($candidate);
+                                        if ($normalized !== null) {
+                                            $listImage = $normalized;
+                                            break;
+                                        }
+                                    }
+                                ?>
+                                <img class="h-48 w-full object-cover sm:h-32 sm:w-48" src="<?php echo htmlspecialchars($listImage); ?>" alt="Imagen de la campaña <?php echo htmlspecialchars($campaign['title']); ?>">
                             </div>
                             <div class="p-6 flex-1">
                                 <div class="flex items-center justify-between">
@@ -348,9 +371,12 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                             </div>
                         </div>
                     </div>
-                <?php endforeach; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+        <?php endif; ?>
 
         <!-- Empty State -->
         <?php if (empty($campaigns)): ?>

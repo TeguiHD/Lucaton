@@ -1,0 +1,42 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "tu@email.com",
+            "name": "Juan Perez"
+        }
+    ],
+    "subject": "Tu campaña \"Titulo de la campaña\" ya está publicada",
+    "body_text": "Hola Juan Perez,\n\n¡Listo! Tu campaña fue aprobada y quedó visible en la plataforma.\n\nRevisa que toda la información esté correcta y comparte el enlace con tu comunidad.\n\nEnlace directo: http:\/\/localhost\/Tesis\/campana\/titulo-de-la-campa-a\n\nMeta: CLP 1.000.000.000 · Cierre: 06\/10\/2025",
+    "generated_at": "2025-10-05T02:21:14-03:00",
+    "context": {
+        "campaign": {
+            "id": 8,
+            "title": "Titulo de la campaña",
+            "slug": "titulo-de-la-campa-a",
+            "status": "published",
+            "goal_amount": 1000000000,
+            "currency": "CLP",
+            "progress": null,
+            "public_url": "http:\/\/localhost\/Tesis\/campana\/titulo-de-la-campa-a"
+        },
+        "ai_prompt": "Diseña 3 publicaciones (texto, carrusel e historia) para redes sociales que celebren la publicación de \"Titulo de la campaña\" (ID 8). Sugiere también un incentivo creativo para los primeros donantes y métricas clave a monitorear durante la primera semana.",
+        "meta": {
+            "milestone": "owner_campaign_published",
+            "campaign_id": 8,
+            "event": "campaign_approved",
+            "slug": "titulo-de-la-campa-a"
+        }
+    },
+    "cc": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Proyecto Lucatón — Tesis Universidad Bernardo O'Higgins"
+        }
+    ],
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_published"
+}

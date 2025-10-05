@@ -129,7 +129,10 @@ $searchQuery = $filters['search'] ?? '';
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                                     <div class="flex justify-end items-center gap-2">
-                                        <a href="<?= Router::url('admin/campana/' . $campaign['id']) ?>" class="inline-flex items-center rounded-lg bg-copihue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-copihue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-copihue-500">
+                                        <a href="<?= Router::url('admin/campana/' . $campaign['id']) ?>" class="inline-flex items-center gap-2 rounded-lg border border-copihue-500 bg-white px-3 py-2 text-xs font-semibold text-copihue-600 shadow-sm transition hover:bg-copihue-50 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-2">
+                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M12 8v8m4-4H8" />
+                                            </svg>
                                             Revisar y decidir
                                         </a>
                                     </div>

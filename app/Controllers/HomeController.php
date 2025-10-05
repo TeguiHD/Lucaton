@@ -152,6 +152,7 @@ class HomeController {
                 c.start_date,
                 c.end_date,
                 c.cover_image_url,
+                c.featured_image_url,
                 c.featured,
                 cm.raised_amount,
                 cm.donor_count,
@@ -247,6 +248,7 @@ class HomeController {
                 c.start_date,
                 c.end_date,
                 c.cover_image_url,
+                c.featured_image_url,
                 cm.raised_amount,
                 cm.donor_count,
                 cat.name AS category_name,
@@ -437,6 +439,7 @@ class HomeController {
                 c.title,
                 c.story,
                 c.cover_image_url,
+                c.featured_image_url,
                 cm.raised_amount,
                 u.first_name,
                 u.last_name,
@@ -450,18 +453,16 @@ class HomeController {
         );
 
         return array_map(function ($row) {
-            $creator = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            if ($creator === '') {
-                $creator = $row['username'] ?? 'Campañista';
-            }
+            $presented = CampaignPresenter::present($row);
+            $creator = $presented['owner_name'] ?? 'Campañista';
 
             return [
-                'title' => $row['title'],
-                'excerpt' => substr($row['story'] ?? '', 0, 220),
-                'raised_amount' => (float)($row['raised_amount'] ?? 0),
+                'title' => $presented['title'],
+                'excerpt' => substr($presented['story'] ?? '', 0, 220),
+                'raised_amount' => (float)($presented['raised_amount'] ?? 0),
                 'creator' => $creator,
-                'image_url' => $row['cover_image_url'] ?: APP_URL . '/public/assets/images/campaigns/escuela-rural.svg',
-                'slug' => $row['slug']
+                'image_url' => $presented['image_url'] ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg',
+                'slug' => $presented['slug'] ?? $row['slug']
             ];
         }, $rows);
     }
@@ -514,8 +515,19 @@ class HomeController {
             }
         }
 
-        if (!isset($row['cover_image_url']) && isset($row['image_url'])) {
-            $row['cover_image_url'] = $row['image_url'];
+        if (!isset($row['cover_image_url'])) {
+            $row['cover_image_url'] = $row['featured_image_url']
+                ?? $row['featured_image']
+                ?? $row['banner_image_url']
+                ?? $row['banner_url']
+                ?? $row['image_url']
+                ?? $row['image_path']
+                ?? $row['image']
+                ?? null;
+        }
+
+        if (!isset($row['image_url']) && isset($row['cover_image_url'])) {
+            $row['image_url'] = $row['cover_image_url'];
         }
 
         if (!isset($row['category_name']) && isset($row['category'])) {

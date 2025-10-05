@@ -42,7 +42,38 @@ class CampaignPresenter {
 
         $ownerId = $row['user_id'] ?? $row['owner_id'] ?? null;
         $ownerAvatar = SessionHelper::normalizeAvatarUrl($row['avatar_url'] ?? ($row['creator_avatar'] ?? null));
-        $image = self::normalizeImageUrl($row['cover_image_url'] ?? $row['image_url'] ?? $row['image'] ?? null, $defaultImage);
+        $imageCandidates = [
+            $row['cover_image_url'] ?? null,
+            $row['featured_image_url'] ?? null,
+            $row['featured_image'] ?? null,
+            $row['banner_image_url'] ?? null,
+            $row['banner_url'] ?? null,
+            $row['main_image_url'] ?? null,
+            $row['image_url'] ?? null,
+            $row['image_path'] ?? null,
+            $row['image'] ?? null,
+            $row['hero_image'] ?? null,
+        ];
+
+        $image = null;
+        foreach ($imageCandidates as $candidate) {
+            $resolvedImage = self::normalizeImageUrl($candidate, $defaultImage);
+            if ($resolvedImage !== $defaultImage) {
+                $image = $resolvedImage;
+                break;
+            }
+        }
+
+        if ($image === null) {
+            $manifestImage = self::resolveCoverFromManifest($row['id'] ?? null);
+            if ($manifestImage !== null) {
+                $image = $manifestImage;
+            }
+        }
+
+        if ($image === null) {
+            $image = $defaultImage;
+        }
 
         $donorCount = (int)($row['donor_count'] ?? $row['supporters_count'] ?? 0);
         $shareCount = (int)($row['share_count'] ?? 0);
@@ -67,6 +98,7 @@ class CampaignPresenter {
             'days_left' => $daysLeft,
             'cover_image_url' => $image,
             'image_url' => $image,
+            'featured_image_url' => $image,
             'video_url' => $row['video_url'] ?? null,
             'owner_id' => $ownerId !== null ? (int)$ownerId : null,
             'owner_name' => $ownerName,
@@ -102,6 +134,38 @@ class CampaignPresenter {
     private static function normalizeImageUrl(?string $value, string $fallback): string {
         $resolved = CampaignMediaUploadService::normalizePublicUrl($value);
         return $resolved ?? $fallback;
+    }
+
+    private static function resolveCoverFromManifest($campaignId): ?string
+    {
+        if ($campaignId === null) {
+            return null;
+        }
+
+        static $mediaService = null;
+        if ($mediaService === null) {
+            $mediaService = new CampaignMediaUploadService();
+        }
+
+        try {
+            $manifest = $mediaService->readManifest((int)$campaignId);
+        } catch (Throwable $exception) {
+            return null;
+        }
+
+        if (!is_array($manifest)) {
+            return null;
+        }
+
+        $coverPath = $manifest['cover_image']
+            ?? $manifest['cover']
+            ?? null;
+
+        if (!$coverPath) {
+            return null;
+        }
+
+        return CampaignMediaUploadService::normalizePublicUrl($coverPath);
     }
 
     public static function statusMeta(string $status): array {

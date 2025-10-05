@@ -1074,10 +1074,823 @@ function initStickyHeader() {
   update();
 }
 
+var shareModalState = {
+  modal: null,
+  overlay: null,
+  input: null,
+  copyButton: null,
+  feedback: null,
+  nameLabel: null,
+  networkLinks: [],
+  lastFocus: null,
+  copyTimeout: null,
+  currentUrl: '',
+  currentTitle: ''
+};
+
+var FAVORITES_STORAGE_KEY = 'lucaton_favs';
+var galleryLightboxState = {
+  items: [],
+  modal: null,
+  imageEl: null,
+  captionEl: null,
+  counterEl: null,
+  prevButton: null,
+  nextButton: null,
+  lastFocus: null,
+  currentIndex: 0,
+  isOpen: false
+};
+var updateHeartStorageKey = 'lucaton_update_hearts';
+var creatorProfileModalState = {
+  modal: null,
+  lastFocus: null,
+  isOpen: false,
+  data: null,
+  avatarEl: null,
+  nameEl: null,
+  usernameEl: null
+};
+
+function initShareModal() {
+  var modal = document.getElementById('share-modal');
+  if (!modal) {
+    shareModalState.modal = null;
+    return;
+  }
+
+  if (modal.dataset.bound === '1') {
+    return;
+  }
+
+  shareModalState.modal = modal;
+  shareModalState.overlay = modal.querySelector('[data-share-overlay]') || null;
+  shareModalState.input = modal.querySelector('[data-share-url]') || null;
+  shareModalState.copyButton = modal.querySelector('[data-share-copy]') || null;
+  shareModalState.feedback = modal.querySelector('[data-share-feedback]') || null;
+  shareModalState.nameLabel = modal.querySelector('[data-share-name]') || null;
+  shareModalState.networkLinks = modal.querySelectorAll('[data-share-network]');
+  shareModalState.copyTimeout = null;
+  shareModalState.currentUrl = '';
+  shareModalState.currentTitle = document.title;
+  shareModalState.lastFocus = null;
+
+  modal.dataset.bound = '1';
+
+  var closeButtons = modal.querySelectorAll('[data-share-close]');
+  closeButtons.forEach(function (button) {
+    button.addEventListener('click', closeShareModal);
+  });
+
+  if (shareModalState.overlay) {
+    shareModalState.overlay.addEventListener('click', closeShareModal);
+  }
+
+  modal.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeShareModal();
+    }
+  });
+
+  if (shareModalState.copyButton) {
+    shareModalState.copyButton.addEventListener('click', handleShareCopy);
+  }
+}
+
+function openShareModal(payload) {
+  initShareModal();
+  if (!shareModalState.modal) {
+    return;
+  }
+
+  var modal = shareModalState.modal;
+  shareModalState.lastFocus = document.activeElement;
+  shareModalState.currentUrl = payload.url;
+  shareModalState.currentTitle = payload.title || document.title;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('overflow-hidden');
+
+  if (shareModalState.input) {
+    shareModalState.input.value = payload.url;
+    shareModalState.input.setAttribute('value', payload.url);
+    try {
+      shareModalState.input.focus({ preventScroll: true });
+      shareModalState.input.select();
+    } catch (err) {
+      shareModalState.input.focus();
+      shareModalState.input.select();
+    }
+  }
+
+  if (shareModalState.feedback) {
+    shareModalState.feedback.classList.add('hidden');
+  }
+
+  if (shareModalState.nameLabel) {
+    shareModalState.nameLabel.textContent = payload.title || 'esta campaña';
+  }
+
+  updateShareNetworks(payload.url, shareModalState.currentTitle);
+}
+
+function closeShareModal() {
+  if (!shareModalState.modal) {
+    return;
+  }
+
+  var modal = shareModalState.modal;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('overflow-hidden');
+
+  if (shareModalState.feedback) {
+    shareModalState.feedback.classList.add('hidden');
+  }
+
+  if (shareModalState.copyTimeout) {
+    window.clearTimeout(shareModalState.copyTimeout);
+    shareModalState.copyTimeout = null;
+  }
+
+  if (shareModalState.lastFocus && typeof shareModalState.lastFocus.focus === 'function') {
+    try {
+      shareModalState.lastFocus.focus({ preventScroll: true });
+    } catch (err) {
+      shareModalState.lastFocus.focus();
+    }
+  }
+}
+
+function handleShareCopy(event) {
+  event.preventDefault();
+  if (!shareModalState.input) {
+    return;
+  }
+
+  var url = shareModalState.input.value;
+  if (!url) {
+    return;
+  }
+
+  var showFeedback = function () {
+    if (!shareModalState.feedback) {
+      return;
+    }
+    shareModalState.feedback.classList.remove('hidden');
+    if (shareModalState.copyTimeout) {
+      window.clearTimeout(shareModalState.copyTimeout);
+    }
+    shareModalState.copyTimeout = window.setTimeout(function () {
+      shareModalState.feedback.classList.add('hidden');
+    }, 2000);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(showFeedback).catch(function () {
+      fallbackCopy(url, showFeedback);
+    });
+  } else {
+    fallbackCopy(url, showFeedback);
+  }
+}
+
+function fallbackCopy(content, callback) {
+  if (!shareModalState.input) {
+    return;
+  }
+
+  var input = shareModalState.input;
+  var previousReadOnly = input.hasAttribute('readonly');
+  if (previousReadOnly) {
+    input.removeAttribute('readonly');
+  }
+  input.value = content;
+  input.select();
+
+  try {
+    var successful = document.execCommand('copy');
+    if (!successful) {
+      throw new Error('Copy command failed');
+    }
+    callback();
+  } catch (err) {
+    window.prompt('Copia el enlace:', content);
+  }
+
+  input.value = shareModalState.currentUrl || content;
+  if (previousReadOnly) {
+    input.setAttribute('readonly', 'readonly');
+  }
+  input.blur();
+}
+
+function updateShareNetworks(url, title) {
+  if (!shareModalState.networkLinks || shareModalState.networkLinks.length === 0) {
+    return;
+  }
+
+  var cleanTitle = title ? String(title).trim() : 'esta campaña';
+  if (cleanTitle === '') {
+    cleanTitle = 'esta campaña';
+  }
+
+  var encodedUrl = encodeURIComponent(url);
+  var encodedTitle = encodeURIComponent(cleanTitle);
+  var baseMessage = 'Estoy apoyando "' + cleanTitle + '" en Lucatón.';
+  var actionMessage = 'Conoce la campaña y súmate: ' + url;
+  var encodedBaseMessage = encodeURIComponent(baseMessage);
+  var encodedActionMessage = encodeURIComponent(actionMessage);
+  var linkedinSummary = 'Estoy apoyando "' + cleanTitle + '" en Lucatón. Conoce la campaña y súmate.';
+  var encodedLinkedinSummary = encodeURIComponent(linkedinSummary);
+  var emailSubject = encodeURIComponent('Te comparto "' + cleanTitle + '" en Lucatón');
+  var emailBody = encodeURIComponent(baseMessage + '\n\n' + actionMessage + '\n\nGracias por apoyar proyectos solidarios.');
+
+  shareModalState.networkLinks.forEach(function (link) {
+    var network = link.getAttribute('data-share-network');
+    var href = url;
+    var targetAttr = link.getAttribute('target');
+
+    if (network === 'whatsapp') {
+      href = 'https://wa.me/?text=' + encodedBaseMessage + '%0A%0A' + encodedActionMessage;
+    } else if (network === 'facebook') {
+      href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodedUrl + '&quote=' + encodedBaseMessage;
+    } else if (network === 'twitter' || network === 'x') {
+      href = 'https://twitter.com/intent/tweet?text=' + encodedBaseMessage + '&url=' + encodedUrl;
+    } else if (network === 'linkedin') {
+      href = 'https://www.linkedin.com/shareArticle?mini=true&url=' + encodedUrl + '&title=' + encodedTitle + '&summary=' + encodedLinkedinSummary + '&source=Lucaton';
+    } else if (network === 'instagram') {
+      href = 'https://www.instagram.com/?url=' + encodedUrl;
+    } else if (network === 'email') {
+      href = 'mailto:?subject=' + emailSubject + '&body=' + emailBody;
+      link.setAttribute('target', '_self');
+      link.removeAttribute('rel');
+    }
+
+    if (network !== 'email' && (!targetAttr || targetAttr === '_self')) {
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener');
+    }
+
+    link.setAttribute('href', href);
+  });
+}
+
+function initCampaignGalleryLightbox() {
+  if (!Array.isArray(window.__campaignGallery) || window.__campaignGallery.length === 0) {
+    return;
+  }
+
+  var modal = document.querySelector('[data-gallery-lightbox]');
+  var triggers = document.querySelectorAll('[data-gallery-trigger]');
+  if (!modal || !triggers.length) {
+    return;
+  }
+
+  galleryLightboxState.items = window.__campaignGallery;
+  galleryLightboxState.modal = modal;
+  galleryLightboxState.imageEl = modal.querySelector('[data-gallery-current-image]');
+  galleryLightboxState.captionEl = modal.querySelector('[data-gallery-current-caption]');
+  galleryLightboxState.counterEl = modal.querySelector('[data-gallery-counter]');
+  galleryLightboxState.prevButton = modal.querySelector('[data-gallery-prev]');
+  galleryLightboxState.nextButton = modal.querySelector('[data-gallery-next]');
+
+  function updateLightbox() {
+    var index = galleryLightboxState.currentIndex;
+    var item = galleryLightboxState.items[index];
+    if (!item || !galleryLightboxState.imageEl) {
+      return;
+    }
+
+    galleryLightboxState.imageEl.src = item.url || '';
+    galleryLightboxState.imageEl.alt = item.caption ? item.caption : 'Imagen de la campaña';
+
+    if (galleryLightboxState.captionEl) {
+      if (item.caption) {
+        galleryLightboxState.captionEl.textContent = item.caption;
+        galleryLightboxState.captionEl.classList.remove('hidden');
+      } else {
+        galleryLightboxState.captionEl.textContent = '';
+        galleryLightboxState.captionEl.classList.add('hidden');
+      }
+    }
+
+    if (galleryLightboxState.counterEl) {
+      galleryLightboxState.counterEl.textContent = (index + 1) + ' / ' + galleryLightboxState.items.length;
+    }
+
+    var hideControls = galleryLightboxState.items.length <= 1;
+    if (galleryLightboxState.prevButton) {
+      galleryLightboxState.prevButton.disabled = hideControls;
+      galleryLightboxState.prevButton.style.display = hideControls ? 'none' : '';
+    }
+    if (galleryLightboxState.nextButton) {
+      galleryLightboxState.nextButton.disabled = hideControls;
+      galleryLightboxState.nextButton.style.display = hideControls ? 'none' : '';
+    }
+  }
+
+  function openGallery(index) {
+    galleryLightboxState.currentIndex = index >= 0 ? index % galleryLightboxState.items.length : 0;
+    galleryLightboxState.lastFocus = document.activeElement;
+    galleryLightboxState.isOpen = true;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    updateLightbox();
+    try {
+      modal.focus({ preventScroll: true });
+    } catch (err) {
+      modal.focus();
+    }
+    document.body.classList.add('overflow-hidden');
+  }
+
+  function closeGallery() {
+    galleryLightboxState.isOpen = false;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+    if (galleryLightboxState.lastFocus && typeof galleryLightboxState.lastFocus.focus === 'function') {
+      try {
+        galleryLightboxState.lastFocus.focus({ preventScroll: true });
+      } catch (err) {
+        galleryLightboxState.lastFocus.focus();
+      }
+    }
+  }
+
+  function changeSlide(delta) {
+    var total = galleryLightboxState.items.length;
+    if (total <= 1) {
+      return;
+    }
+    var nextIndex = (galleryLightboxState.currentIndex + delta + total) % total;
+    galleryLightboxState.currentIndex = nextIndex;
+    updateLightbox();
+  }
+
+  triggers.forEach(function (trigger) {
+    trigger.addEventListener('click', function (event) {
+      event.preventDefault();
+      var index = parseInt(trigger.getAttribute('data-gallery-index') || '0', 10);
+      if (isNaN(index)) {
+        index = 0;
+      }
+      openGallery(index);
+    });
+  });
+
+  var closeButtons = modal.querySelectorAll('[data-gallery-close]');
+  closeButtons.forEach(function (btn) {
+    btn.addEventListener('click', function (event) {
+      event.preventDefault();
+      closeGallery();
+    });
+  });
+
+  if (galleryLightboxState.prevButton) {
+    galleryLightboxState.prevButton.addEventListener('click', function (event) {
+      event.preventDefault();
+      changeSlide(-1);
+    });
+  }
+
+  if (galleryLightboxState.nextButton) {
+    galleryLightboxState.nextButton.addEventListener('click', function (event) {
+      event.preventDefault();
+      changeSlide(1);
+    });
+  }
+
+  window.addEventListener('keydown', function (event) {
+    if (!galleryLightboxState.isOpen) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      closeGallery();
+    } else if (event.key === 'ArrowRight') {
+      changeSlide(1);
+    } else if (event.key === 'ArrowLeft') {
+      changeSlide(-1);
+    }
+  });
+}
+
+function readUpdateHeartStorage() {
+  try {
+    var raw = localStorage.getItem(updateHeartStorageKey);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function writeUpdateHeartStorage(map) {
+  try {
+    localStorage.setItem(updateHeartStorageKey, JSON.stringify(map));
+  } catch (err) {
+    // ignore quota errors silently
+  }
+}
+
+function updateHeartButtonStyles(button, icon, path, active) {
+  if (!button) {
+    return;
+  }
+
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  if (active) {
+    button.classList.add('bg-rose-500', 'text-white');
+    button.classList.remove('bg-white', 'text-rose-500', 'border-rose-200');
+  } else {
+    button.classList.add('bg-white', 'text-rose-500', 'border-rose-200');
+    button.classList.remove('bg-rose-500', 'text-white');
+  }
+
+  if (icon) {
+    if (active) {
+      icon.setAttribute('fill', 'currentColor');
+      icon.setAttribute('stroke', 'currentColor');
+    } else {
+      icon.setAttribute('fill', 'none');
+      icon.setAttribute('stroke', 'currentColor');
+    }
+  }
+
+  if (path) {
+    if (active) {
+      path.setAttribute('fill', 'currentColor');
+      path.setAttribute('stroke', 'currentColor');
+    } else {
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'currentColor');
+    }
+  }
+}
+
+function initCampaignUpdateHearts() {
+  var buttons = document.querySelectorAll('[data-update-heart]');
+  if (!buttons.length) {
+    return;
+  }
+
+  var storage = readUpdateHeartStorage();
+
+  buttons.forEach(function (button) {
+    var updateId = button.getAttribute('data-update-id');
+    if (!updateId) {
+      return;
+    }
+
+    var baseCount = parseInt(button.getAttribute('data-update-initial') || '0', 10);
+    if (isNaN(baseCount)) {
+      baseCount = 0;
+    }
+
+    var icon = button.querySelector('[data-update-heart-icon]');
+    var path = button.querySelector('[data-update-heart-path]');
+    var countEl = button.parentElement.querySelector('[data-update-heart-count]');
+
+    var hasHearted = Boolean(storage[updateId]);
+    var displayCount = baseCount + (hasHearted ? 1 : 0);
+
+    if (countEl) {
+      countEl.textContent = displayCount;
+    }
+    updateHeartButtonStyles(button, icon, path, hasHearted);
+
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      storage = readUpdateHeartStorage();
+      hasHearted = Boolean(storage[updateId]);
+
+      if (hasHearted) {
+        delete storage[updateId];
+        displayCount = baseCount;
+        updateHeartButtonStyles(button, icon, path, false);
+      } else {
+        storage[updateId] = true;
+        displayCount = baseCount + 1;
+        updateHeartButtonStyles(button, icon, path, true);
+      }
+
+      if (countEl) {
+        countEl.textContent = displayCount;
+      }
+
+      writeUpdateHeartStorage(storage);
+    });
+  });
+}
+
+function initCreatorProfileModal() {
+  if (!window.__creatorProfile) {
+    return;
+  }
+
+  var modal = document.querySelector('[data-creator-profile-modal]');
+  var triggers = document.querySelectorAll('[data-creator-profile-trigger]');
+  if (!modal || !triggers.length) {
+    return;
+  }
+
+  creatorProfileModalState.modal = modal;
+  creatorProfileModalState.data = window.__creatorProfile;
+  creatorProfileModalState.avatarEl = modal.querySelector('[data-creator-profile-avatar]');
+  creatorProfileModalState.nameEl = modal.querySelector('[data-creator-profile-name]');
+  creatorProfileModalState.usernameEl = modal.querySelector('[data-creator-profile-username]');
+
+  function renderCreatorProfile() {
+    var data = creatorProfileModalState.data || {};
+    if (creatorProfileModalState.avatarEl) {
+      if (data.avatar) {
+        creatorProfileModalState.avatarEl.innerHTML = '<img src="' + data.avatar + '" alt="Avatar de ' + (data.name || 'Usuario') + '" class="h-14 w-14 rounded-full object-cover">';
+      } else {
+        var initial = 'U';
+        if (data.name) {
+          initial = data.name.trim().charAt(0).toUpperCase();
+        }
+        creatorProfileModalState.avatarEl.textContent = initial;
+      }
+    }
+
+    if (creatorProfileModalState.nameEl) {
+      creatorProfileModalState.nameEl.textContent = data.name || 'Usuario';
+    }
+
+    if (creatorProfileModalState.usernameEl) {
+      creatorProfileModalState.usernameEl.textContent = data.username ? '@' + data.username : '';
+    }
+
+  }
+
+  function openCreatorProfile() {
+    creatorProfileModalState.lastFocus = document.activeElement;
+    creatorProfileModalState.isOpen = true;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+    renderCreatorProfile();
+    try {
+      modal.focus({ preventScroll: true });
+    } catch (err) {
+      modal.focus();
+    }
+  }
+
+  function closeCreatorProfile() {
+    creatorProfileModalState.isOpen = false;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+    if (creatorProfileModalState.lastFocus && typeof creatorProfileModalState.lastFocus.focus === 'function') {
+      try {
+        creatorProfileModalState.lastFocus.focus({ preventScroll: true });
+      } catch (err) {
+        creatorProfileModalState.lastFocus.focus();
+      }
+    }
+  }
+
+  triggers.forEach(function (trigger) {
+    trigger.addEventListener('click', function (event) {
+      event.preventDefault();
+      openCreatorProfile();
+    });
+  });
+
+  var closeButtons = modal.querySelectorAll('[data-creator-profile-close]');
+  closeButtons.forEach(function (btn) {
+    btn.addEventListener('click', function (event) {
+      event.preventDefault();
+      closeCreatorProfile();
+    });
+  });
+
+  window.addEventListener('keydown', function (event) {
+    if (!creatorProfileModalState.isOpen) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      closeCreatorProfile();
+    }
+  });
+}
+
+function normalizeSharePayload(target) {
+  var payload = {
+    slug: '',
+    url: '',
+    title: ''
+  };
+
+  if (typeof target === 'string' || typeof target === 'number') {
+    payload.slug = String(target);
+  } else if (target && typeof target === 'object') {
+    if (target.slug !== undefined && target.slug !== null && target.slug !== '') {
+      payload.slug = String(target.slug);
+    }
+    if (target.url) {
+      payload.url = String(target.url);
+    }
+    if (target.title) {
+      payload.title = String(target.title);
+    }
+  }
+
+  if (!payload.url) {
+    payload.url = buildCampaignUrl(payload.slug);
+  }
+
+  if (!payload.title) {
+    payload.title = 'Campaña Lucatón';
+  }
+
+  return {
+    url: payload.url,
+    title: payload.title
+  };
+}
+
+function buildCampaignUrl(identifier) {
+  var base = window.location.origin + (window.APP_BASE_PATH || '');
+  if (!identifier) {
+    return base + '/campana/detalle';
+  }
+
+  var slug = typeof identifier === 'string' ? identifier : String(identifier);
+  if (/^https?:\/\//i.test(slug)) {
+    return slug;
+  }
+
+  if (slug.charAt(0) === '/') {
+    return base + slug;
+  }
+
+  return base + '/campana/' + encodeURIComponent(slug);
+}
+
+function readFavorites() {
+  try {
+    var stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
+    if (!stored) {
+      return new Set();
+    }
+    var parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+    return new Set(parsed.map(function (value) {
+      return String(value);
+    }));
+  } catch (err) {
+    return new Set();
+  }
+}
+
+function writeFavorites(values) {
+  try {
+    var serialized = JSON.stringify(Array.from(values));
+    localStorage.setItem(FAVORITES_STORAGE_KEY, serialized);
+  } catch (err) {
+    // Ignorar errores de almacenamiento (modo incógnito, etc.)
+  }
+}
+
+function updateFavoriteButtonState(button, active) {
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.classList.toggle('text-copihue-600', active);
+  button.classList.toggle('text-gray-400', !active);
+
+  var icon = button.querySelector('[data-favorite-icon]');
+  var path = button.querySelector('[data-favorite-path]');
+  if (icon) {
+    icon.setAttribute('fill', active ? 'currentColor' : 'none');
+    icon.setAttribute('stroke', active ? 'currentColor' : 'currentColor');
+  }
+  if (path) {
+    path.setAttribute('stroke', active ? 'currentColor' : 'currentColor');
+  }
+
+  button.setAttribute('title', active ? 'Quitar de favoritos' : 'Guardar campaña');
+}
+
+function normalizeFavoritePayload(payload) {
+  if (payload === null || payload === undefined) {
+    return { id: null };
+  }
+
+  if (typeof payload === 'string' || typeof payload === 'number' || typeof payload === 'boolean') {
+    return { id: String(payload) };
+  }
+
+  if (typeof payload === 'object') {
+    if (payload.id !== undefined && payload.id !== null && payload.id !== '') {
+      return { id: String(payload.id) };
+    }
+    if (payload.slug !== undefined && payload.slug !== null && payload.slug !== '') {
+      return { id: String(payload.slug) };
+    }
+  }
+
+  return { id: null };
+}
+
+function initFavoriteButtons() {
+  var buttons = document.querySelectorAll('[data-favorite-button]');
+  if (!buttons.length) {
+    return;
+  }
+
+  var favorites = readFavorites();
+  buttons.forEach(function (button) {
+    if (button.dataset.favoriteBound === '1') {
+      updateFavoriteButtonState(button, favorites.has(button.getAttribute('data-favorite-id')));
+      return;
+    }
+
+    var id = button.getAttribute('data-favorite-id');
+    if (!id) {
+      return;
+    }
+
+    updateFavoriteButtonState(button, favorites.has(id));
+    button.dataset.favoriteBound = '1';
+  });
+}
+
+function initCampaignCards() {
+  var cards = document.querySelectorAll('[data-campaign-link]');
+  if (!cards.length) {
+    return;
+  }
+
+  cards.forEach(function (card) {
+    if (card.dataset.cardLinkBound === '1') {
+      return;
+    }
+
+    card.dataset.cardLinkBound = '1';
+    card.addEventListener('click', handleCardLinkClick);
+    card.addEventListener('keydown', handleCardLinkKeydown);
+  });
+}
+
+function handleCardLinkClick(event) {
+  if (shouldIgnoreCardInteraction(event.target)) {
+    return;
+  }
+
+  var card = event.currentTarget;
+  var url = card.getAttribute('data-campaign-link');
+  if (!url) {
+    return;
+  }
+
+  event.preventDefault();
+  window.location.href = url;
+}
+
+function handleCardLinkKeydown(event) {
+  if (event.key !== 'Enter' && event.key !== ' ') {
+    return;
+  }
+
+  var card = event.currentTarget;
+  var url = card.getAttribute('data-campaign-link');
+  if (!url) {
+    return;
+  }
+
+  event.preventDefault();
+  window.location.href = url;
+}
+
+function shouldIgnoreCardInteraction(target) {
+  if (!target) {
+    return false;
+  }
+
+  var interactive = target.closest('a, button, input, textarea, select, label, [role="button"], [data-ignore-card-link]');
+  return Boolean(interactive);
+}
+
 function bootstrapLucaton() {
   initLucatonUI();
   initStickyHeader();
   initPasswordVisibility();
+  initShareModal();
+  initCampaignCards();
+  initFavoriteButtons();
+  initCampaignGalleryLightbox();
+  initCampaignUpdateHearts();
+  initCreatorProfileModal();
 }
 
 if (document.readyState === 'loading') {
@@ -1086,30 +1899,41 @@ if (document.readyState === 'loading') {
   bootstrapLucaton();
 }
 
-// Utility: share campaign (graceful fallback)
-function shareCampaign(slug) {
-  var path = '/campana/' + encodeURIComponent(slug || 'detalle');
-  var url = window.location.origin + (window.APP_BASE_PATH || '') + path;
-  if (navigator.share) {
-    navigator.share({ title: 'Lucatón', text: 'Mira esta campaña', url: url }).catch(function () {});
-  } else {
-    try {
-      navigator.clipboard.writeText(url);
-      alert('Enlace copiado al portapapeles');
-    } catch (err) {
-      prompt('Copia el enlace:', url);
-    }
+// Utility: abrir modal de compartir
+function shareCampaign(target) {
+  var payload = normalizeSharePayload(target);
+  if (!payload.url) {
+    return;
   }
+
+  openShareModal(payload);
 }
 
-// Utility: toggle favorite using localStorage (demo)
-function toggleFavorite(id) {
-  var key = 'lucaton_favs';
-  var favs = new Set(JSON.parse(localStorage.getItem(key) || '[]'));
-  if (favs.has(String(id))) {
-    favs.delete(String(id));
-  } else {
-    favs.add(String(id));
+// Utility: alternar favoritos con retroalimentación UI
+function toggleFavorite(event, payload) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+    event.stopPropagation();
   }
-  localStorage.setItem(key, JSON.stringify(Array.from(favs)));
+
+  var normalized = normalizeFavoritePayload(payload);
+  if (!normalized.id) {
+    return;
+  }
+
+  var favorites = readFavorites();
+  var isActive = favorites.has(normalized.id);
+  if (isActive) {
+    favorites.delete(normalized.id);
+  } else {
+    favorites.add(normalized.id);
+  }
+  writeFavorites(favorites);
+
+  var buttons = document.querySelectorAll('[data-favorite-button]');
+  buttons.forEach(function (button) {
+    if (button.getAttribute('data-favorite-id') === normalized.id) {
+      updateFavoriteButtonState(button, !isActive);
+    }
+  });
 }

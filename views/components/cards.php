@@ -22,12 +22,36 @@ function render_campaign_card($campaign, $options = []) {
 
     $goal_amount = (float)($campaign['goal_amount'] ?? ($campaign['goal'] ?? 0));
     $raised_amount = (float)($campaign['raised_amount'] ?? ($campaign['current_amount'] ?? ($campaign['raised'] ?? 0)));
-    $imageCandidate = $campaign['cover_image_url']
-        ?? $campaign['image_url']
-        ?? $campaign['image']
-        ?? null;
-    $image_url = CampaignMediaUploadService::normalizePublicUrl($imageCandidate)
-        ?? (APP_URL . '/public/assets/images/campaigns/escuela-rural.svg');
+
+    $imageCandidates = [
+        $campaign['image_url'] ?? null,
+        $campaign['cover_image_url'] ?? null,
+        $campaign['featured_image_url'] ?? null,
+        $campaign['featured_image'] ?? null,
+        $campaign['banner_image_url'] ?? null,
+        $campaign['banner_url'] ?? null,
+        $campaign['main_image_url'] ?? null,
+        $campaign['image'] ?? null,
+        $campaign['owner_avatar'] ?? null,
+        $campaign['creator_avatar'] ?? null,
+    ];
+
+    $image_url = null;
+    foreach ($imageCandidates as $candidate) {
+        if ($candidate === null || $candidate === '') {
+            continue;
+        }
+
+        $normalized = CampaignMediaUploadService::normalizePublicUrl($candidate);
+        if ($normalized !== null) {
+            $image_url = $normalized;
+            break;
+        }
+    }
+
+    if ($image_url === null) {
+        $image_url = APP_URL . '/public/assets/images/campaigns/escuela-rural.svg';
+    }
     $creator_name = $campaign['owner_name']
         ?? $campaign['creator_name']
         ?? $campaign['creator']
@@ -66,7 +90,7 @@ function render_campaign_card($campaign, $options = []) {
     $category_label = $campaign['category_name'] ?? $campaign['category'] ?? null;
     $summary_text = $campaign['summary'] ?? $campaign['description'] ?? '';
 
-    $card_classes = 'bg-white rounded-xl shadow-soft hover:shadow-strong transform hover:-translate-y-0.5 hover:scale-[1.01] transition-all duration-300 overflow-hidden';
+    $card_classes = 'bg-white rounded-xl shadow-soft hover:shadow-strong transform hover:-translate-y-0.5 hover:scale-[1.01] transition-all duration-300 overflow-hidden relative group focus-within:ring-2 focus-within:ring-copihue-500 focus-within:ring-offset-2 focus-within:ring-offset-white';
     if (!empty($options['card_class'])) {
         $card_classes .= ' ' . $options['card_class'];
     }
@@ -74,11 +98,27 @@ function render_campaign_card($campaign, $options = []) {
         $card_classes .= ' max-w-sm';
     }
 
-    $html = '<div class="' . $card_classes . '">';
+    $cardAttributes = [
+        'class' => $card_classes . ' cursor-pointer',
+        'data-campaign-link' => $detail_url,
+        'tabindex' => '0',
+        'role' => 'link',
+        'aria-label' => 'Ver campaña ' . ($campaign['title'] ?? ''),
+    ];
+
+    $attributeString = '';
+    foreach ($cardAttributes as $attr => $value) {
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $attributeString .= ' ' . $attr . '="' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '"';
+    }
+
+    $html = '<article' . $attributeString . '>';
 
     if (!empty($image_url)) {
         $html .= '<div class="relative">';
-        $html .= '<img class="w-full h-48 object-cover" src="' . htmlspecialchars($image_url) . '" alt="' . htmlspecialchars($campaign['title']) . '">';
+        $html .= '<img class="w-full h-48 object-cover" src="' . htmlspecialchars($image_url) . '" alt="Imagen de la campaña ' . htmlspecialchars($campaign['title']) . '">';
 
         $html .= '<div class="absolute top-2 right-2">';
         $html .= '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' . htmlspecialchars($status_badge_class) . '">';
@@ -161,15 +201,25 @@ function render_campaign_card($campaign, $options = []) {
         }
 
         $share_target = $slug ?? ($campaign['id'] ?? '');
-        $share_attr = htmlspecialchars(json_encode($share_target), ENT_QUOTES, 'UTF-8');
+        $share_payload = [
+            'slug' => $share_target,
+            'title' => $campaign['title'] ?? 'Campaña Lucatón'
+        ];
+        $share_attr = htmlspecialchars(json_encode($share_payload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
         $html .= '<button type="button" class="btn-ghost p-2" onclick="shareCampaign(' . $share_attr . ')" title="Compartir">';
         $html .= '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path></svg>';
         $html .= '</button>';
 
         $favorite_target = $campaign['id'] ?? $share_target;
-        $favorite_attr = htmlspecialchars(json_encode($favorite_target), ENT_QUOTES, 'UTF-8');
-        $html .= '<button type="button" class="btn-ghost p-2" onclick="toggleFavorite(' . $favorite_attr . ')" title="Agregar a favoritos">';
-        $html .= '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>';
+        $favorite_payload = [
+            'id' => $favorite_target,
+            'slug' => $share_target,
+            'title' => $campaign['title'] ?? 'Campaña Lucatón'
+        ];
+        $favorite_attr = htmlspecialchars(json_encode($favorite_payload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+        $favoriteIdAttr = htmlspecialchars((string)$favorite_target, ENT_QUOTES, 'UTF-8');
+        $html .= '<button type="button" class="btn-ghost p-2" data-favorite-button data-favorite-id="' . $favoriteIdAttr . '" onclick="toggleFavorite(event, ' . $favorite_attr . ')" title="Guardar campaña" aria-pressed="false">';
+        $html .= '<svg class="w-5 h-5 transition-colors" data-favorite-icon fill="none" stroke="currentColor" viewBox="0 0 24 24"><path data-favorite-path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>';
         $html .= '</button>';
 
         $html .= '</div>';
@@ -177,7 +227,7 @@ function render_campaign_card($campaign, $options = []) {
 
 
     $html .= '</div>';
-    $html .= '</div>';
+    $html .= '</article>';
 
     return $html;
 }

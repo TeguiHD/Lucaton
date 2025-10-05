@@ -59,6 +59,38 @@ class CampaignController {
         $recent_supporters = $this->donations->findByCampaignId($campaign['id'], 10, 0, true);
         $stats = $this->buildCampaignStats($campaign);
 
+        $mediaService = new CampaignMediaUploadService();
+        $campaignImageUrl = null;
+        $galleryMedia = [];
+
+        try {
+            $mediaManifest = $mediaService->readManifest((int)$campaign['id']);
+        } catch (\Throwable $exception) {
+            $mediaManifest = [];
+        }
+
+        $coverCandidate = $mediaManifest['cover_image']
+            ?? $campaign['image_url']
+            ?? $campaign['cover_image_url']
+            ?? null;
+        $campaignImageUrl = CampaignMediaUploadService::normalizePublicUrl($coverCandidate)
+            ?? ($campaign['image_url'] ?? null);
+
+        $galleryMedia = array_values(array_filter(array_map(static function ($item) {
+            if (!is_array($item) || empty($item['url'])) {
+                return null;
+            }
+
+            $normalizedUrl = CampaignMediaUploadService::normalizePublicUrl($item['url']) ?? $item['url'];
+            return [
+                'url' => $normalizedUrl,
+                'caption' => isset($item['caption']) && $item['caption'] !== '' ? $item['caption'] : null,
+            ];
+        }, $mediaManifest['gallery'] ?? [])));
+
+        $campaignUpdates = $this->fetchCampaignUpdates((int)$campaign['id']);
+        $creatorProfileData = $this->buildCreatorProfile($campaign);
+
         $donationFormErrors = $_SESSION['donation_form_errors'][$campaign['id']] ?? [];
         $donationFormOld = $_SESSION['donation_form_old'][$campaign['id']] ?? [];
         unset($_SESSION['donation_form_errors'][$campaign['id']], $_SESSION['donation_form_old'][$campaign['id']]);
@@ -684,6 +716,7 @@ class CampaignController {
                     c.start_date,
                     c.end_date,
                     c.cover_image_url,
+                    c.featured_image_url,
                     c.visibility,
                     c.video_url,
                     c.featured,
@@ -798,6 +831,7 @@ class CampaignController {
                     c.start_date,
                     c.end_date,
                     c.cover_image_url,
+                    c.featured_image_url,
                     c.visibility,
                     c.video_url,
                     c.featured,
@@ -846,6 +880,27 @@ class CampaignController {
             'progress' => (float)($campaign['progress'] ?? 0),
             'days_left' => $campaign['days_left'] ?? null,
             'donors' => (int)($campaign['donor_count'] ?? 0)
+        ];
+    }
+
+    private function fetchCampaignUpdates(int $campaignId): array
+    {
+        // Future implementation: pull updates from campaign_updates table.
+        // Preparing structure so the view can render once data is available.
+        return [];
+    }
+
+    private function buildCreatorProfile(array $campaign): array
+    {
+        $avatarCandidate = $campaign['owner_avatar'] ?? ($campaign['creator_avatar'] ?? null);
+
+        return [
+            'name' => $campaign['creator_name'] ?? $campaign['owner_name'] ?? 'Campañista',
+            'username' => $campaign['username'] ?? null,
+            'avatar' => CampaignMediaUploadService::normalizePublicUrl($avatarCandidate),
+            'verified' => true,
+            'campaign_verified' => in_array($campaign['status'] ?? 'draft', ['published', 'active', 'completed', 'funded'], true),
+            'joined_at' => $campaign['owner_joined_at'] ?? null,
         ];
     }
 
@@ -1851,8 +1906,19 @@ class CampaignController {
             }
         }
 
-        if (!isset($row['cover_image_url']) && isset($row['image_url'])) {
-            $row['cover_image_url'] = $row['image_url'];
+        if (!isset($row['cover_image_url'])) {
+            $row['cover_image_url'] = $row['featured_image_url']
+                ?? $row['featured_image']
+                ?? $row['banner_image_url']
+                ?? $row['banner_url']
+                ?? $row['image_url']
+                ?? $row['image_path']
+                ?? $row['image']
+                ?? null;
+        }
+
+        if (!isset($row['image_url']) && isset($row['cover_image_url'])) {
+            $row['image_url'] = $row['cover_image_url'];
         }
 
         if (!isset($row['category_name']) && isset($row['category'])) {

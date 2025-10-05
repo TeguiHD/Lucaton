@@ -176,5 +176,74 @@ $social_links = [
         </div>
     </div>
 </footer>
+<div id="share-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-6" aria-hidden="true">
+    <div class="absolute inset-0 bg-gray-900/50" data-share-overlay style="backdrop-filter: blur(8px);"></div>
+    <div class="relative w-full max-w-md rounded-2xl bg-white shadow-xl" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+        <div class="flex items-start justify-between border-b border-gray-100 px-6 py-4">
+            <div>
+                <h2 id="share-modal-title" class="text-lg font-semibold text-gray-900">Compartir campaña</h2>
+                <p class="text-sm text-gray-500">Comparte <span data-share-name class="font-medium text-gray-900">esta campaña</span> con tu comunidad.</p>
+            </div>
+            <button type="button" class="text-gray-400 hover:text-gray-600" data-share-close aria-label="Cerrar">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+            <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700">Enlace directo</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" data-share-url readonly class="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 focus:border-copihue-500 focus:ring-copihue-500">
+                    <button type="button" data-share-copy class="inline-flex items-center gap-2 rounded-lg bg-copihue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-copihue-700 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8h2a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2v-2"/></svg>
+                        Copiar
+                    </button>
+                </div>
+                <p class="text-xs text-emerald-600 hidden" data-share-feedback>Enlace copiado al portapapeles.</p>
+            </div>
+            <div class="space-y-2">
+                <h3 class="text-sm font-medium text-gray-700">Compartir en redes</h3>
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <a href="#" target="_blank" rel="noopener" data-share-network="whatsapp" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-copihue-500 hover:text-copihue-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                            <path fill="currentColor" d="M12.04 2C6.57 2 2.24 6.19 2.24 11.54c0 1.73.47 3.34 1.29 4.75L2 21.98l5.89-1.54c1.34.73 2.87 1.15 4.5 1.15 5.47 0 9.8-4.19 9.8-9.54C22.19 6.19 17.55 2 12.04 2Zm5.8 13.48c-.25.7-1.26 1.33-1.75 1.38-.45.04-1.01.06-1.64-.1-.38-.1-.87-.28-1.5-.54-2.64-1.16-4.36-3.98-4.49-4.17-.13-.19-1.07-1.42-1.07-2.71 0-1.29.68-1.92.92-2.19.25-.27.55-.34.73-.34.18 0 .36 0 .52.01.17.01.39-.06.6.46.25.6.85 2.06.92 2.21.07.15.11.33.02.52-.09.19-.13.33-.27.5-.13.17-.29.39-.41.53-.13.15-.27.31-.12.58.15.27.66 1.09 1.42 1.77.98.88 1.81 1.16 2.08 1.29.27.13.43.11.6-.07.17-.17.69-.77.88-1.03.18-.27.37-.22.62-.13.25.09 1.61.77 1.88.91.27.13.45.2.52.31.07.12.07.7-.18 1.41Z"/>
+                        </svg>
+                        <span>WhatsApp</span>
+                    </a>
+                    <a href="#" target="_blank" rel="noopener" data-share-network="facebook" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-copihue-500 hover:text-copihue-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M22 12.07C22 6.55 17.52 2 12 2S2 6.55 2 12.07c0 5.02 3.66 9.18 8.44 9.93v-7.03H7.9v-2.9h2.54V9.78c0-2.5 1.49-3.89 3.77-3.89 1.09 0 2.23.2 2.23.2v2.45h-1.26c-1.24 0-1.63.77-1.63 1.56v1.87h2.78l-.44 2.9h-2.34v7.03C18.34 21.25 22 17.09 22 12.07Z"/>
+                        </svg>
+                        <span>Facebook</span>
+                    </a>
+                    <a href="#" target="_blank" rel="noopener" data-share-network="x" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-copihue-500 hover:text-copihue-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M3 3h4.53l4.18 6.26L16.94 3H21l-7.27 9.52L21 21h-4.53l-4.12-6.15L7.12 21H3l7.35-9.48L3 3Z"/>
+                        </svg>
+                        <span>X</span>
+                    </a>
+                    <a href="#" target="_blank" rel="noopener" data-share-network="linkedin" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-copihue-500 hover:text-copihue-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.47-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM7.12 20.45H3.55V9h3.57v11.45Z"/>
+                        </svg>
+                        <span>LinkedIn</span>
+                    </a>
+                    <a href="#" target="_blank" rel="noopener" data-share-network="instagram" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-copihue-500 hover:text-copihue-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4Zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-6.5-.25a1.25 1.25 0 1 0 2.5 0 1.25 1.25 0 0 0-2.5 0Zm6.5 2.75a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>Instagram</span>
+                    </a>
+                    <a href="#" data-share-network="email" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-copihue-500 hover:text-copihue-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                            <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 5.75h15a1.75 1.75 0 0 1 1.75 1.75v9a1.75 1.75 0 0 1-1.75 1.75h-15A1.75 1.75 0 0 1 2.75 16.5v-9A1.75 1.75 0 0 1 4.5 5.75Z"/>
+                            <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m5 7 7 5 7-5"/>
+                        </svg>
+                        <span>Correo</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 <!-- JS de interacción ligera (sin CDN) -->
 <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
