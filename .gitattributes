@@ -1,0 +1,36 @@
+# Configuración de atributos de Git para el proyecto Lucatón
+
+# Especificar que todos los archivos .php son PHP, no Hack
+*.php linguist-language=PHP
+
+# Configurar archivos de texto
+*.md text
+*.txt text
+*.json text
+*.css text
+*.js text
+*.sql text
+
+# Configurar archivos binarios
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Normalización de finales de línea
+* text=auto
+*.php text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.sql text eol=lf
+
+# Excluir archivos de estadísticas de lenguaje
+docs/* linguist-documentation
+requerimientos/* linguist-documentation
+capturasPantalla/* linguist-documentation
+storage/logs/* linguist-generated
+public/storage/* linguist-generated
