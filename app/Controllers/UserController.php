@@ -160,8 +160,9 @@ class UserController {
                     'message' => $notification['message'],
                     'time' => $this->diffForHumans($notification['created_at']),
                     'read' => (bool)$notification['is_read'],
+                    'meta' => $notification['meta'] ?? null,
                 ];
-            }, $notificationModel->getForUser($userId, 5));
+            }, $notificationModel->getForUser($userId, 3));
         }
 
         $normalizedUserAvatar = SessionHelper::normalizeAvatarUrl($userRecord['avatar_url'] ?? null);
@@ -186,6 +187,9 @@ class UserController {
             'donations_count' => (int)$donationStats['donations_count'],
             'total_donated' => (float)$donationStats['total_donated'],
         ];
+
+        $dashboardCelebration = $this->resolveDashboardCelebration($campaigns, $notifications);
+        $campaignMetricsEndpoint = Router::url('api/mis-campanas/resumen');
 
         include VIEWS_PATH . '/user/dashboard.php';
     }
@@ -600,6 +604,58 @@ class UserController {
         Router::redirect('perfil');
     }
 
+    public function campaignMetrics(): void
+    {
+        if (!SessionHelper::isAuthenticated()) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'No autorizado'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $userId = (int)SessionHelper::getUserId();
+        $campaignModel = new Campaign();
+
+        try {
+            $rows = $campaignModel->findByUserId($userId, 100, 0);
+        } catch (Throwable $exception) {
+            Logger::error('No se pudieron cargar las métricas de campañas', [
+                'user_id' => $userId,
+                'error' => $exception->getMessage()
+            ]);
+
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'No se pudieron obtener las métricas'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $payload = array_map(static function (array $row) {
+            $campaignId = (int)($row['id'] ?? 0);
+            $goal = (float)($row['goal_amount'] ?? 0.0);
+            $raised = (float)($row['raised_amount'] ?? 0.0);
+            $currency = $row['currency'] ?? 'CLP';
+            $progress = $goal > 0 ? min(100, round(($raised / $goal) * 100, 2)) : 0.0;
+
+            return [
+                'id' => $campaignId,
+                'slug' => $row['slug'] ?? null,
+                'title' => $row['title'] ?? 'Campaña',
+                'goal_amount' => $goal,
+                'raised_amount' => $raised,
+                'progress' => $progress,
+                'currency' => $currency,
+                'status' => $row['status'] ?? null,
+                'funded_at' => $row['funded_at'] ?? null,
+                'funding_celebrated_at' => $row['funding_celebrated_at'] ?? null,
+                'updated_at' => $row['updated_at'] ?? null,
+            ];
+        }, $rows);
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['data' => $payload], JSON_UNESCAPED_UNICODE);
+    }
+
     private function diffForHumans(?string $timestamp): string {
         if (empty($timestamp)) {
             return '';
@@ -632,6 +688,123 @@ class UserController {
         }
 
         return date('d/m/Y', $time);
+    }
+
+    private function resolveDashboardCelebration(array $campaigns, array $notifications): ?array
+    {
+        $sessionKey = 'campaign_celebrations_shown';
+        $shown = $_SESSION[$sessionKey] ?? [];
+
+        $campaignIndex = [];
+        foreach ($campaigns as $campaign) {
+            $id = (int)($campaign['id'] ?? 0);
+            if ($id > 0) {
+                $campaignIndex[$id] = $campaign;
+            }
+        }
+
+        $formatCurrency = static function (float $amount, string $currency): string {
+            $currency = strtoupper($currency ?: 'CLP');
+            $formatted = number_format(max(0, $amount), 0, ',', '.');
+            return $currency === 'CLP'
+                ? '$' . $formatted
+                : $currency . ' ' . $formatted;
+        };
+
+        $campaignModel = null;
+
+        $buildPayload = function (array $campaignData, array $meta = []) use (&$shown, $sessionKey, $formatCurrency, &$campaignModel) {
+            $campaignId = (int)($campaignData['id'] ?? ($meta['campaign_id'] ?? 0));
+            if ($campaignId <= 0) {
+                return null;
+            }
+
+            if (!empty($shown[$campaignId])) {
+                return null;
+            }
+
+            if (!empty($campaignData['funding_celebrated_at'])) {
+                return null;
+            }
+
+            $progress = (float)($campaignData['progress'] ?? ($meta['progress'] ?? 0));
+            if ($progress < 100.0) {
+                return null;
+            }
+
+            $goal = (float)($campaignData['goal_amount'] ?? ($meta['goal_amount'] ?? 0));
+            $raised = (float)($campaignData['raised_amount'] ?? ($meta['raised_amount'] ?? 0));
+            $currency = $campaignData['currency'] ?? ($meta['currency'] ?? 'CLP');
+
+            $shown[$campaignId] = time();
+            $_SESSION[$sessionKey] = $shown;
+
+            if ($campaignModel === null) {
+                $campaignModel = new Campaign();
+            }
+
+            try {
+                $campaignModel->markFundingMilestone($campaignId, ['mark_celebrated' => true]);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo marcar la celebración en panel', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
+
+            $publicUrl = Router::url('campana/' . ($campaignData['slug'] ?? $campaignId));
+            $manageUrl = Router::url('campana/' . $campaignId . '/editar');
+
+            return [
+                'campaign_id' => $campaignId,
+                'campaign_title' => $campaignData['title'] ?? ($meta['campaign_title'] ?? 'Tu campaña'),
+                'raised_amount' => $formatCurrency($raised, $currency),
+                'goal_amount' => $formatCurrency($goal, $currency),
+                'progress' => min(100, round($progress, 1)),
+                'public_url' => $publicUrl,
+                'manage_url' => $manageUrl,
+            ];
+        };
+
+        foreach ($notifications as $notification) {
+            $meta = is_array($notification['meta'] ?? null) ? $notification['meta'] : [];
+            $event = $meta['event'] ?? $meta['milestone'] ?? null;
+            if ($event !== 'campaign_goal_reached' && $event !== 'goal_reached') {
+                continue;
+            }
+
+            $campaignId = (int)($meta['campaign_id'] ?? 0);
+            if ($campaignId <= 0) {
+                continue;
+            }
+
+            $campaignData = $campaignIndex[$campaignId] ?? null;
+            if (!$campaignData) {
+                if ($campaignModel === null) {
+                    $campaignModel = new Campaign();
+                }
+
+                $record = $campaignModel->findById($campaignId);
+                if (!$record) {
+                    continue;
+                }
+                $campaignData = array_merge($record, CampaignPresenter::present($record));
+            }
+
+            $payload = $buildPayload($campaignData, $meta);
+            if ($payload !== null) {
+                return $payload;
+            }
+        }
+
+        foreach ($campaignIndex as $campaignData) {
+            $payload = $buildPayload($campaignData);
+            if ($payload !== null) {
+                return $payload;
+            }
+        }
+
+        return null;
     }
 
     private function formatDonationReceivedMessage(array $donation): string {

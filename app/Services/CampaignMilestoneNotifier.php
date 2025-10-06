@@ -38,6 +38,17 @@ class CampaignMilestoneNotifier {
 
         $progress = (float)($stats['progress'] ?? 0);
 
+        if ($progress >= 100.0) {
+            try {
+                $this->campaigns->markFundingMilestone($campaignId, ['mark_funded' => true]);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo marcar la campaña como financiada', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
+        }
+
         try {
             $this->mailer->handleFundingProgress($campaign, $stats, $progress);
         } catch (Throwable $exception) {
@@ -51,6 +62,7 @@ class CampaignMilestoneNotifier {
             $this->sendMilestoneNotification([
                 'campaign_id' => $campaignId,
                 'campaign_title' => $campaign['title'] ?? 'Campaña',
+                'campaign_slug' => $campaign['slug'] ?? null,
                 'goal_amount' => (float)($stats['goal_amount'] ?? 0),
                 'raised_amount' => (float)($stats['raised_amount'] ?? 0),
                 'progress' => $progress,
@@ -71,6 +83,15 @@ class CampaignMilestoneNotifier {
                     'error' => $exception->getMessage()
                 ]);
             }
+
+            try {
+                $this->campaigns->markFundingMilestone($campaignId, ['mark_notified' => true]);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo marcar la notificación de financiamiento', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
             return;
         }
 
@@ -81,6 +102,7 @@ class CampaignMilestoneNotifier {
             $this->sendMilestoneNotification([
                 'campaign_id' => $campaignId,
                 'campaign_title' => $campaign['title'] ?? 'Campaña',
+                'campaign_slug' => $campaign['slug'] ?? null,
                 'goal_amount' => (float)($stats['goal_amount'] ?? 0),
                 'raised_amount' => (float)($stats['raised_amount'] ?? 0),
                 'progress' => $progress,
@@ -127,6 +149,7 @@ class CampaignMilestoneNotifier {
         $this->sendMilestoneNotification([
             'campaign_id' => $campaignId,
             'campaign_title' => $campaign['title'] ?? 'Campaña',
+            'campaign_slug' => $campaign['slug'] ?? null,
             'goal_amount' => (float)($stats['goal_amount'] ?? 0),
             'raised_amount' => (float)($stats['raised_amount'] ?? 0),
             'progress' => (float)($stats['progress'] ?? 0),
@@ -149,13 +172,32 @@ class CampaignMilestoneNotifier {
 
         try {
             $meta = array_merge([
-                'milestone' => $milestone,
                 'campaign_id' => $context['campaign_id'],
+                'campaign_slug' => $context['campaign_slug'] ?? null,
                 'campaign_title' => $context['campaign_title'],
                 'progress' => $context['progress'],
                 'goal_amount' => $context['goal_amount'],
                 'raised_amount' => $context['raised_amount']
             ], $extraMeta);
+
+            $campaignUrl = $this->buildCampaignUrl($context);
+            if ($campaignUrl) {
+                $meta['campaign_url'] = $campaignUrl;
+                if (empty($meta['cta_url'])) {
+                    $meta['cta_url'] = $campaignUrl;
+                }
+            }
+
+            if (!empty($meta['cta_url'])) {
+                $meta['cta_label'] = $meta['cta_label'] ?? match ($milestone) {
+                    'goal_reached' => 'Ver resultados',
+                    'near_goal' => 'Apoyar campaña',
+                    'goal_not_met' => 'Ver campaña',
+                    default => 'Ver campaña'
+                };
+            }
+
+            $meta['milestone'] = $milestone;
 
             $this->notifications->createSystem([
                 'title' => $title,
@@ -177,5 +219,23 @@ class CampaignMilestoneNotifier {
     private function formatCurrency(float $amount, string $currency): string {
         $formatted = number_format($amount, 0, ',', '.');
         return sprintf('%s %s', strtoupper($currency), $formatted);
+    }
+
+    private function buildCampaignUrl(array $context): ?string
+    {
+        $base = defined('APP_URL') ? rtrim(APP_URL, '/') : '';
+        if ($base === '') {
+            return null;
+        }
+
+        if (!empty($context['campaign_slug'])) {
+            return $base . '/campana/' . $context['campaign_slug'];
+        }
+
+        if (!empty($context['campaign_id'])) {
+            return $base . '/campana/' . $context['campaign_id'];
+        }
+
+        return null;
     }
 }

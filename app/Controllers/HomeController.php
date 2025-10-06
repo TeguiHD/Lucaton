@@ -30,6 +30,7 @@ class HomeController {
 
     public function index() {
         $current_page = 'home';
+        (new Campaign())->closeExpiredCampaigns();
         $featured_campaigns = $this->fetchFeaturedCampaigns();
         $impact_stats = $this->fetchImpactStats();
         $top_categories = $this->fetchTopCategories();
@@ -190,7 +191,7 @@ class HomeController {
             $where[] = "c.visibility = 'public'";
         }
         if (in_array('status', $this->campaignColumns, true)) {
-            $where[] = "c.status IN ('published','active','completed','funded')";
+            $where[] = "c.status IN ('published','completed')";
         }
 
         $order = 'c.id DESC';
@@ -274,7 +275,7 @@ class HomeController {
             $where[] = "c.visibility = 'public'";
         }
         if (in_array('status', $this->campaignColumns, true)) {
-            $where[] = "c.status IN ('published','active','completed','funded')";
+            $where[] = "c.status IN ('published','completed')";
         }
 
         $order = in_array('created_at', $this->campaignColumns, true) ? 'c.created_at DESC' : 'c.id DESC';
@@ -340,7 +341,7 @@ class HomeController {
             $campaignStats = $this->db->fetch(
                 "SELECT 
                     COUNT(*) AS total,
-                    SUM(CASE WHEN status IN ('completed','funded','ended') THEN 1 ELSE 0 END) AS completed,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
                     SUM(CASE WHEN status IN ('published','active') THEN 1 ELSE 0 END) AS active
                  FROM campaigns"
             ) ?: $campaignStats;
@@ -435,11 +436,14 @@ class HomeController {
     private function fetchSuccessStoriesModular(): array {
         $rows = $this->db->fetchAll(
             "SELECT 
+                c.id,
                 c.slug,
                 c.title,
                 c.story,
                 c.cover_image_url,
                 c.featured_image_url,
+                c.goal_amount,
+                c.currency,
                 cm.raised_amount,
                 u.first_name,
                 u.last_name,
@@ -447,19 +451,29 @@ class HomeController {
              FROM campaigns c
              JOIN campaign_metrics cm ON cm.campaign_id = c.id
              JOIN users u ON c.owner_id = u.id
-             WHERE c.status = 'completed' AND c.visibility = 'public'
-             ORDER BY c.updated_at DESC
+             WHERE c.status = 'completed'
+               AND c.visibility = 'public'
+               AND c.goal_amount IS NOT NULL
+               AND c.goal_amount > 0
+               AND cm.raised_amount >= (c.goal_amount * 0.9)
+             ORDER BY (cm.raised_amount / NULLIF(c.goal_amount, 0)) DESC, c.updated_at DESC
              LIMIT 3"
         );
 
         return array_map(function ($row) {
             $presented = CampaignPresenter::present($row);
             $creator = $presented['owner_name'] ?? 'Campañista';
+            $goal = (float)($presented['goal_amount'] ?? 0);
+            $raised = (float)($presented['raised_amount'] ?? 0);
+            $progress = $goal > 0 ? min(100, round(($raised / $goal) * 100, 1)) : 0;
 
             return [
                 'title' => $presented['title'],
                 'excerpt' => substr($presented['story'] ?? '', 0, 220),
-                'raised_amount' => (float)($presented['raised_amount'] ?? 0),
+                'raised_amount' => $raised,
+                'goal_amount' => $goal,
+                'progress' => $progress,
+                'currency' => $presented['currency'] ?? 'CLP',
                 'creator' => $creator,
                 'image_url' => $presented['image_url'] ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg',
                 'slug' => $presented['slug'] ?? $row['slug']
@@ -468,9 +482,18 @@ class HomeController {
     }
 
     private function fetchSuccessStoriesLegacy(): array {
-        $whereStatus = in_array('status', $this->campaignColumns, true) ? "WHERE status IN ('completed','funded','ended')" : '';
+        $where = [];
+        if (in_array('status', $this->campaignColumns, true)) {
+            $where[] = "status = 'completed'";
+        }
+        if (in_array('visibility', $this->campaignColumns, true)) {
+            $where[] = "visibility = 'public'";
+        }
+        $where[] = 'goal_amount IS NOT NULL';
+        $where[] = 'goal_amount > 0';
+        $whereClause = 'WHERE ' . implode(' AND ', $where);
         $orderColumn = in_array('updated_at', $this->campaignColumns, true) ? 'updated_at' : 'id';
-        $sql = "SELECT * FROM campaigns {$whereStatus} ORDER BY {$orderColumn} DESC LIMIT 3";
+        $sql = "SELECT * FROM campaigns {$whereClause} ORDER BY {$orderColumn} DESC";
 
         try {
             $rows = $this->db->fetchAll($sql);
@@ -479,17 +502,38 @@ class HomeController {
             return [];
         }
 
-        return array_map(function ($row) {
+        $stories = [];
+        foreach ($rows as $row) {
             $presented = $this->normalizeLegacyRow($row);
-            return [
+            $goal = (float)($presented['goal_amount'] ?? 0);
+            $raised = (float)($presented['raised_amount'] ?? 0);
+            if ($goal <= 0) {
+                continue;
+            }
+            if ($raised < ($goal * 0.9)) {
+                continue;
+            }
+
+            $progress = min(100, round(($raised / $goal) * 100, 1));
+
+            $stories[] = [
                 'title' => $presented['title'],
                 'excerpt' => substr($presented['story'] ?? '', 0, 220),
-                'raised_amount' => (float)($presented['raised_amount'] ?? 0),
+                'raised_amount' => $raised,
+                'goal_amount' => $goal,
+                'progress' => $progress,
+                'currency' => $presented['currency'] ?? 'CLP',
                 'creator' => $presented['owner_name'] ?? 'Campañista',
                 'image_url' => $presented['image_url'] ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg',
                 'slug' => $presented['slug'] ?? (string)$presented['id']
             ];
-        }, $rows);
+        }
+
+        usort($stories, static function ($a, $b) {
+            return ($b['progress'] ?? 0) <=> ($a['progress'] ?? 0);
+        });
+
+        return array_slice($stories, 0, 3);
     }
 
     private function normalizeLegacyRow(array $row): array {

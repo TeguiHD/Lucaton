@@ -31,6 +31,7 @@ class CampaignController {
     }
 
     public function show($identifier) {
+        (new Campaign())->closeExpiredCampaigns();
         $campaign = $this->fetchCampaign($identifier, true);
 
         if (!$campaign) {
@@ -56,6 +57,13 @@ class CampaignController {
         $preview_notice = $preview_mode ? $this->previewNoticeForStatus($status, $campaign) : null;
 
         $current_page = 'campaigns';
+        $currentUserId = SessionHelper::getUserId();
+        $ownerId = $campaign['owner_id'] ?? $campaign['user_id'] ?? null;
+        $isCampaignOwner = $currentUserId !== null
+            && $ownerId !== null
+            && (int)$ownerId === (int)$currentUserId;
+        $canManageUpdates = $isCampaignOwner;
+
         $recent_supporters = $this->donations->findByCampaignId($campaign['id'], 10, 0, true);
         $stats = $this->buildCampaignStats($campaign);
 
@@ -88,17 +96,24 @@ class CampaignController {
             ];
         }, $mediaManifest['gallery'] ?? [])));
 
-        $campaignUpdates = $this->fetchCampaignUpdates((int)$campaign['id']);
+        $campaignUpdates = $this->fetchCampaignUpdates((int)$campaign['id'], $isCampaignOwner);
         $creatorProfileData = $this->buildCreatorProfile($campaign);
 
         $donationFormErrors = $_SESSION['donation_form_errors'][$campaign['id']] ?? [];
         $donationFormOld = $_SESSION['donation_form_old'][$campaign['id']] ?? [];
         unset($_SESSION['donation_form_errors'][$campaign['id']], $_SESSION['donation_form_old'][$campaign['id']]);
 
+        $updateFormErrors = $_SESSION['campaign_update_errors'] ?? [];
+        $updateFormOld = $_SESSION['campaign_update_old'] ?? [];
+        unset($_SESSION['campaign_update_errors'], $_SESSION['campaign_update_old']);
+
+        $celebrationOverlay = $this->buildCampaignCelebrationPayload($campaign, $stats, $isCampaignOwner);
+
         include VIEWS_PATH . '/public/campaign-detail.php';
     }
 
     public function index() {
+        (new Campaign())->closeExpiredCampaigns();
         $filters = [
             'search' => trim($_GET['search'] ?? ''),
             'category' => trim($_GET['category'] ?? ''),
@@ -130,6 +145,8 @@ class CampaignController {
         if (!SessionHelper::isAuthenticated()) {
             Router::redirect('/login');
         }
+
+        (new Campaign())->closeExpiredCampaigns();
 
         $current_page = 'my_campaigns';
 
@@ -679,9 +696,16 @@ class CampaignController {
         $params = [];
 
         $publicStatuses = $this->getPublicStatuses();
-        if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
-            $where[] = 'c.status = ?';
-            $params[] = $filters['status'];
+        $resolvedStatuses = $this->resolveStatusFilter($filters['status'] ?? '');
+
+        if (is_array($resolvedStatuses) && !empty($resolvedStatuses)) {
+            $resolvedStatuses = array_values(array_intersect($resolvedStatuses, $publicStatuses));
+        }
+
+        if (!empty($resolvedStatuses)) {
+            $placeholders = implode(',', array_fill(0, count($resolvedStatuses), '?'));
+            $where[] = "c.status IN ({$placeholders})";
+            $params = array_merge($params, $resolvedStatuses);
         } else {
             $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
             $where[] = "c.status IN ({$placeholders})";
@@ -767,9 +791,16 @@ class CampaignController {
         $params = [];
 
         $publicStatuses = $this->getPublicStatuses();
-        if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
-            $where[] = 'status = ?';
-            $params[] = $filters['status'];
+        $resolvedStatuses = $this->resolveStatusFilter($filters['status'] ?? '');
+
+        if (is_array($resolvedStatuses) && !empty($resolvedStatuses)) {
+            $resolvedStatuses = array_values(array_intersect($resolvedStatuses, $publicStatuses));
+        }
+
+        if (!empty($resolvedStatuses)) {
+            $placeholders = implode(',', array_fill(0, count($resolvedStatuses), '?'));
+            $where[] = "status IN ({$placeholders})";
+            $params = array_merge($params, $resolvedStatuses);
         } else {
             $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
             $where[] = "status IN ({$placeholders})";
@@ -879,15 +910,113 @@ class CampaignController {
             'raised_amount' => (float)($campaign['raised_amount'] ?? 0),
             'progress' => (float)($campaign['progress'] ?? 0),
             'days_left' => $campaign['days_left'] ?? null,
-            'donors' => (int)($campaign['donor_count'] ?? 0)
+            'donors' => (int)($campaign['donor_count'] ?? 0),
+            'funded_at' => $campaign['funded_at'] ?? null,
         ];
     }
 
-    private function fetchCampaignUpdates(int $campaignId): array
+    private function fetchCampaignUpdates(int $campaignId, bool $includeOwnerView = false): array
     {
-        // Future implementation: pull updates from campaign_updates table.
-        // Preparing structure so the view can render once data is available.
-        return [];
+        if (!$this->db->tableExists('campaign_updates')) {
+            return [];
+        }
+
+        static $campaignUpdateModel = null;
+        if ($campaignUpdateModel === null) {
+            $campaignUpdateModel = new CampaignUpdate();
+        }
+
+        try {
+            $rawUpdates = $includeOwnerView
+                ? $campaignUpdateModel->listForOwner($campaignId, 20)
+                : $campaignUpdateModel->listPublicByCampaign($campaignId, 12);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudieron obtener las actualizaciones de la campaña', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage()
+            ]);
+            return [];
+        }
+
+        return array_map(static function (array $update) use ($includeOwnerView) {
+            $publishedAt = $update['published_at'] ?? $update['created_at'] ?? null;
+
+            return [
+                'id' => $update['id'] ?? null,
+                'title' => $update['title'] ?? null,
+                'body' => $update['body'] ?? '',
+                'media' => $update['media'] ?? [],
+                'heart_count' => (int)($update['heart_count'] ?? 0),
+                'status' => $update['status'] ?? 'published',
+                'visibility' => $update['visibility'] ?? 'public',
+                'published_at' => $publishedAt,
+                'created_at' => $update['created_at'] ?? null,
+                'can_manage' => $includeOwnerView,
+            ];
+        }, $rawUpdates);
+    }
+
+    private function buildCampaignCelebrationPayload(array $campaign, array $stats, bool $canManageCampaign): ?array
+    {
+        if (!$canManageCampaign) {
+            return null;
+        }
+
+        $progress = (float)($stats['progress'] ?? 0.0);
+        if ($progress < 100.0) {
+            return null;
+        }
+
+        $campaignId = (int)($campaign['id'] ?? 0);
+        if ($campaignId <= 0) {
+            return null;
+        }
+
+        if (!empty($campaign['funding_celebrated_at'])) {
+            return null;
+        }
+
+        $sessionKey = 'campaign_celebrations_shown';
+        $celebrated = $_SESSION[$sessionKey] ?? [];
+        if (isset($celebrated[$campaignId])) {
+            return null;
+        }
+
+        $celebrated[$campaignId] = time();
+        $_SESSION[$sessionKey] = $celebrated;
+
+        $goal = (float)($stats['goal_amount'] ?? ($campaign['goal_amount'] ?? 0));
+        $raised = (float)($stats['raised_amount'] ?? ($campaign['raised_amount'] ?? 0));
+        $currency = $campaign['currency'] ?? 'CLP';
+
+        $formatCurrency = static function (float $amount, string $currency): string {
+            return sprintf('%s %s', strtoupper($currency), number_format($amount, 0, ',', '.'));
+        };
+
+        $manageUrl = null;
+        if (!empty($campaign['id'])) {
+            $manageUrl = Router::url('campana/' . $campaign['id'] . '/editar');
+        }
+
+        $publicUrl = Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']));
+
+        try {
+            (new Campaign())->markFundingMilestone($campaignId, ['mark_celebrated' => true]);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo registrar la celebración de meta alcanzada', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage()
+            ]);
+        }
+
+        return [
+            'campaign_title' => $campaign['title'] ?? 'Tu campaña',
+            'progress' => $progress,
+            'raised_amount' => $formatCurrency($raised, $currency),
+            'goal_amount' => $formatCurrency($goal, $currency),
+            'public_url' => $publicUrl,
+            'manage_url' => $manageUrl,
+        ];
     }
 
     private function buildCreatorProfile(array $campaign): array
@@ -899,13 +1028,13 @@ class CampaignController {
             'username' => $campaign['username'] ?? null,
             'avatar' => CampaignMediaUploadService::normalizePublicUrl($avatarCandidate),
             'verified' => true,
-            'campaign_verified' => in_array($campaign['status'] ?? 'draft', ['published', 'active', 'completed', 'funded'], true),
+            'campaign_verified' => in_array($campaign['status'] ?? 'draft', ['published', 'completed'], true),
             'joined_at' => $campaign['owner_joined_at'] ?? null,
         ];
     }
 
     private function getPublicStatuses(): array {
-        return ['published', 'active', 'completed', 'funded', 'ended'];
+        return ['published', 'completed'];
     }
 
     private function canPreviewCampaign(array $campaign): bool {
@@ -974,20 +1103,41 @@ class CampaignController {
     private function getStatuses(): array {
         if ($this->hasModularSchema) {
             return [
-                '' => 'Todos los estados',
-                'published' => 'Activas',
-                'completed' => 'Completadas',
-                'under_review' => 'En revisión',
-                'paused' => 'Pausadas'
+                '' => 'Todas las campañas',
+                'live' => 'En curso',
+                'finalized' => 'Finalizadas'
             ];
         }
 
         return [
-            '' => 'Todos los estados',
-            'active' => 'Activas',
-            'funded' => 'Financiadas',
-            'ended' => 'Finalizadas'
+            '' => 'Todas las campañas',
+            'live' => 'En curso',
+            'finalized' => 'Finalizadas'
         ];
+    }
+
+    private function resolveStatusFilter(?string $filter): ?array
+    {
+        $filter = is_string($filter) ? trim($filter) : '';
+        if ($filter === '') {
+            return null;
+        }
+
+        $map = [
+            'live' => ['published'],
+            'finalized' => ['completed', 'archived'],
+        ];
+
+        if (isset($map[$filter])) {
+            return $map[$filter];
+        }
+
+        $publicStatuses = $this->getPublicStatuses();
+        if (in_array($filter, $publicStatuses, true)) {
+            return [$filter];
+        }
+
+        return null;
     }
 
     private function formatCategoryLabel(?string $slug): string {
@@ -1414,9 +1564,16 @@ class CampaignController {
 
         if (in_array('status', $this->campaignColumns, true)) {
             $publicStatuses = $this->getPublicStatuses();
-            if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
-                $where[] = 'c.status = ?';
-                $params[] = $filters['status'];
+            $resolvedStatuses = $this->resolveStatusFilter($filters['status'] ?? '');
+
+            if (is_array($resolvedStatuses) && !empty($resolvedStatuses)) {
+                $resolvedStatuses = array_values(array_intersect($resolvedStatuses, $publicStatuses));
+            }
+
+            if (!empty($resolvedStatuses)) {
+                $placeholders = implode(',', array_fill(0, count($resolvedStatuses), '?'));
+                $where[] = 'c.status IN (' . $placeholders . ')';
+                $params = array_merge($params, $resolvedStatuses);
             } else {
                 $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
                 $where[] = 'c.status IN (' . $placeholders . ')';
@@ -1497,9 +1654,16 @@ class CampaignController {
 
         if (in_array('status', $this->campaignColumns, true)) {
             $publicStatuses = $this->getPublicStatuses();
-            if (!empty($filters['status']) && in_array($filters['status'], $publicStatuses, true)) {
-                $where[] = 'status = ?';
-                $params[] = $filters['status'];
+            $resolvedStatuses = $this->resolveStatusFilter($filters['status'] ?? '');
+
+            if (is_array($resolvedStatuses) && !empty($resolvedStatuses)) {
+                $resolvedStatuses = array_values(array_intersect($resolvedStatuses, $publicStatuses));
+            }
+
+            if (!empty($resolvedStatuses)) {
+                $placeholders = implode(',', array_fill(0, count($resolvedStatuses), '?'));
+                $where[] = 'status IN (' . $placeholders . ')';
+                $params = array_merge($params, $resolvedStatuses);
             } else {
                 $placeholders = implode(',', array_fill(0, count($publicStatuses), '?'));
                 $where[] = 'status IN (' . $placeholders . ')';

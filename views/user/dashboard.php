@@ -10,6 +10,8 @@ $campaigns = $campaigns ?? [];
 $recentActivity = $recentActivity ?? [];
 $notifications = $notifications ?? [];
 $campaignInsights = $campaignInsights ?? ['donations_count' => 0, 'total_donated' => 0];
+$dashboardCelebration = $dashboardCelebration ?? null;
+$campaignMetricsEndpoint = $campaignMetricsEndpoint ?? Router::url('api/mis-campanas/resumen');
 
 $page_title = 'Panel de Usuario — Lucatón';
 $page_description = 'Gestiona tus campañas, consulta métricas y mantente informado de tus donaciones.';
@@ -185,6 +187,7 @@ $buttonIcons = [
                                         $raisedAmount = (float)($campaign['raised_amount'] ?? 0);
                                         $progress = $goalAmount > 0 ? min(100, ($raisedAmount / $goalAmount) * 100) : 0;
                                         $progressLabel = number_format($progress, 0);
+                                        $currencyCode = strtoupper((string)($campaign['currency'] ?? 'CLP'));
                             $imageCandidate = $campaign['cover_image_url'] ?? ($campaign['image_url'] ?? null);
                             $imageUrl = CampaignMediaUploadService::normalizePublicUrl($imageCandidate)
                                 ?? (APP_URL . '/public/assets/images/campaigns/placeholder.jpg');
@@ -199,7 +202,7 @@ $buttonIcons = [
                                             $daysLeft = $diffDays > 0 ? $diffDays : 0;
                                         }
                                     ?>
-                                    <article class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                    <article class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" data-campaign-card data-campaign-id="<?= (int)($campaign['id'] ?? 0) ?>" data-campaign-currency="<?= htmlspecialchars($currencyCode) ?>">
                                         <div class="flex items-start space-x-4">
                                             <div class="flex-shrink-0">
                                                 <img class="h-16 w-16 rounded-lg object-cover" src="<?= htmlspecialchars($imageUrl) ?>" alt="Imagen de <?= htmlspecialchars($campaign['title'] ?? 'Campaña') ?>">
@@ -230,11 +233,11 @@ $buttonIcons = [
                                                 <?php endif; ?>
                                     <div class="mt-3">
                                         <div class="flex items-center justify-between text-sm text-gray-600">
-                                            <span><?= $formatCurrency($raisedAmount) ?> de <?= $formatCurrency($goalAmount) ?></span>
-                                            <span><?= $progressLabel ?>%</span>
+                                            <span data-campaign-amount><?= $formatCurrency($raisedAmount) ?> de <?= $formatCurrency($goalAmount) ?></span>
+                                            <span data-campaign-progress-label><?= $progressLabel ?>%</span>
                                         </div>
                                         <div class="mt-2 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                            <div class="bg-gradient-to-r from-copihue-500 to-copihue-600 h-2" style="width: <?= $progress ?>%"></div>
+                                            <div class="bg-gradient-to-r from-copihue-500 to-copihue-600 h-2" data-campaign-progress-bar style="width: <?= $progress ?>%"></div>
                                         </div>
                                         <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
                                             <span><?= number_format((int)($campaign['donor_count'] ?? 0)) ?> aportes</span>
@@ -379,6 +382,9 @@ $buttonIcons = [
                                     <?php
                                         $type = $notification['type'] ?? 'info';
                                         $containerClass = $notificationStyles[$type] ?? $notificationStyles['info'];
+                                        $meta = $notification['meta'] ?? null;
+                                        $ctaUrl = is_array($meta) ? ($meta['cta_url'] ?? null) : null;
+                                        $ctaLabel = is_array($meta) ? ($meta['cta_label'] ?? 'Ver detalles') : 'Ver detalles';
                                     ?>
                                     <div class="p-3 rounded-lg <?= htmlspecialchars($containerClass) ?>">
                                         <p class="text-sm font-semibold text-gray-900">
@@ -387,6 +393,16 @@ $buttonIcons = [
                                         <p class="text-sm text-gray-600">
                                             <?= htmlspecialchars($notification['message'] ?? '') ?>
                                         </p>
+                                        <?php if ($ctaUrl): ?>
+                                            <a href="<?= htmlspecialchars($ctaUrl) ?>"
+                                               class="mt-2 inline-flex items-center text-xs font-semibold text-copihue-600 hover:text-copihue-700"
+                                               target="_blank" rel="noopener noreferrer">
+                                                <?= htmlspecialchars($ctaLabel) ?>
+                                                <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </a>
+                                        <?php endif; ?>
                                         <p class="text-xs text-gray-400 mt-1">
                                             Hace <?= htmlspecialchars($notification['time'] ?? '') ?>
                                         </p>
@@ -420,7 +436,114 @@ $buttonIcons = [
         </div>
     </main>
 
+    <?php if (!empty($dashboardCelebration)): ?>
+        <?php
+        $overlayData = $dashboardCelebration;
+        include __DIR__ . '/../components/celebration-overlay.php';
+        ?>
+    <?php endif; ?>
+
     <?php include VIEWS_PATH . '/layouts/partials/footer.php'; ?>
+
+    <script>
+        (function () {
+            var endpoint = '<?= htmlspecialchars($campaignMetricsEndpoint, ENT_QUOTES, 'UTF-8') ?>';
+            if (!window.fetch || !endpoint) {
+                return;
+            }
+
+            var cards = document.querySelectorAll('[data-campaign-card]');
+            if (!cards.length) {
+                return;
+            }
+
+            var cardIndex = {};
+            cards.forEach(function (card) {
+                var id = card.getAttribute('data-campaign-id');
+                if (id) {
+                    cardIndex[id] = card;
+                }
+            });
+
+            function toNumber(value) {
+                var number = parseFloat(value);
+                return isNaN(number) ? 0 : number;
+            }
+
+            function formatCurrency(amount, currency) {
+                currency = (currency || 'CLP').toUpperCase();
+
+                try {
+                    return new Intl.NumberFormat('es-CL', {
+                        style: 'currency',
+                        currency: currency
+                    }).format(amount);
+                } catch (error) {
+                    var rounded = Math.round(amount);
+                    var formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                    return (currency === 'CLP' ? '$' : currency + ' ') + formatted;
+                }
+            }
+
+            function applyMetrics(data) {
+                if (!data || typeof data.id === 'undefined') {
+                    return;
+                }
+
+                var id = String(data.id);
+                var card = cardIndex[id];
+                if (!card) {
+                    return;
+                }
+
+                var currency = (data.currency || card.getAttribute('data-campaign-currency') || 'CLP').toUpperCase();
+                var goal = toNumber(data.goal_amount);
+                var raised = toNumber(data.raised_amount);
+                var progress = Math.min(100, Math.max(0, toNumber(data.progress)));
+
+                var amountElement = card.querySelector('[data-campaign-amount]');
+                if (amountElement) {
+                    amountElement.textContent = formatCurrency(raised, currency) + ' de ' + formatCurrency(goal, currency);
+                }
+
+                var progressLabel = card.querySelector('[data-campaign-progress-label]');
+                if (progressLabel) {
+                    var formattedProgress = progress >= 10 ? progress.toFixed(0) : progress.toFixed(1);
+                    progressLabel.textContent = formattedProgress.replace(/\.0$/, '') + '%';
+                }
+
+                var progressBar = card.querySelector('[data-campaign-progress-bar]');
+                if (progressBar) {
+                    progressBar.style.width = Math.min(100, progress) + '%';
+                }
+            }
+
+            function fetchMetrics() {
+                fetch(endpoint, {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('request_failed');
+                        }
+                        return response.json();
+                    })
+                    .then(function (payload) {
+                        if (!payload || !Array.isArray(payload.data)) {
+                            return;
+                        }
+                        payload.data.forEach(applyMetrics);
+                    })
+                    .catch(function () {
+                        // silencioso: evitamos ruido en consola del panel
+                    });
+            }
+
+            fetchMetrics();
+            setInterval(fetchMetrics, 30000);
+        })();
+    </script>
 
     <script>
         document.addEventListener('click', function (event) {

@@ -12,15 +12,27 @@ class CampaignPresenter {
         $raised = (float)$raisedSource;
         $progress = $goal > 0 ? min(100, round(($raised / $goal) * 100, 2)) : 0.0;
 
+        $status = $row['status'] ?? '';
+        if (is_string($status)) {
+            $status = trim($status);
+        }
+
         $endDate = $row['end_date'] ?? null;
         $daysLeft = null;
         if (!empty($endDate)) {
             $timestamp = strtotime($endDate);
             if ($timestamp !== false) {
                 $daysLeft = max(0, (int)ceil(($timestamp - time()) / 86400));
+                if (($status === '' || $status === null) && $timestamp < time()) {
+                    $status = 'ended';
+                }
             }
         } elseif (isset($row['days_left'])) {
             $daysLeft = (int)$row['days_left'];
+        }
+
+        if ($status === '' || $status === null) {
+            $status = 'draft';
         }
 
         $ownerName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
@@ -36,7 +48,6 @@ class CampaignPresenter {
             $ownerName = 'Campañista';
         }
 
-        $status = $row['status'] ?? 'draft';
         $categoryName = $row['category_name'] ?? $row['category'] ?? 'Causa social';
         $categorySlug = $row['category_slug'] ?? null;
 
@@ -92,6 +103,7 @@ class CampaignPresenter {
             'goal_amount' => $goal,
             'raised_amount' => $raised,
             'progress' => $progress,
+            'currency' => $row['currency'] ?? 'CLP',
             'status' => $status,
             'start_date' => $row['start_date'] ?? null,
             'end_date' => $endDate,
@@ -117,6 +129,9 @@ class CampaignPresenter {
             'view_count' => $viewCount,
             'average_donation' => $averageDonation,
             'last_donation_at' => $row['last_donation_at'] ?? null,
+            'funded_at' => $row['funded_at'] ?? null,
+            'funding_notified_at' => $row['funding_notified_at'] ?? null,
+            'funding_celebrated_at' => $row['funding_celebrated_at'] ?? null,
             'visibility' => $row['visibility'] ?? null,
         ];
 
@@ -175,7 +190,7 @@ class CampaignPresenter {
             'published' => ['label' => 'Publicada', 'badge_class' => 'bg-emerald-100 text-emerald-700'],
             'active' => ['label' => 'Activa', 'badge_class' => 'bg-emerald-100 text-emerald-700'],
             'paused' => ['label' => 'Pausada', 'badge_class' => 'bg-orange-100 text-orange-700'],
-            'completed' => ['label' => 'Completada', 'badge_class' => 'bg-blue-100 text-blue-700'],
+            'completed' => ['label' => 'Finalizada', 'badge_class' => 'bg-blue-100 text-blue-700'],
             'cancelled' => ['label' => 'Cancelada', 'badge_class' => 'bg-red-100 text-red-700'],
             'archived' => ['label' => 'Archivada', 'badge_class' => 'bg-slate-100 text-slate-700'],
             'funded' => ['label' => 'Financiada', 'badge_class' => 'bg-blue-100 text-blue-700'],

@@ -14,6 +14,7 @@ $userName = $_SESSION['user_name'] ?? 'Usuario';
 $selectedId = $selectedNotification['id'] ?? null;
 $selectedMeta = $selectedNotification['meta'] ?? null;
 $selectedCtaUrl = is_array($selectedMeta) ? ($selectedMeta['cta_url'] ?? null) : null;
+$selectedCtaLabel = is_array($selectedMeta) ? ($selectedMeta['cta_label'] ?? 'Ver más detalles') : 'Ver más detalles';
 
 $breadcrumbs = [
     ['name' => 'Inicio', 'href' => Router::url('/')],
@@ -152,8 +153,9 @@ $notificationLink = static function (array $notification, array $pagination) {
                                 </div>
                                 <?php if (!empty($selectedCtaUrl)): ?>
                                     <a href="<?= htmlspecialchars($selectedCtaUrl) ?>"
-                                       class="inline-flex items-center text-sm font-semibold text-copihue-600 hover:text-copihue-700">
-                                        Ver más detalles
+                                       class="inline-flex items-center text-sm font-semibold text-copihue-600 hover:text-copihue-700"
+                                       target="_blank" rel="noopener noreferrer">
+                                        <?= htmlspecialchars($selectedCtaLabel) ?>
                                         <svg class="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                         </svg>

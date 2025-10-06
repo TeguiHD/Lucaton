@@ -17,6 +17,18 @@ $count_on_page = count($campaigns ?? []);
 $from_item = $totalCampaigns > 0 ? (($page - 1) * ($perPage ?? 9)) + 1 : 0;
 $to_item = $totalCampaigns > 0 ? min($totalCampaigns, $from_item + $count_on_page - 1) : 0;
 
+$all_statuses = $statuses ?? [];
+$status_placeholder = $all_statuses[''] ?? 'Todas las campañas';
+$status_options = $all_statuses;
+if (isset($status_options[''])) {
+    unset($status_options['']);
+}
+
+$status_filter_label = '';
+if ($status_filter !== '') {
+    $status_filter_label = $all_statuses[$status_filter] ?? ucfirst(str_replace('_', ' ', $status_filter));
+}
+
 $page_title = 'Campañas - Lucatón';
 $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyectos sociales, educativos y emprendimientos sustentables.';
 ?>
@@ -144,12 +156,8 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                                 'id' => 'status',
                                 'label' => 'Estado',
                                 'value' => $status_filter,
-                                'placeholder' => 'Todos los estados',
-                                'options' => [
-                                    'active' => 'Activa',
-                                    'completed' => 'Completada',
-                                    'paused' => 'Pausada'
-                                ],
+                                'placeholder' => $status_placeholder,
+                                'options' => $status_options,
                                 'wrapper_class' => 'mb-0',
                                 'label_class' => 'text-sm font-medium text-gray-700'
                             ]); ?>
@@ -231,7 +239,7 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                                     <?php endif; ?>
                                     <?php if (!empty($status_filter)): ?>
                                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                            Estado: <?= htmlspecialchars($status_filter) ?>
+                                            Estado: <?= htmlspecialchars($status_filter_label) ?>
                                         </span>
                                     <?php endif; ?>
                                 </div>

@@ -332,7 +332,7 @@ $ia_login_redirect = Router::url('login') . '?redirect=' . urlencode(Router::url
                         <h2 class="text-3xl font-bold text-marino-900">Resultados reales que cambiaron vidas</h2>
                         <p class="text-sm text-marino-600">Conoce campañas que alcanzaron su meta y cómo reportaron el impacto a la comunidad.</p>
                     </div>
-                    <a href="<?= Router::url('campanas', ['status' => 'completed']); ?>" class="text-sm font-semibold text-copihue-600 hover:text-copihue-700">Ver todas las historias →</a>
+                    <a href="<?= Router::url('campanas', ['status' => 'finalized']); ?>" class="text-sm font-semibold text-copihue-600 hover:text-copihue-700">Ver todas las historias →</a>
                 </div>
 
                 <div class="relative">
@@ -343,10 +343,21 @@ $ia_login_redirect = Router::url('login') . '?redirect=' . urlencode(Router::url
                     <div class="flex snap-x snap-mandatory gap-6 overflow-x-auto pb-2">
                         <?php if (!empty($success_stories)): ?>
                             <?php foreach ($success_stories as $story): ?>
+                                <?php
+                                    $currencyCode = strtoupper($story['currency'] ?? 'CLP');
+                                    $raised = (float)($story['raised_amount'] ?? 0);
+                                    $goal = (float)($story['goal_amount'] ?? 0);
+                                    $progress = (float)($story['progress'] ?? ($goal > 0 ? ($raised / $goal) * 100 : 0));
+                                    $formattedRaised = ($currencyCode === 'CLP' ? '$' : $currencyCode . ' ') . number_format($raised, 0, ',', '.');
+                                    $formattedGoal = ($currencyCode === 'CLP' ? '$' : $currencyCode . ' ') . number_format($goal, 0, ',', '.');
+                                    $progressLabel = number_format(min(100, $progress), 0);
+                                ?>
                                 <article class="min-w-[280px] snap-start rounded-3xl border border-neutral-100 bg-white shadow-soft transition duration-500 hover:-translate-y-2 hover:shadow-strong">
                                     <div class="relative h-48 overflow-hidden rounded-3xl rounded-b-none">
                                         <img src="<?= htmlspecialchars($story['image_url']); ?>" alt="<?= htmlspecialchars($story['title']); ?>" class="h-full w-full object-cover transition duration-700 hover:scale-105">
-                                        <span class="absolute top-4 left-4 inline-flex items-center gap-2 rounded-full bg-success-500 px-3 py-1 text-xs font-semibold text-white">Meta cumplida</span>
+                                        <span class="absolute top-4 left-4 inline-flex items-center gap-2 rounded-full bg-success-500 px-3 py-1 text-xs font-semibold text-white">
+                                            <?= $progressLabel ?>% de la meta
+                                        </span>
                                     </div>
                                     <div class="space-y-3 p-6">
                                         <h3 class="text-lg font-semibold text-marino-900 leading-tight line-clamp-2">
@@ -356,7 +367,7 @@ $ia_login_redirect = Router::url('login') . '?redirect=' . urlencode(Router::url
                                             <?= htmlspecialchars($story['excerpt']); ?>
                                         </p>
                                         <div class="text-sm font-semibold text-success-600">
-                                            $<?= number_format((int)$story['raised_amount'], 0, ',', '.'); ?> recaudados
+                                            <?= $formattedRaised ?> recaudados / <?= $formattedGoal ?> objetivo
                                         </div>
                                         <a href="<?= Router::url('campana/' . $story['slug']); ?>" class="inline-flex items-center gap-2 text-sm font-semibold text-copihue-600 hover:text-copihue-700">
                                             Leer más

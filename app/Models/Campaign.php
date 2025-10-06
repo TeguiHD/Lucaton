@@ -20,6 +20,10 @@ class Campaign {
                 'created_at' => $this->db->columnExists('campaigns', 'created_at'),
                 'updated_at' => $this->db->columnExists('campaigns', 'updated_at'),
                 'published_at' => $this->db->columnExists('campaigns', 'published_at'),
+                'end_date' => $this->db->columnExists('campaigns', 'end_date'),
+                'funded_at' => $this->db->columnExists('campaigns', 'funded_at'),
+                'funding_notified_at' => $this->db->columnExists('campaigns', 'funding_notified_at'),
+                'funding_celebrated_at' => $this->db->columnExists('campaigns', 'funding_celebrated_at'),
             ];
         }
 
@@ -377,10 +381,39 @@ class Campaign {
                 }
             }
 
+            if ($status === 'completed' && ($campaign['status'] ?? null) !== 'completed') {
+                $campaign['status'] = $status;
+
+                try {
+                    $stats = $this->getStats($id);
+                } catch (Throwable $statsException) {
+                    Logger::warning('No se pudieron obtener estadísticas actualizadas de la campaña finalizada', [
+                        'campaign_id' => $id,
+                        'error' => $statsException->getMessage()
+                    ]);
+                    $stats = [];
+                }
+
+                $this->dispatchCompletionMail($campaign, $stats);
+            }
+
             return true;
         } catch (Exception $e) {
             $this->db->rollback();
             throw $e;
+        }
+    }
+
+    private function dispatchCompletionMail(array $campaign, array $stats): void
+    {
+        try {
+            $mailer = new CampaignLifecycleMailer();
+            $mailer->campaignDeadlineReached($campaign, $stats);
+        } catch (Throwable $mailerException) {
+            Logger::warning('No se pudo preparar correo de campaña finalizada', [
+                'campaign_id' => $campaign['id'] ?? null,
+                'error' => $mailerException->getMessage()
+            ]);
         }
     }
 
@@ -462,6 +495,53 @@ class Campaign {
         return $row;
     }
 
+    public function markFundingMilestone(int $campaignId, array $options = []): void
+    {
+        $campaignId = (int)$campaignId;
+        if ($campaignId <= 0) {
+            return;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $updates = [];
+
+        if (!empty($options['mark_funded']) && $this->supportsColumn('funded_at')) {
+            $updates['funded_at'] = $options['funded_at'] ?? $now;
+        }
+
+        if (!empty($options['mark_notified']) && $this->supportsColumn('funding_notified_at')) {
+            $updates['funding_notified_at'] = $options['funding_notified_at'] ?? $now;
+        }
+
+        if (!empty($options['mark_celebrated']) && $this->supportsColumn('funding_celebrated_at')) {
+            $updates['funding_celebrated_at'] = $options['funding_celebrated_at'] ?? $now;
+        }
+
+        if (empty($updates)) {
+            return;
+        }
+
+        $setClauses = [];
+        $params = [':campaign_id' => $campaignId];
+
+        foreach ($updates as $column => $value) {
+            $placeholder = ':' . $column;
+            $setClauses[] = sprintf('%s = COALESCE(%s, %s)', $column, $column, $placeholder);
+            $params[$placeholder] = $value;
+        }
+
+        $sql = 'UPDATE campaigns SET ' . implode(', ', $setClauses) . ' WHERE id = :campaign_id';
+
+        try {
+            $this->db->query($sql, $params);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo actualizar el hito de financiamiento', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage()
+            ]);
+        }
+    }
+
     public function getStats(int $id): array {
         $campaign = $this->findById($id);
         if (!$campaign) {
@@ -477,7 +557,61 @@ class Campaign {
             'raised_amount' => $raised,
             'progress' => $progress,
             'donors' => (int)($campaign['donor_count'] ?? 0),
-            'average_donation' => (float)($campaign['average_donation'] ?? 0)
+            'average_donation' => (float)($campaign['average_donation'] ?? 0),
+            'funded_at' => $campaign['funded_at'] ?? null,
         ];
+    }
+
+    public function closeExpiredCampaigns(): int
+    {
+        if (!($this->supportsColumn('status') && $this->supportsColumn('end_date'))) {
+            return 0;
+        }
+
+        $today = date('Y-m-d');
+
+        try {
+            $expired = $this->db->fetchAll(
+                "SELECT id FROM campaigns 
+                 WHERE end_date IS NOT NULL 
+                   AND end_date < ? 
+                   AND (
+                        status IS NULL
+                        OR status = ''
+                        OR status IN ('published','under_review','paused')
+                   )",
+                [$today]
+            );
+        } catch (Exception $exception) {
+            Logger::error('Failed to fetch expired campaigns', [
+                'error' => $exception->getMessage()
+            ]);
+            return 0;
+        }
+
+        if (empty($expired)) {
+            return 0;
+        }
+
+        $closed = 0;
+
+        foreach ($expired as $row) {
+            $campaignId = (int)($row['id'] ?? 0);
+            if ($campaignId <= 0) {
+                continue;
+            }
+
+            try {
+                $this->changeStatus($campaignId, 'completed', null, 'Cierre automático por fecha límite');
+                $closed++;
+            } catch (Throwable $exception) {
+                Logger::error('Failed to close expired campaign', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
+        }
+
+        return $closed;
     }
 }

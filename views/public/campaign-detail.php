@@ -31,6 +31,27 @@ $recent_supporters = $recent_supporters ?? [];
 $galleryMedia = $galleryMedia ?? [];
 $campaignUpdates = $campaignUpdates ?? [];
 $creatorProfileData = $creatorProfileData ?? [];
+$canManageUpdates = $canManageUpdates ?? false;
+$updateFormErrors = $updateFormErrors ?? [];
+$rawUpdateFormOld = isset($updateFormOld) && is_array($updateFormOld) ? $updateFormOld : [];
+$updateFormOld = array_merge([
+    'title' => '',
+    'body' => '',
+    'media_urls' => []
+], $rawUpdateFormOld);
+$updateMediaUrls = $updateFormOld['media_urls'];
+if (!is_array($updateMediaUrls)) {
+    $updateMediaUrls = [];
+}
+$updateMediaUrls = array_map(static function ($value) {
+    return trim((string)$value);
+}, array_slice($updateMediaUrls, 0, 3));
+$updateMediaUrls = array_pad($updateMediaUrls, 3, '');
+$celebrationOverlay = $celebrationOverlay ?? null;
+$campaignIdentifier = (string)($campaign['slug'] ?? $campaign['id'] ?? '');
+$campaignUpdateAction = $campaignIdentifier !== ''
+    ? Router::url('campana/' . rawurlencode($campaignIdentifier) . '/actualizaciones')
+    : Router::url('campana/' . ($campaign['id'] ?? ''));
 
 $image_url = $campaignImageUrl
     ?? CampaignMediaUploadService::normalizePublicUrl($campaign['image_url'] ?? ($campaign['cover_image_url'] ?? null))
@@ -255,35 +276,131 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                     </section>
                 <?php endif; ?>
 
-                <section class="bg-white shadow-soft rounded-3xl p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold text-gray-900">Actualizaciones de la campaña</h2>
-                        <span class="inline-flex items-center gap-2 text-xs text-gray-500">
-                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6 2a1 1 0 011 1v1h6V3a1 1 0 112 0v1h1a2 2 0 012 2v2H3V6a2 2 0 012-2h1V3a1 1 0 011-1z" /><path d="M3 9h14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /></svg>
-                            Avance y transparencia
-                        </span>
+                <section id="actualizaciones" class="bg-white shadow-soft rounded-3xl p-6">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-900">Actualizaciones de la campaña</h2>
+                            <p class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6 2a1 1 0 011 1v1h6V3a1 1 0 112 0v1h1a2 2 0 012 2v2H3V6a2 2 0 012-2h1V3a1 1 0 011-1z" /><path d="M3 9h14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /></svg>
+                                Comparte avances y transparencia con tu comunidad.
+                            </p>
+                        </div>
+                        <?php if ($canManageUpdates): ?>
+                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                Eres el responsable de la campaña
+                            </span>
+                        <?php endif; ?>
                     </div>
+
+                    <?php if ($canManageUpdates): ?>
+                        <div class="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5" id="actualizaciones-form">
+                            <h3 class="text-sm font-semibold text-emerald-900">Publica una nueva actualización</h3>
+                            <p class="mt-1 text-xs text-emerald-800">Informa avances, comparte fotos o agradece a tu comunidad. Nos encargamos de notificar a tus seguidores.</p>
+
+                            <?php if (!empty($updateFormErrors)): ?>
+                                <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                                    <p class="text-sm font-semibold text-red-700">Revisa los siguientes puntos antes de publicar:</p>
+                                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-600">
+                                        <?php foreach ($updateFormErrors as $error): ?>
+                                            <li><?= htmlspecialchars($error) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
+                            <form method="POST" action="<?= htmlspecialchars($campaignUpdateAction) ?>" class="mt-4 space-y-4">
+                                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
+                                <div>
+                                    <label for="campaign-update-title" class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Título (opcional)</label>
+                                    <input
+                                        type="text"
+                                        name="title"
+                                        id="campaign-update-title"
+                                        maxlength="150"
+                                        value="<?= htmlspecialchars($updateFormOld['title']) ?>"
+                                        class="mt-1 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                        placeholder="Ej: Semana 3 · Ya superamos el 75%"
+                                    >
+                                </div>
+                                <div>
+                                    <label for="campaign-update-body" class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Mensaje para tu comunidad</label>
+                                    <textarea
+                                        name="body"
+                                        id="campaign-update-body"
+                                        rows="4"
+                                        maxlength="5000"
+                                        class="mt-1 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                        placeholder="Comparte avances, próximas actividades o agradece a quienes apoyan tu causa."><?= htmlspecialchars($updateFormOld['body']) ?></textarea>
+                                    <p class="mt-1 text-xs text-emerald-700">Consejo: Sé claro y agradece. Los enlaces se convierten automáticamente en hipervínculos.</p>
+                                </div>
+                                <div class="grid gap-3 sm:grid-cols-3">
+                                    <?php foreach ($updateMediaUrls as $mediaIndex => $mediaUrl): ?>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Enlace multimedia <?= $mediaIndex + 1 ?> (opcional)</label>
+                                            <input
+                                                type="url"
+                                                name="media_urls[]"
+                                                value="<?= htmlspecialchars($mediaUrl) ?>"
+                                                class="mt-1 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                                placeholder="https://..."
+                                            >
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <p class="text-xs text-emerald-700 flex items-center gap-2">
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v8m4-4H8" />
+                                        </svg>
+                                        Puedes agregar hasta tres enlaces de imágenes, videos o documentos públicos.
+                                    </p>
+                                    <button type="submit" class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                        Publicar actualización
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if (!empty($campaignUpdates)): ?>
                         <div class="space-y-6">
                             <?php foreach ($campaignUpdates as $index => $update): ?>
                                 <?php
                                 $updateId = $update['id'] ?? ('update-' . ($campaign['id'] ?? 'campaign') . '-' . $index);
                                 $updateHeartCount = (int)($update['heart_count'] ?? 0);
+                                $publishedAt = $update['published_at'] ?? $update['created_at'] ?? null;
                                 ?>
                                 <article class="rounded-2xl border border-gray-200 p-4 space-y-3">
-                                    <header class="flex items-center justify-between gap-4">
-                                        <h3 class="text-sm font-semibold text-gray-900"><?= htmlspecialchars($update['title'] ?? 'Actualización') ?></h3>
-                                        <?php if (!empty($update['published_at'])): ?>
-                                            <time datetime="<?= htmlspecialchars($update['published_at']) ?>" class="text-xs text-gray-500">
-                                                <?= date('d/m/Y H:i', strtotime($update['published_at'])) ?>
+                                    <header class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <h3 class="text-sm font-semibold text-gray-900"><?= htmlspecialchars($update['title'] ?? 'Actualización') ?></h3>
+                                            <?php if ($canManageUpdates && ($update['status'] ?? 'published') !== 'published'): ?>
+                                                <span class="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                    Estado: <?= htmlspecialchars(ucfirst($update['status'] ?? 'borrador')) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php if (!empty($publishedAt)): ?>
+                                            <time datetime="<?= htmlspecialchars($publishedAt) ?>" class="text-xs text-gray-500">
+                                                <?= date('d/m/Y H:i', strtotime($publishedAt)) ?>
                                             </time>
                                         <?php endif; ?>
                                     </header>
                                     <p class="text-sm text-gray-600 leading-relaxed"><?= nl2br(htmlspecialchars($update['body'] ?? '')) ?></p>
                                     <?php if (!empty($update['media'])): ?>
-                                        <div class="mt-2 grid grid-cols-2 gap-2">
+                                        <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                                             <?php foreach ($update['media'] as $mediaItem): ?>
-                                                <img src="<?= htmlspecialchars($mediaItem['url']) ?>" alt="Imagen de actualización" class="h-24 w-full rounded-lg object-cover">
+                                                <?php if (!empty($mediaItem['url'])): ?>
+                                                    <a href="<?= htmlspecialchars($mediaItem['url']) ?>" target="_blank" rel="noopener noreferrer" class="group relative block overflow-hidden rounded-xl border border-gray-200">
+                                                        <span class="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent opacity-0 transition group-hover:opacity-100"></span>
+                                                        <img src="<?= htmlspecialchars($mediaItem['url']) ?>" alt="Imagen de actualización" class="h-28 w-full object-cover transition group-hover:scale-105" loading="lazy">
+                                                        <?php if (!empty($mediaItem['caption'])): ?>
+                                                            <span class="absolute bottom-2 left-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
+                                                                <?= htmlspecialchars($mediaItem['caption']) ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </a>
+                                                <?php endif; ?>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php endif; ?>
@@ -310,6 +427,9 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                         <div class="rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
                             <p class="font-medium text-gray-700">Aún no hay publicaciones de avance.</p>
                             <p class="mt-1">Pronto verás hitos, fotografías y mensajes del equipo de la campaña.</p>
+                            <?php if ($canManageUpdates): ?>
+                                <p class="mt-4 text-xs text-gray-500">Comienza publicando un resumen de la situación actual para motivar a más personas a donar.</p>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
                 </section>
@@ -489,6 +609,13 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
             </aside>
         </div>
     </main>
+
+    <?php if (!empty($celebrationOverlay)): ?>
+        <?php
+        $overlayData = $celebrationOverlay;
+        include __DIR__ . '/../components/celebration-overlay.php';
+        ?>
+    <?php endif; ?>
 
     <div class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/80 px-4" data-gallery-lightbox aria-hidden="true" tabindex="-1">
         <button type="button" class="absolute inset-0 h-full w-full cursor-default" data-gallery-close tabindex="-1" aria-label="Cerrar galería"></button>

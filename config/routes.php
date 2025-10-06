@@ -46,11 +46,13 @@ $router->group(['middleware' => 'auth'], function($router) {
     $router->get('/notificaciones', 'NotificationController@history');
     $router->get('/api/notifications', 'NotificationController@index');
     $router->get('/api/notifications/summary', 'NotificationController@summary');
+    $router->get('/api/mis-campanas/resumen', 'UserController@campaignMetrics');
 
     $router->group(['middleware' => 'csrf'], function($router) {
         $router->post('/campana/crear', 'CampaignController@store');
         $router->post('/campana/{id}/editar', 'CampaignController@update');
         $router->post('/campana/{id}/apelar', 'CampaignController@appeal');
+        $router->post('/campana/{id}/actualizaciones', 'CampaignUpdateController@store');
         $router->post('/api/notifications/mark-read', 'NotificationController@markRead');
         $router->post('/api/notifications/delete', 'NotificationController@delete');
         $router->post('/api/ai/generate-text', 'AIController@generateText');

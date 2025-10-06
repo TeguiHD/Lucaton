@@ -55,12 +55,15 @@ class CampaignLifecycleMailer
             'requires_peer_review' => !empty($context['is_admin_owner']),
         ]);
 
-        $meta = [
-            'milestone' => $milestoneKey,
-            'campaign_id' => (int)$campaignId,
-            'event' => 'campaign_created',
-            'requires_peer_review' => !empty($context['is_admin_owner'])
-        ];
+        $meta = $this->buildOwnerNotificationMeta(
+            $campaign,
+            [
+                'event' => 'campaign_created',
+                'requires_peer_review' => !empty($context['is_admin_owner'])
+            ],
+            $this->buildCampaignManageUrl($campaign),
+            'Completar campaña'
+        );
 
         $this->recordOwnerNotification(
             $campaignId,
@@ -115,12 +118,15 @@ class CampaignLifecycleMailer
             'published_url' => $campaignUrl,
         ]);
 
-        $meta = [
-            'milestone' => $milestoneKey,
-            'campaign_id' => (int)$campaignId,
-            'event' => 'campaign_approved',
-            'slug' => $campaign['slug'] ?? null
-        ];
+        $meta = $this->buildOwnerNotificationMeta(
+            $campaign,
+            [
+                'event' => 'campaign_approved',
+                'slug' => $campaign['slug'] ?? null
+            ],
+            $campaignUrl,
+            'Ver campaña publicada'
+        );
 
         $this->recordOwnerNotification(
             $campaignId,
@@ -170,11 +176,12 @@ class CampaignLifecycleMailer
             'rejection_reason' => $reason
         ]);
 
-        $meta = [
-            'milestone' => $milestoneKey,
-            'campaign_id' => (int)$campaignId,
-            'event' => 'campaign_rejected'
-        ];
+        $meta = $this->buildOwnerNotificationMeta(
+            $campaign,
+            ['event' => 'campaign_rejected'],
+            $this->buildCampaignManageUrl($campaign),
+            'Revisar observaciones'
+        );
 
         $this->recordOwnerNotification(
             $campaignId,
@@ -228,14 +235,19 @@ class CampaignLifecycleMailer
             'stats' => $stats
         ]);
 
-        $meta = [
-            'milestone' => $milestoneKey,
-            'campaign_id' => $campaignId,
-            'event' => 'campaign_goal_reached',
-            'progress' => $progress,
-            'raised_amount' => $raised,
-            'goal_amount' => $goal
-        ];
+        $publicUrl = $this->buildCampaignUrl($campaign);
+
+        $meta = $this->buildOwnerNotificationMeta(
+            $campaign,
+            [
+                'event' => 'campaign_goal_reached',
+                'progress' => $progress,
+                'raised_amount' => $raised,
+                'goal_amount' => $goal
+            ],
+            $publicUrl,
+            'Ver campaña'
+        );
 
         $this->recordOwnerNotification(
             $campaignId,
@@ -247,10 +259,13 @@ class CampaignLifecycleMailer
             $meta
         );
 
+        $htmlBody = $this->buildGoalReachedHtml($campaign, $progress, $raised, $goal, $currency, $publicUrl);
+
         $payload = $this->buildMailPayload($owner, $campaign, $subject, $body, [
             'meta' => $meta,
             'ai_prompt' => $aiPrompt,
-            'progress' => $progress
+            'progress' => $progress,
+            'body_html' => $htmlBody
         ]);
 
         $this->dispatchMail($payload, $milestoneKey);
@@ -295,13 +310,16 @@ class CampaignLifecycleMailer
             'stats' => $stats
         ]);
 
-        $meta = [
-            'milestone' => $milestoneKey,
-            'campaign_id' => $campaignId,
-            'event' => 'campaign_near_goal',
-            'progress' => $progress,
-            'remaining_amount' => $remaining
-        ];
+        $meta = $this->buildOwnerNotificationMeta(
+            $campaign,
+            [
+                'event' => 'campaign_near_goal',
+                'progress' => $progress,
+                'remaining_amount' => $remaining
+            ],
+            $this->buildCampaignUrl($campaign),
+            'Ver campaña'
+        );
 
         $this->recordOwnerNotification(
             $campaignId,
@@ -312,6 +330,102 @@ class CampaignLifecycleMailer
             'info',
             $meta
         );
+
+        $payload = $this->buildMailPayload($owner, $campaign, $subject, $body, [
+            'meta' => $meta,
+            'ai_prompt' => $aiPrompt,
+            'progress' => $progress
+        ]);
+
+        $this->dispatchMail($payload, $milestoneKey);
+    }
+
+    public function campaignDeadlineReached(array $campaign, array $stats): void
+    {
+        $campaignId = (int)($campaign['id'] ?? 0);
+        if ($campaignId <= 0) {
+            return;
+        }
+
+        $owner = $this->resolveOwner($campaign);
+        if (!$owner || empty($owner['email'])) {
+            return;
+        }
+
+        $milestoneKey = self::OWNER_MILESTONE_PREFIX . 'campaign_deadline_reached';
+        if ($this->hasNotificationRecord($campaignId, $milestoneKey)) {
+            return;
+        }
+
+        $goal = (float)($stats['goal_amount'] ?? ($campaign['goal_amount'] ?? 0.0));
+        $raised = (float)($stats['raised_amount'] ?? ($campaign['raised_amount'] ?? $campaign['current_amount'] ?? 0.0));
+        $progress = (float)($stats['progress'] ?? ($goal > 0 ? min(100.0, round(($raised / max($goal, 1)) * 100, 1)) : 0.0));
+        $currency = $campaign['currency'] ?? 'CLP';
+
+        if (!class_exists('CampaignPresenter') && defined('ROOT_PATH')) {
+            $presenterPath = ROOT_PATH . '/app/Services/CampaignPresenter.php';
+            if (file_exists($presenterPath)) {
+                require_once $presenterPath;
+            }
+        }
+
+        $status = strtolower((string)($campaign['status'] ?? 'completed'));
+        $statusLabel = class_exists('CampaignPresenter')
+            ? CampaignPresenter::statusLabel($status)
+            : ucfirst($status);
+
+        $endDate = $campaign['end_date'] ?? null;
+        $endDateLabel = $endDate ? date('d/m/Y', strtotime($endDate)) : 'hoy';
+
+        $goalLabel = $this->formatCurrency($goal, $currency);
+        $raisedLabel = $this->formatCurrency($raised, $currency);
+
+        $progressLine = $progress >= 100.0
+            ? sprintf('¡Meta alcanzada! Cerraste con %s, superando el objetivo inicial de %s.', $raisedLabel, $goalLabel)
+            : sprintf('Recaudaste %s de los %s propuestos (%.1f%% del objetivo).', $raisedLabel, $goalLabel, $progress);
+
+        $body = $this->buildBody([
+            sprintf('Hola %s,', $this->formatUserName($owner)),
+            sprintf('La campaña "%s" finalizó el %s.', $campaign['title'] ?? 'tu campaña', $endDateLabel),
+            $progressLine,
+            sprintf('Estado final registrado: %s.', $statusLabel),
+            'Desde tu panel puedes compartir un cierre con la comunidad y detallar los próximos pasos para los aportantes.'
+        ]);
+
+        $aiPrompt = $this->buildAiPrompt('campaign_deadline_reached', $campaign, [
+            'progress' => $progress,
+            'raised_amount' => $raised,
+            'goal_amount' => $goal,
+            'end_date' => $endDateLabel,
+            'status_label' => $statusLabel
+        ]);
+
+        $meta = $this->buildOwnerNotificationMeta(
+            $campaign,
+            [
+                'event' => 'campaign_deadline_reached',
+                'progress' => $progress,
+                'raised_amount' => $raised,
+                'goal_amount' => $goal,
+                'status' => $status,
+                'status_label' => $statusLabel,
+                'closed_at' => $endDate
+            ],
+            $this->buildCampaignUrl($campaign),
+            'Ver campaña finalizada'
+        );
+
+        $this->recordOwnerNotification(
+            $campaignId,
+            $milestoneKey,
+            (int)($owner['id'] ?? 0),
+            'Campaña finalizada',
+            'Tu campaña alcanzó la fecha límite. Revisa el panel para compartir un mensaje de cierre y próximos pasos.',
+            'info',
+            $meta
+        );
+
+        $subject = sprintf('"%s" llegó a su plazo final', $campaign['title'] ?? 'Tu campaña');
 
         $payload = $this->buildMailPayload($owner, $campaign, $subject, $body, [
             'meta' => $meta,
@@ -361,13 +475,16 @@ class CampaignLifecycleMailer
                 'stats' => $stats
             ]);
 
-            $meta = [
-                'milestone' => $milestoneKey,
-                'campaign_id' => $campaignId,
-                'event' => 'campaign_progress',
-                'progress' => $progress,
-                'threshold' => $threshold
-            ];
+            $meta = $this->buildOwnerNotificationMeta(
+                $campaign,
+                [
+                    'event' => 'campaign_progress',
+                    'progress' => $progress,
+                    'threshold' => $threshold
+                ],
+                $this->buildCampaignUrl($campaign),
+                'Ver campaña'
+            );
 
             $this->recordOwnerNotification(
                 $campaignId,
@@ -468,6 +585,105 @@ class CampaignLifecycleMailer
         }
     }
 
+    private function buildOwnerNotificationMeta(array $campaign, array $extra = [], ?string $ctaUrl = null, ?string $ctaLabel = null): array
+    {
+        $meta = array_merge([
+            'campaign_id' => (int)($campaign['id'] ?? 0),
+            'campaign_slug' => $campaign['slug'] ?? null,
+        ], $extra);
+
+        $publicUrl = $this->buildCampaignUrl($campaign);
+        if ($publicUrl) {
+            $meta['campaign_url'] = $publicUrl;
+        }
+
+        $manageUrl = $this->buildCampaignManageUrl($campaign);
+        if ($manageUrl) {
+            $meta['manage_url'] = $manageUrl;
+        }
+
+        if ($ctaUrl === null) {
+            $ctaUrl = $publicUrl;
+        }
+
+        if ($ctaUrl) {
+            $meta['cta_url'] = $ctaUrl;
+            $meta['cta_label'] = $ctaLabel ?? 'Ver campaña';
+        }
+
+        return $meta;
+    }
+
+    private function buildGoalReachedHtml(array $campaign, float $progress, float $raised, float $goal, string $currency, ?string $publicUrl): string
+    {
+        $campaignTitle = htmlspecialchars($campaign['title'] ?? 'Tu campaña', ENT_QUOTES, 'UTF-8');
+        $progressLabel = number_format(min(100, $progress), 1);
+        $raisedLabel = $this->formatCurrency($raised, $currency);
+        $goalLabel = $this->formatCurrency($goal, $currency);
+        $ctaSection = '';
+
+        if ($publicUrl) {
+            $safeUrl = htmlspecialchars($publicUrl, ENT_QUOTES, 'UTF-8');
+            $ctaSection = <<<HTML
+                <div style="margin-top:24px;text-align:center;">
+                    <a href="{$safeUrl}" style="display:inline-block;padding:12px 24px;background-color:#0f766e;color:#ffffff;font-weight:600;border-radius:999px;text-decoration:none;">Ver campaña</a>
+                </div>
+            HTML;
+        }
+
+        return <<<HTML
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Celebración de meta alcanzada</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;padding:32px 0;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color:#ffffff;border-radius:24px;padding:32px;box-shadow:0 12px 32px rgba(15,118,110,0.15);">
+                    <tr>
+                        <td style="text-align:center;">
+                            <p style="margin:0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">Meta alcanzada</p>
+                            <h1 style="margin:16px 0 12px;font-size:26px;font-weight:800;color:#0f172a;">¡Felicitaciones, {$campaignTitle} logró su objetivo!</h1>
+                            <p style="margin:0;font-size:16px;line-height:24px;color:#334155;">La campaña concluyó con un avance del <strong>{$progressLabel}%</strong>. Agradece a tu comunidad y comparte los próximos pasos.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:24px 0;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,#0f766e,#0d9488);border-radius:20px;padding:24px;color:#ffffff;">
+                                <tr>
+                                    <td style="font-size:15px;font-weight:600;">Total recaudado</td>
+                                    <td style="font-size:15px;text-align:right;">{$raisedLabel}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-size:13px;color:rgba(248,250,252,0.85);padding-top:8px;">Meta original</td>
+                                    <td style="font-size:13px;color:rgba(248,250,252,0.85);padding-top:8px;text-align:right;">{$goalLabel}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-size:14px;line-height:22px;color:#475569;">
+                            <p style="margin:0 0 12px;">Te recomendamos compartir un mensaje de cierre, agradecer a los donantes y contar cómo se ejecutará la próxima etapa.</p>
+                            <p style="margin:0;">Desde el panel puedes subir comprobantes y mantener informada a tu comunidad.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            {$ctaSection}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+HTML;
+    }
+
     private function buildMailPayload(array $recipient, array $campaign, string $subject, string $body, array $context): array
     {
         $payload = [
@@ -504,6 +720,10 @@ class CampaignLifecycleMailer
 
         if (!empty($context['published_url'])) {
             $payload['context']['campaign']['public_url'] = $context['published_url'];
+        }
+
+        if (!empty($context['body_html'])) {
+            $payload['body_html'] = (string)$context['body_html'];
         }
 
         return $payload;
@@ -599,6 +819,16 @@ class CampaignLifecycleMailer
                     $title,
                     $campaignId,
                     $threshold
+                );
+            case 'campaign_deadline_reached':
+                $statusLabel = $context['status_label'] ?? 'Finalizada';
+                return sprintf(
+                    'Redacta un mensaje de cierre para la campaña "%s" (ID %d) que explique que finalizó el %s con un estado "%s" y %.1f%% de avance. Sugiere también dos follow-ups para informar a los aportantes.',
+                    $title,
+                    $campaignId,
+                    $context['end_date'] ?? 'la fecha límite',
+                    $statusLabel,
+                    $progress ?? 0.0
                 );
             default:
                 return sprintf(
@@ -700,5 +930,20 @@ class CampaignLifecycleMailer
         }
 
         return null;
+    }
+
+    private function buildCampaignManageUrl(array $campaign): ?string
+    {
+        $base = defined('APP_URL') ? rtrim(APP_URL, '/') : '';
+        if ($base === '') {
+            return null;
+        }
+
+        $id = $campaign['id'] ?? null;
+        if (!$id) {
+            return null;
+        }
+
+        return $base . '/campana/' . $id . '/editar';
     }
 }
