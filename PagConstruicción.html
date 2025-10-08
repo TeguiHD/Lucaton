@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lucatón - Plataforma de Crowdfunding Social con IA | UBO</title>
+  <meta name="description" content="Plataforma de crowdfunding social en desarrollo con asistencia de inteligencia artificial para mitigar la brecha digital en Chile. Proyecto de tesis que combina propósito social y tecnología robusta." />
+
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e'
+            },
+            ai: {
+              50: '#fdf4ff',
+              100: '#fae8ff',
+              200: '#f5d0fe',
+              300: '#f0abfc',
+              400: '#e879f9',
+              500: '#d946ef',
+              600: '#c026d3',
+              700: '#a21caf',
+              800: '#86198f',
+              900: '#701a75'
+            }
+          },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'gradient': 'gradient 15s ease infinite',
+            'fadeInUp': 'fadeInUp 0.8s ease-out forwards',
+            'fadeInLeft': 'fadeInLeft 0.8s ease-out forwards',
+            'fadeInRight': 'fadeInRight 0.8s ease-out forwards',
+            'slideInDown': 'slideInDown 0.6s ease-out forwards',
+            'zoomIn': 'zoomIn 0.6s ease-out forwards'
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-20px)' }
+            },
+            gradient: {
+              '0%, 100%': { 'background-position': '0% 50%' },
+              '50%': { 'background-position': '100% 50%' }
+            },
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(30px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            },
+            fadeInLeft: {
+              '0%': { opacity: '0', transform: 'translateX(-30px)' },
+              '100%': { opacity: '1', transform: 'translateX(0)' }
+            },
+            fadeInRight: {
+              '0%': { opacity: '0', transform: 'translateX(30px)' },
+              '100%': { opacity: '1', transform: 'translateX(0)' }
+            },
+            slideInDown: {
+              '0%': { opacity: '0', transform: 'translateY(-50px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            },
+            zoomIn: {
+              '0%': { opacity: '0', transform: 'scale(0.8)' },
+              '100%': { opacity: '1', transform: 'scale(1)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Iconos (Font Awesome por CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- Favicon UBO -->
+  <link rel="icon" type="image/png" href="https://www.ubo.cl/wp-content/uploads/ico_120x120.png" />
+
+  <style>
+    .gradient-bg {
+      background: linear-gradient(-45deg, #0c4a6e, #075985, #0369a1, #701a75, #86198f);
+      background-size: 400% 400%;
+      animation: gradient 15s ease infinite;
+    }
+    
+    .glass-effect {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    
+    .tech-pattern {
+      background-image: 
+        radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 1px, transparent 1px),
+        radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+    
+    /* Animaciones de entrada */
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .animate-on-scroll.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    /* Efectos hover elegantes */
+    .hover-lift {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .hover-lift:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+    }
+    
+    .hover-glow {
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .hover-glow::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+      transition: left 0.6s;
+    }
+    
+    .hover-glow:hover::before {
+      left: 100%;
+    }
+    
+    /* Botones elegantes */
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+      transition: left 0.6s;
+    }
+    
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+    }
+    
+    /* Tipografía institucional */
+    .institutional-title {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+    
+    .institutional-subtitle {
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      line-height: 1.4;
+    }
+    
+    .institutional-text {
+      line-height: 1.6;
+      letter-spacing: 0.005em;
+    }
+    
+    /* Animaciones escalonadas */
+    .stagger-1 { animation-delay: 0.1s; }
+    .stagger-2 { animation-delay: 0.2s; }
+    .stagger-3 { animation-delay: 0.3s; }
+    .stagger-4 { animation-delay: 0.4s; }
+    .stagger-5 { animation-delay: 0.5s; }
+    .stagger-6 { animation-delay: 0.6s; }
+    
+    /* Canvas de partículas */
+    #particles-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      pointer-events: none;
+    }
+    
+    /* Diseño Mobile-First Optimizado */
+     @media (max-width: 768px) {
+       /* Espaciado compacto y eficiente */
+       .py-24 {
+         padding-top: 0.75rem;
+         padding-bottom: 0.75rem;
+       }
+       
+       .py-20 {
+         padding-top: 0.5rem;
+         padding-bottom: 0.5rem;
+       }
+       
+       .mb-20 {
+         margin-bottom: 1rem;
+       }
+       
+       .mb-12 {
+         margin-bottom: 0.75rem;
+       }
+       
+       .mb-10 {
+         margin-bottom: 0.75rem;
+       }
+       
+       .mb-8 {
+         margin-bottom: 0.5rem;
+       }
+       
+       .mb-6 {
+         margin-bottom: 0.5rem;
+       }
+       
+       .gap-12 {
+         gap: 1rem;
+       }
+       
+       .gap-8 {
+         gap: 0.75rem;
+       }
+       
+       .gap-4 {
+         gap: 0.5rem;
+       }
+       
+       /* Tipografía optimizada para móvil */
+       .text-4xl {
+         font-size: 1.75rem;
+         line-height: 2rem;
+       }
+       
+       .text-5xl {
+         font-size: 2rem;
+         line-height: 2.25rem;
+       }
+       
+       .text-6xl {
+         font-size: 2.25rem;
+         line-height: 2.5rem;
+       }
+       
+       .text-xl {
+         font-size: 1rem;
+         line-height: 1.4rem;
+       }
+       
+       .text-lg {
+         font-size: 0.95rem;
+         line-height: 1.3rem;
+       }
+       
+       /* Componentes compactos */
+       .glass-effect {
+         padding: 0.5rem;
+       }
+       
+       .min-h-screen {
+         min-height: auto;
+         max-height: none;
+       }
+       
+       /* Header compacto */
+       .header-mobile {
+         padding: 0.25rem 0;
+       }
+       
+       /* Hero section optimizado */
+       .hero-mobile {
+         padding-top: 0.5rem;
+         padding-bottom: 0.5rem;
+       }
+       
+       /* Grid responsivo mejorado */
+       .grid-mobile-optimized {
+         grid-template-columns: 1fr 1fr;
+         gap: 0.25rem;
+       }
+       
+       /* Grid compacto para elementos tecnológicos */
+       .tech-grid-mobile {
+         grid-template-columns: repeat(2, 1fr);
+         gap: 0.25rem;
+       }
+       
+       /* Elementos tecnológicos más pequeños */
+       .tech-item-mobile {
+         padding: 0.5rem;
+         min-height: 60px;
+       }
+       
+       .tech-item-mobile i {
+         font-size: 1rem !important;
+         margin-bottom: 0.25rem !important;
+       }
+       
+       .tech-item-mobile .tech-title {
+         font-size: 0.7rem;
+         line-height: 1;
+         margin-bottom: 0.125rem;
+       }
+       
+       .tech-item-mobile .tech-subtitle {
+         font-size: 0.6rem;
+         line-height: 1;
+       }
+       
+       /* Botones compactos */
+       .btn-mobile {
+         padding: 0.75rem 1rem;
+         font-size: 0.875rem;
+       }
+       
+       /* Cards más eficientes */
+       .card-mobile {
+         padding: 1rem;
+         margin-bottom: 0.75rem;
+       }
+       
+       /* Progreso compacto */
+       .progress-mobile {
+         padding: 1rem;
+       }
+     }
+    
+    /* Animaciones de líneas conectoras */
+    .connection-line {
+      position: absolute;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.6), rgba(147, 51, 234, 0.6));
+      height: 1px;
+      transform-origin: left center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .connection-line.active {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-white overflow-x-hidden">
+  <!-- Canvas de partículas de fondo -->
+  <canvas id="particles-canvas"></canvas>
+  
+  <!-- Header institucional optimizado móvil -->
+  <header class="relative z-50 animate-slideInDown">
+    <div class="glass-effect header-mobile md:py-4">
+      <div class="mx-auto max-w-7xl px-3 md:px-4 py-2 md:py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 md:gap-4">
+            <img src="https://www.ubo.cl/wp-content/uploads/logo_ubo_SC.webp" alt="UBO" class="h-8 md:h-10 w-auto bg-white rounded-sm p-1">
+            <div class="block">
+              <div class="text-sm md:text-lg font-bold institutional-title">Lucatón</div>
+            <div class="text-xs md:text-sm text-gray-300 institutional-subtitle hidden sm:block">Crowdfunding Social</div>
+            </div>
+          </div>
+          <nav class="flex items-center gap-1 md:gap-4">
+            <a class="flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl btn-primary text-white btn-mobile" href="https://www.ubo.cl" target="_blank" rel="noopener">
+              <i class="fa-solid fa-university text-xs md:text-sm"></i>
+              <span class="text-xs md:text-sm">Sitio Oficial</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative h-auto py-4 md:py-8 flex items-center">
+    <!-- Fondo animado -->
+    <div class="absolute inset-0 gradient-bg tech-pattern"></div>
+    
+    <!-- Elementos flotantes decorativos -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute top-20 left-10 w-20 h-20 bg-ai-500/20 rounded-full blur-xl animate-float"></div>
+      <div class="absolute top-40 right-20 w-32 h-32 bg-brand-400/20 rounded-full blur-xl animate-float" style="animation-delay: -2s;"></div>
+      <div class="absolute bottom-40 left-20 w-24 h-24 bg-ai-400/20 rounded-full blur-xl animate-float" style="animation-delay: -4s;"></div>
+    </div>
+
+    <div class="relative z-10 mx-auto max-w-7xl px-3 md:px-4 py-1 md:py-4 hero-mobile">
+      <div class="grid lg:grid-cols-2 gap-4 md:gap-12 items-center">
+        <!-- Contenido principal -->
+        <div class="text-center lg:text-left">
+          <!-- Badge institucional compacto -->
+          <div class="inline-flex items-center gap-2 md:gap-3 glass-effect rounded-full px-3 md:px-6 py-1 md:py-2 text-xs md:text-sm mb-2 md:mb-4 animate-fadeInUp stagger-1">
+            <div class="w-2 md:w-3 h-2 md:h-3 bg-blue-400 rounded-full animate-pulse"></div>
+            <span class="font-medium institutional-text">En Desarrollo</span>
+          </div>
+          
+          <!-- Título principal optimizado -->
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl institutional-title mb-2 md:mb-4 animate-fadeInUp stagger-2">
+            <span class="bg-gradient-to-r from-blue-400 via-blue-300 to-purple-400 bg-clip-text text-transparent">
+              Lucatón
+            </span>
+            <br class="block">
+            <span class="text-lg md:text-xl lg:text-2xl text-gray-300">Crowdfunding Social con IA</span>
+          </h1>
+          
+          <!-- Descripción compacta -->
+          <p class="text-sm md:text-lg text-gray-300 mb-2 md:mb-4 max-w-2xl animate-fadeInUp stagger-3 institutional-text">
+            Plataforma de crowdfunding social con asistencia de inteligencia artificial para mitigar la brecha digital y facilitar la creación de campañas de impacto social.
+          </p>
+          
+          <!-- Botones compactos -->
+          <div class="flex flex-col sm:flex-row gap-2 md:gap-4 mb-2 md:mb-4 animate-fadeInUp stagger-4">
+            <a href="#" onclick="alert('Plataforma en desarrollo - Próximamente disponible')" 
+               class="inline-flex items-center justify-center gap-2 md:gap-3 btn-primary px-4 md:px-8 py-3 md:py-4 rounded-lg md:rounded-xl font-semibold text-white hover-lift btn-mobile">
+              <i class="fa-solid fa-heart text-sm"></i>
+              <span class="text-sm md:text-base">Crear Campaña</span>
+            </a>
+            <a href="#capacidades" 
+               class="inline-flex items-center justify-center gap-2 md:gap-3 glass-effect hover:bg-white/10 px-4 md:px-8 py-3 md:py-4 rounded-lg md:rounded-xl font-semibold transition-all duration-300 hover-lift btn-mobile">
+              <i class="fa-solid fa-info-circle text-sm"></i>
+              <span class="text-sm md:text-base">Conocer Más</span>
+            </a>
+          </div>
+          
+
+        </div>
+        
+        <!-- Panel tecnológico optimizado -->
+        <div class="relative animate-fadeInRight stagger-3 mt-4 lg:mt-0">
+          <!-- Contenedor principal compacto -->
+          <div class="glass-effect rounded-xl md:rounded-3xl p-4 md:p-10 hover-lift card-mobile">
+            <!-- Grid de características optimizado -->
+            <div class="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 tech-grid-mobile md:grid-mobile-optimized">
+              <div class="glass-effect rounded-lg md:rounded-xl p-2 md:p-4 text-center hover:bg-white/8 transition-all duration-300 animate-on-scroll hover-lift tech-item-mobile md:p-4">
+                <i class="fa-solid fa-heart text-lg md:text-2xl lg:text-3xl text-blue-400 mb-1 md:mb-3"></i>
+                <div class="text-xs md:text-sm font-semibold mb-1 institutional-subtitle break-words tech-title md:text-sm">Crowdfunding</div>
+                <div class="text-xs text-gray-400 institutional-text break-words hidden md:block tech-subtitle">Social</div>
+              </div>
+              <div class="glass-effect rounded-lg md:rounded-xl p-2 md:p-4 text-center hover:bg-white/8 transition-all duration-300 animate-on-scroll hover-lift tech-item-mobile md:p-4">
+                <i class="fa-solid fa-brain text-lg md:text-2xl lg:text-3xl text-purple-400 mb-1 md:mb-3"></i>
+                <div class="text-xs md:text-sm font-semibold mb-1 institutional-subtitle break-words tech-title md:text-sm">IA Asistida</div>
+                <div class="text-xs text-gray-400 institutional-text break-words hidden md:block tech-subtitle">Contenido</div>
+              </div>
+              <div class="glass-effect rounded-lg md:rounded-xl p-2 md:p-4 text-center hover:bg-white/8 transition-all duration-300 animate-on-scroll hover-lift tech-item-mobile md:p-4">
+                <i class="fa-solid fa-users text-lg md:text-2xl lg:text-3xl text-green-400 mb-1 md:mb-3"></i>
+                <div class="text-xs md:text-sm font-semibold mb-1 institutional-subtitle break-words tech-title md:text-sm">Comunidad</div>
+                <div class="text-xs text-gray-400 institutional-text break-words hidden md:block tech-subtitle">Impacto</div>
+              </div>
+              <div class="glass-effect rounded-lg md:rounded-xl p-2 md:p-4 text-center hover:bg-white/8 transition-all duration-300 animate-on-scroll hover-lift tech-item-mobile md:p-4">
+                <i class="fa-solid fa-shield-alt text-lg md:text-2xl lg:text-3xl text-cyan-400 mb-1 md:mb-3"></i>
+                <div class="text-xs md:text-sm font-semibold mb-1 institutional-subtitle break-words tech-title md:text-sm">Transparencia</div>
+                <div class="text-xs text-gray-400 institutional-text break-words hidden md:block tech-subtitle">Confianza</div>
+              </div>
+            </div>
+            
+            <!-- Progreso del proyecto integrado -->
+            <div class="border-t border-gray-600/30 pt-3 md:pt-4 mt-3 md:mt-4">
+              <div class="flex items-center justify-between mb-2 md:mb-3">
+                <span class="text-xs md:text-sm font-medium institutional-subtitle">Estado del Proyecto</span>
+                <span class="text-sm md:text-base font-bold text-blue-400">75%</span>
+              </div>
+              <div class="bg-gray-700 rounded-lg h-1.5 md:h-2 mb-2 md:mb-3 overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-blue-500 via-blue-400 to-purple-500 rounded-lg transition-all duration-1000 ease-out" style="width: 75%"></div>
+              </div>
+              <p class="text-xs text-gray-400 institutional-text mb-3 md:mb-4">Plataforma de crowdfunding en desarrollo</p>
+            </div>
+            
+            <!-- Indicadores compactos -->
+            <div class="space-y-2 md:space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs md:text-sm institutional-text">Modelos NLP</span>
+                <div class="flex items-center gap-1 md:gap-2">
+                  <div class="w-1.5 md:w-2 h-1.5 md:h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                  <span class="text-xs text-orange-500">API Pendiente</span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs md:text-sm institutional-text">Agentes IA</span>
+                <div class="flex items-center gap-1 md:gap-2">
+                  <div class="w-1.5 md:w-2 h-1.5 md:h-2 bg-gray-500 rounded-full"></div>
+                  <span class="text-xs text-gray-500">Sin Iniciar</span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs md:text-sm institutional-text">Base de Datos</span>
+                <div class="flex items-center gap-1 md:gap-2">
+                  <div class="w-1.5 md:w-2 h-1.5 md:h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span class="text-xs text-yellow-500">Planificando</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Elementos decorativos -->
+          <div class="absolute -top-1 md:-top-2 -right-1 md:-right-2 w-2 md:w-4 h-2 md:h-4 bg-blue-500 rounded-full opacity-30"></div>
+          <div class="absolute -bottom-1 md:-bottom-2 -left-1 md:-left-2 w-1.5 md:w-3 h-1.5 md:h-3 bg-purple-500 rounded-full opacity-30"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección de capacidades de la plataforma -->
+  <section id="capacidades" class="py-3 md:py-24 relative">
+    <div class="container mx-auto px-3 md:px-6">
+      <!-- Título compacto -->
+      <div class="text-center mb-2 md:mb-12">
+        <h2 class="text-xl md:text-3xl lg:text-4xl institutional-title mb-2 md:mb-6 animate-on-scroll">
+          Capacidades de la
+          <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            Plataforma
+          </span>
+        </h2>
+        <p class="text-xs md:text-lg text-gray-300 max-w-3xl mx-auto institutional-text animate-on-scroll">
+          Tecnologías avanzadas para conectar creadores y colaboradores en proyectos de impacto social
+        </p>
+      </div>
+      
+      <!-- Grid optimizado -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-8">
+        <!-- Crowdfunding Social -->
+        <div class="glass-effect rounded-xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-3 md:mb-6">
+            <div class="w-8 h-8 md:w-16 md:h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-heart text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-sm md:text-xl font-bold institutional-subtitle">Crowdfunding Social</h3>
+          </div>
+          <p class="text-gray-300 mb-3 md:mb-6 institutional-text text-xs md:text-base">
+            Plataforma especializada en proyectos sociales, educativos, de salud, ambientales y de ayuda comunitaria.
+          </p>
+          <div class="flex items-center gap-2 text-xs md:text-sm text-blue-400">
+            <i class="fa-solid fa-check-circle"></i>
+            <span class="institutional-text">Gestión integral de campañas</span>
+          </div>
+        </div>
+        
+        <!-- Asistencia IA -->
+        <div class="glass-effect rounded-xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-3 md:mb-6">
+            <div class="w-8 h-8 md:w-16 md:h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-brain text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-sm md:text-xl font-bold institutional-subtitle">Asistencia IA</h3>
+          </div>
+          <p class="text-gray-300 mb-3 md:mb-6 institutional-text text-xs md:text-base">
+            Inteligencia artificial para mitigar la brecha digital y mejorar la experiencia del usuario.
+          </p>
+          <div class="flex items-center gap-2 text-xs md:text-sm text-purple-400">
+            <i class="fa-solid fa-check-circle"></i>
+            <span class="institutional-text">Generación automática de contenido</span>
+          </div>
+        </div>
+        
+        <!-- Seguridad y Transparencia -->
+        <div class="glass-effect rounded-xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-3 md:mb-6">
+            <div class="w-8 h-8 md:w-16 md:h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-shield-halved text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-sm md:text-xl font-bold institutional-subtitle">Seguridad y Transparencia</h3>
+          </div>
+          <p class="text-gray-300 mb-3 md:mb-6 institutional-text text-xs md:text-base">
+            Protección robusta de datos y transparencia en todas las transacciones financieras.
+          </p>
+          <div class="flex items-center gap-2 text-xs md:text-sm text-green-400">
+            <i class="fa-solid fa-check-circle"></i>
+            <span class="institutional-text">Transacciones seguras y transparentes</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección de servicios institucionales -->
+  <section id="servicios" class="py-3 md:py-24 my-4 md:my-8 relative">
+    <div class="container mx-auto px-3 md:px-6">
+      <!-- Título de sección institucional -->
+      <div class="text-center mb-3 md:mb-20">
+        <h2 class="text-xl md:text-3xl sm:text-4xl institutional-title mb-2 md:mb-6 animate-on-scroll">
+          Servicios de la
+          <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            Plataforma
+          </span>
+        </h2>
+        <p class="text-xs md:text-lg text-gray-300 max-w-3xl mx-auto institutional-text animate-on-scroll">
+          Herramientas y recursos para maximizar el impacto de tus proyectos sociales
+        </p>
+      </div>
+      
+      <!-- Grid de servicios institucionales -->
+      <div class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-8">
+        <!-- Aula Virtual -->
+        <a href="https://aulavirtual.ubo.cl" target="_blank" rel="noopener" 
+           class="glass-effect rounded-xl md:rounded-2xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-2 md:mb-6">
+            <div class="w-8 h-8 md:w-14 md:h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-graduation-cap text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-xs md:text-lg font-bold institutional-subtitle">Aula Virtual</h3>
+          </div>
+          <p class="text-gray-300 text-xs mb-2 md:mb-6 institutional-text">
+            Plataforma educativa digital con cursos, materiales académicos y herramientas de aprendizaje.
+          </p>
+          <div class="flex items-center gap-1 md:gap-2 text-xs md:text-sm text-blue-400">
+            <span class="institutional-text">Acceder al Campus Virtual</span>
+            <i class="fa-solid fa-external-link-alt group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </a>
+        
+        <!-- Portal Institucional -->
+        <a href="https://intranet.ubo.cl" target="_blank" rel="noopener" 
+           class="glass-effect rounded-xl md:rounded-2xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-2 md:mb-6">
+            <div class="w-8 h-8 md:w-14 md:h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-building text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-xs md:text-lg font-bold institutional-subtitle">Portal Institucional</h3>
+          </div>
+          <p class="text-gray-300 text-xs mb-2 md:mb-6 institutional-text">
+            Sistema interno para gestión académica, servicios estudiantiles y recursos institucionales.
+          </p>
+          <div class="flex items-center gap-1 md:gap-2 text-xs md:text-sm text-purple-400">
+            <span class="institutional-text">Ingresar al Portal</span>
+            <i class="fa-solid fa-external-link-alt group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </a>
+        
+        <!-- Sitio Web Oficial -->
+        <a href="https://www.ubo.cl" target="_blank" rel="noopener" 
+           class="glass-effect rounded-xl md:rounded-2xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-2 md:mb-6">
+            <div class="w-8 h-8 md:w-14 md:h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-university text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-xs md:text-lg font-bold institutional-subtitle">Sitio Web UBO</h3>
+          </div>
+          <p class="text-gray-300 text-xs mb-2 md:mb-6 institutional-text">
+            Portal oficial con información institucional, noticias académicas y servicios públicos.
+          </p>
+          <div class="flex items-center gap-1 md:gap-2 text-xs md:text-sm text-green-400">
+            <span class="institutional-text">Visitar Sitio Oficial</span>
+            <i class="fa-solid fa-external-link-alt group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </a>
+        
+        <!-- Biblioteca Digital -->
+        <a href="https://biblioteca.ubo.cl" target="_blank" rel="noopener" 
+           class="glass-effect rounded-xl md:rounded-2xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-2 md:mb-6">
+            <div class="w-8 h-8 md:w-14 md:h-14 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-book-open text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-xs md:text-lg font-bold institutional-subtitle">Biblioteca Digital</h3>
+          </div>
+          <p class="text-gray-300 text-xs mb-2 md:mb-6 institutional-text">
+            Recursos bibliográficos digitales, bases de datos académicas y servicios de investigación.
+          </p>
+          <div class="flex items-center gap-1 md:gap-2 text-xs md:text-sm text-cyan-400">
+            <span class="institutional-text">Explorar Recursos</span>
+            <i class="fa-solid fa-external-link-alt group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </a>
+        
+        <!-- Sistema IA (En Desarrollo) -->
+        <div class="glass-effect rounded-xl md:rounded-2xl p-3 md:p-8 transition-all duration-300 animate-on-scroll opacity-75">
+          <div class="flex items-center gap-2 md:gap-4 mb-2 md:mb-6">
+            <div class="w-8 h-8 md:w-14 md:h-14 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg">
+              <i class="fa-solid fa-brain text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-xs md:text-lg font-bold institutional-subtitle">Sistema de IA</h3>
+          </div>
+          <p class="text-gray-300 text-xs mb-2 md:mb-6 institutional-text">
+            Plataforma de automatización académica con inteligencia artificial (En fase de desarrollo).
+          </p>
+          <div class="flex items-center gap-1 md:gap-2 text-xs md:text-sm text-gray-400">
+            <span class="institutional-text">Próximamente Disponible</span>
+            <i class="fa-solid fa-clock"></i>
+          </div>
+        </div>
+        
+        <!-- Soporte Técnico -->
+        <a href="mailto:soporte@ubo.cl" 
+           class="glass-effect rounded-xl md:rounded-2xl p-3 md:p-8 hover:bg-white/8 transition-all duration-300 group animate-on-scroll hover-lift hover-glow">
+          <div class="flex items-center gap-2 md:gap-4 mb-2 md:mb-6">
+            <div class="w-8 h-8 md:w-14 md:h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+              <i class="fa-solid fa-headset text-white text-sm md:text-xl"></i>
+            </div>
+            <h3 class="text-xs md:text-lg font-bold institutional-subtitle">Soporte Técnico</h3>
+          </div>
+          <p class="text-gray-300 text-xs mb-2 md:mb-6 institutional-text">
+            Asistencia técnica especializada y soporte para usuarios de plataformas académicas.
+          </p>
+          <div class="flex items-center gap-1 md:gap-2 text-xs md:text-sm text-orange-400">
+            <span class="institutional-text">Contactar Soporte</span>
+            <i class="fa-solid fa-envelope group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer institucional -->
+  <footer class="bg-black/40 backdrop-blur-sm border-t border-white/10 py-8 md:py-12 lg:py-16">
+    <div class="container mx-auto px-4 md:px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 lg:gap-10 mb-6 md:mb-8 lg:mb-12">
+        <!-- Información del proyecto -->
+        <div class="space-y-3 md:space-y-4">
+          <h3 class="text-lg md:text-xl font-bold institutional-subtitle">Lucatón</h3>
+          <p class="text-sm text-gray-400 institutional-text">
+            Plataforma de crowdfunding social con asistencia IA para mitigar la brecha digital en Chile.
+          </p>
+          <div class="flex space-x-3 md:space-x-4">
+            <a href="#" class="text-gray-400 hover:text-blue-400 transition-colors">
+              <i class="fa-brands fa-facebook text-lg md:text-xl"></i>
+            </a>
+            <a href="#" class="text-gray-400 hover:text-blue-400 transition-colors">
+              <i class="fa-brands fa-twitter text-lg md:text-xl"></i>
+            </a>
+            <a href="#" class="text-gray-400 hover:text-blue-400 transition-colors">
+              <i class="fa-brands fa-linkedin text-lg md:text-xl"></i>
+            </a>
+            <a href="#" class="text-gray-400 hover:text-blue-400 transition-colors">
+              <i class="fa-brands fa-github text-lg md:text-xl"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- Enlaces rápidos -->
+        <div class="space-y-3 md:space-y-4">
+          <h4 class="text-base md:text-lg font-semibold institutional-subtitle">Enlaces Rápidos</h4>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li><a href="#inicio" class="hover:text-white transition-colors institutional-text">Inicio</a></li>
+            <li><a href="#capacidades" class="hover:text-white transition-colors institutional-text">Capacidades</a></li>
+            <li><a href="#servicios" class="hover:text-white transition-colors institutional-text">Servicios</a></li>
+            <li><a href="#" onclick="alert('Documentación en desarrollo')" class="hover:text-white transition-colors institutional-text">Documentación</a></li>
+          </ul>
+        </div>
+
+        <!-- Contacto -->
+        <div class="space-y-3 md:space-y-4">
+          <h4 class="text-base md:text-lg font-semibold institutional-subtitle">Contacto</h4>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-center">
+              <i class="fa-solid fa-envelope mr-2 text-blue-400"></i>
+              <a href="mailto:lucaton@ubo.cl" class="hover:text-white transition-colors institutional-text">lucaton@ubo.cl</a>
+            </li>
+            <li class="flex items-center">
+              <i class="fa-solid fa-phone mr-2 text-blue-400"></i>
+              <span class="institutional-text">+56 2 2477 2500</span>
+            </li>
+            <li class="flex items-center">
+              <i class="fa-solid fa-map-marker-alt mr-2 text-blue-400"></i>
+              <span class="institutional-text">Santiago, Chile</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Universidad -->
+        <div class="space-y-3 md:space-y-4">
+          <h4 class="text-base md:text-lg font-semibold institutional-subtitle">Universidad</h4>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li><a href="https://www.ubo.cl" target="_blank" class="hover:text-white transition-colors institutional-text">Portal UBO</a></li>
+            <li><a href="https://aulavirtual.ubo.cl" target="_blank" class="hover:text-white transition-colors institutional-text">Aula Virtual</a></li>
+            <li><a href="https://biblioteca.ubo.cl" target="_blank" class="hover:text-white transition-colors institutional-text">Biblioteca</a></li>
+            <li><a href="#" onclick="alert('Proyecto de Tesis en desarrollo')" class="hover:text-white transition-colors institutional-text">Proyecto de Tesis</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Línea divisoria -->
+      <div class="border-t border-white/10 pt-6 md:pt-8">
+        <div class="flex flex-col md:flex-row justify-between items-center space-y-3 md:space-y-0">
+          <p class="text-xs md:text-sm text-gray-400 institutional-text text-center md:text-left">
+            © <span id="currentYear">2024</span> Lucatón - Proyecto de Tesis Universidad Bernardo O'Higgins. Todos los derechos reservados.
+          </p>
+          <div class="flex space-x-4 md:space-x-6 text-xs md:text-sm">
+            <a href="#" onclick="alert('Términos en desarrollo')" class="text-gray-400 hover:text-white transition-colors institutional-text">Términos de Uso</a>
+            <a href="#" onclick="alert('Política en desarrollo')" class="text-gray-400 hover:text-white transition-colors institutional-text">Privacidad</a>
+            <a href="#" onclick="alert('Cookies en desarrollo')" class="text-gray-400 hover:text-white transition-colors institutional-text">Cookies</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Sistema de partículas mejorado y optimizado
+    class ParticleNetwork {
+      constructor() {
+        this.canvas = document.getElementById('particles-canvas');
+        if (!this.canvas) return;
+        
+        this.ctx = this.canvas.getContext('2d');
+        this.particles = [];
+        this.mouse = { x: 0, y: 0 };
+        this.animationId = null;
+        this.isMouseMoving = false;
+        this.mouseTimeout = null;
+        
+        this.init();
+      }
+      
+      init() {
+        this.resize();
+        this.createParticles();
+        this.bindEvents();
+        this.animate();
+      }
+      
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        // Recrear partículas después del resize
+        this.particles = [];
+        this.createParticles();
+      }
+      
+      createParticles() {
+          const particleCount = Math.min(100, Math.floor((this.canvas.width * this.canvas.height) / 15000));
+        
+        for (let i = 0; i < particleCount; i++) {
+          this.particles.push({
+            x: Math.random() * this.canvas.width,
+            y: Math.random() * this.canvas.height,
+            vx: (Math.random() - 0.5) * 0.6,
+            vy: (Math.random() - 0.5) * 0.6,
+            size: Math.random() * 2.5 + 1,
+            opacity: Math.random() * 0.5 + 0.3,
+            originalSize: 0
+          });
+          this.particles[i].originalSize = this.particles[i].size;
+        }
+      }
+      
+      bindEvents() {
+        window.addEventListener('resize', () => this.resize());
+        
+        // Eventos para mouse y dispositivos táctiles
+        window.addEventListener('mousemove', (e) => {
+          this.mouse.x = e.clientX;
+          this.mouse.y = e.clientY;
+          this.isMouseMoving = true;
+          
+          clearTimeout(this.mouseTimeout);
+          this.mouseTimeout = setTimeout(() => {
+            this.isMouseMoving = false;
+          }, 150);
+        });
+        
+        // Eventos táctiles para móviles
+        window.addEventListener('touchmove', (e) => {
+          if (e.touches.length > 0) {
+            this.mouse.x = e.touches[0].clientX;
+            this.mouse.y = e.touches[0].clientY;
+            this.isMouseMoving = true;
+            
+            clearTimeout(this.mouseTimeout);
+            this.mouseTimeout = setTimeout(() => {
+              this.isMouseMoving = false;
+            }, 150);
+          }
+        });
+        
+        window.addEventListener('touchstart', (e) => {
+          if (e.touches.length > 0) {
+            this.mouse.x = e.touches[0].clientX;
+            this.mouse.y = e.touches[0].clientY;
+            this.isMouseMoving = true;
+          }
+        });
+        
+        window.addEventListener('touchend', () => {
+          this.mouse.x = 0;
+          this.mouse.y = 0;
+          this.isMouseMoving = false;
+        });
+      }
+      
+      animate() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Dibujar triángulos primero (fondo)
+        this.drawTriangles();
+        
+        // Actualizar y dibujar partículas
+        this.particles.forEach((particle, i) => {
+          // Movimiento base
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          
+          // Atracción al mouse (incluye dispositivos táctiles)
+            if (this.mouse.x > 0 && this.mouse.y > 0) {
+              const dx = this.mouse.x - particle.x;
+              const dy = this.mouse.y - particle.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < 120) {
+                const force = (120 - distance) / 120;
+                // Aplicar gravedad constante, mayor cuando el mouse se mueve
+                const gravityMultiplier = this.isMouseMoving ? 0.02 : 0.012;
+                particle.vx += (dx / distance) * force * gravityMultiplier;
+                particle.vy += (dy / distance) * force * gravityMultiplier;
+                particle.size = particle.originalSize + force * 1.5;
+              } else {
+                particle.size = particle.originalSize;
+              }
+            } else {
+              particle.size = particle.originalSize;
+            }
+          
+          // Limitar velocidad
+          const maxSpeed = 1.2;
+          const speed = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
+          if (speed > maxSpeed) {
+            particle.vx = (particle.vx / speed) * maxSpeed;
+            particle.vy = (particle.vy / speed) * maxSpeed;
+          }
+          
+          // Rebote en bordes con amortiguación
+          if (particle.x <= 0 || particle.x >= this.canvas.width) {
+            particle.vx *= -0.8;
+            particle.x = Math.max(0, Math.min(this.canvas.width, particle.x));
+          }
+          if (particle.y <= 0 || particle.y >= this.canvas.height) {
+            particle.vy *= -0.8;
+            particle.y = Math.max(0, Math.min(this.canvas.height, particle.y));
+          }
+          
+          // Dibujar partícula con efecto de brillo
+          this.ctx.beginPath();
+          this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          this.ctx.fillStyle = `rgba(59, 130, 246, ${particle.opacity})`;
+          this.ctx.fill();
+          
+          this.ctx.beginPath();
+          this.ctx.arc(particle.x, particle.y, particle.size * 0.6, 0, Math.PI * 2);
+          this.ctx.fillStyle = `rgba(147, 197, 253, ${particle.opacity * 0.7})`;
+          this.ctx.fill();
+          
+          // Conectar partículas cercanas
+          for (let j = i + 1; j < this.particles.length; j++) {
+            const other = this.particles[j];
+            const dx = particle.x - other.x;
+            const dy = particle.y - other.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 100) {
+              const opacity = (100 - distance) / 100 * 0.25;
+              this.ctx.beginPath();
+              this.ctx.moveTo(particle.x, particle.y);
+              this.ctx.lineTo(other.x, other.y);
+              this.ctx.strokeStyle = `rgba(59, 130, 246, ${opacity})`;
+              this.ctx.lineWidth = 0.8;
+              this.ctx.stroke();
+            }
+          }
+          
+          // Conexiones al mouse (siempre visibles cuando el mouse está cerca)
+            if (this.mouse.x > 0 && this.mouse.y > 0) {
+              const dx = particle.x - this.mouse.x;
+              const dy = particle.y - this.mouse.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < 120) {
+                const opacity = (120 - distance) / 120 * 0.6;
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(particle.x, particle.y);
+                this.ctx.lineTo(this.mouse.x, this.mouse.y);
+                this.ctx.strokeStyle = `rgba(147, 51, 234, ${opacity})`;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+              }
+            }
+        });
+        
+        this.animationId = requestAnimationFrame(() => this.animate());
+      }
+      
+      drawTriangles() {
+        const connectionDistance = 100;
+        
+        for (let i = 0; i < this.particles.length; i++) {
+          for (let j = i + 1; j < this.particles.length; j++) {
+            for (let k = j + 1; k < this.particles.length; k++) {
+              const d1 = Math.sqrt((this.particles[i].x - this.particles[j].x) ** 2 + (this.particles[i].y - this.particles[j].y) ** 2);
+              const d2 = Math.sqrt((this.particles[j].x - this.particles[k].x) ** 2 + (this.particles[j].y - this.particles[k].y) ** 2);
+              const d3 = Math.sqrt((this.particles[k].x - this.particles[i].x) ** 2 + (this.particles[k].y - this.particles[i].y) ** 2);
+              
+              if (d1 < connectionDistance && d2 < connectionDistance && d3 < connectionDistance) {
+                const avgDistance = (d1 + d2 + d3) / 3;
+                const opacity = (connectionDistance - avgDistance) / connectionDistance * 0.03;
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.particles[i].x, this.particles[i].y);
+                this.ctx.lineTo(this.particles[j].x, this.particles[j].y);
+                this.ctx.lineTo(this.particles[k].x, this.particles[k].y);
+                this.ctx.closePath();
+                this.ctx.fillStyle = `rgba(59, 130, 246, ${opacity})`;
+                this.ctx.fill();
+              }
+            }
+          }
+        }
+      }
+      
+      destroy() {
+        if (this.animationId) {
+          cancelAnimationFrame(this.animationId);
+        }
+        clearTimeout(this.mouseTimeout);
+      }
+    }
+    
+    // Inicializar sistema de partículas
+    document.addEventListener('DOMContentLoaded', () => {
+      const particleNetwork = new ParticleNetwork();
+      
+      // Generar año automáticamente
+      document.getElementById('current-year').textContent = new Date().getFullYear();
+      
+      // Limpiar al salir de la página
+      window.addEventListener('beforeunload', () => {
+        if (particleNetwork) {
+          particleNetwork.destroy();
+        }
+      });
+    });
+    
+    // Animaciones de scroll
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, observerOptions);
+    
+    // Observar elementos con animación de scroll
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.animate-on-scroll').forEach(el => {
+        observer.observe(el);
+      });
+    });
+  </script>
+</body>
+</html>

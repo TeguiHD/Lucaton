@@ -18,6 +18,14 @@ Plataforma de crowdfunding social con asistencia de inteligencia artificial para
 - **Actualizaciones de Campaña**: Múltiples niveles de visibilidad (público, donantes, privado)
 - **Sistema de Celebración**: Overlays animados para logros y metas alcanzadas
 
+#### 🎨 **Página de Construcción Actualizada**
+- **Branding Lucatón**: Actualización completa de la identidad visual del proyecto
+- **Contenido Contextualizado**: Adaptación de todas las secciones al contexto de crowdfunding social
+- **Capacidades de Plataforma**: Nuevas secciones sobre crowdfunding social, asistencia IA, comunidad de impacto y transparencia
+- **Servicios Actualizados**: Gestión de campañas, centro de comunicación, recursos académicos y asistente IA
+- **Información Institucional**: Enlaces y contacto actualizados para la Universidad Bernardo O'Higgins
+- **Diseño Responsive**: Optimización mobile-first con animaciones de partículas y efectos visuales avanzados
+
 #### 🔧 **Mejoras en Funcionalidades Existentes**
 - **Funding Mejorado**: Tracking de fechas de primera/última donación
 - **Historial de Notificaciones**: Filtros avanzados para usuarios y administradores
@@ -35,6 +43,7 @@ Plataforma de crowdfunding social con asistencia de inteligencia artificial para
 - Implementación de patrones de diseño más robustos
 - Mejoras en la arquitectura MVC
 - Optimización de consultas y performance
+- Actualización completa de la página de construcción con branding Lucatón
 
 ## 🎯 Características Principales
 
@@ -114,6 +123,7 @@ Tesis/
 ├── 📄 composer.lock           # Lock de dependencias PHP
 ├── 📄 index.php               # Punto de entrada principal
 ├── 📄 package.json            # Dependencias Node.js
+├── 📄 PagConstrucción.html    # Página de construcción/landing con branding Lucatón
 ├── 📄 phpunit.xml             # Configuración PHPUnit
 ├── 📄 pnpm-lock.yaml          # Lock de dependencias pnpm
 ├── 📄 tailwind.config.js      # Configuración Tailwind CSS
@@ -190,6 +200,7 @@ SESSION_LIFETIME=7200
 ## 🚀 Funcionalidades Implementadas
 
 ### 🌐 Públicas
+- ✅ **Página de construcción** con branding Lucatón y información del proyecto
 - ✅ **Página de inicio** con campañas destacadas
 - ✅ **Explorar campañas** con filtros y búsqueda
 - ✅ **Detalle de campaña** con información completa y actualizaciones
