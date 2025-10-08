@@ -33,6 +33,12 @@ $admin_nav_items = [
         'current' => $current_page === 'admin-notifications'
     ],
     [
+        'name' => 'Newsletter',
+        'href' => '/admin/newsletter',
+        'icon' => 'mail',
+        'current' => $current_page === 'admin-newsletter'
+    ],
+    [
         'name' => 'Moderación IA',
         'href' => '/admin/ia',
         'icon' => 'sparkles',
@@ -62,6 +68,7 @@ $icons = [
     'clipboard-list' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />',
     'chart-bar' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />',
     'bell' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM10.5 3.75a6 6 0 016 6v2.25a3 3 0 003 3v.75H4.5v-.75a3 3 0 003-3V9.75a6 6 0 016-6z" />',
+    'mail' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z" />',
     'newspaper' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 5H8a2 2 0 00-2 2v11a1 1 0 01-1 1H5a1 1 0 01-1-1V6a2 2 0 012-2h13a1 1 0 011 1v11a2 2 0 01-2 2H9" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7h2M16 11h2M16 15h2M10 7h2M10 11h2M10 15h2" />'
 ];

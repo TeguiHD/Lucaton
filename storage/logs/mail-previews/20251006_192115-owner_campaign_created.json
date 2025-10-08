@@ -1,0 +1,45 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "tu@email.com",
+            "name": "Juan Perez"
+        }
+    ],
+    "subject": "Recibimos tu campaña \"Prueba 6 de octubre\"",
+    "body_text": "Hola Juan Perez,\n\nTu campaña \"Prueba 6 de octubre\" quedó registrada y está en revisión por el equipo.\n\nTe avisaremos cuando pase a estado publicado. Mientras tanto puedes preparar materiales para difundirla apenas esté en línea.\n\nMeta: CLP 5.000.000 · Cierre: 07\/10\/2025",
+    "generated_at": "2025-10-06T19:21:15-03:00",
+    "context": {
+        "campaign": {
+            "id": 9,
+            "title": "Prueba 6 de octubre",
+            "slug": "prueba-6-de-octubre",
+            "status": null,
+            "goal_amount": 5000000,
+            "currency": "CLP",
+            "progress": null
+        },
+        "ai_prompt": "Genera un plan breve de lanzamiento en redes para la campaña \"Prueba 6 de octubre\" (ID 9, meta CLP 5.000.000). Incluye ideas para anunciar que está en revisión, contenidos para captar aliados iniciales y sugerencias de próximos pasos antes de la publicación.",
+        "meta": {
+            "campaign_id": 9,
+            "campaign_slug": "prueba-6-de-octubre",
+            "event": "campaign_created",
+            "requires_peer_review": false,
+            "campaign_url": "http:\/\/localhost\/Tesis\/campana\/prueba-6-de-octubre",
+            "manage_url": "http:\/\/localhost\/Tesis\/campana\/9\/editar",
+            "cta_url": "http:\/\/localhost\/Tesis\/campana\/9\/editar",
+            "cta_label": "Completar campaña"
+        }
+    },
+    "cc": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Proyecto Lucatón — Tesis Universidad Bernardo O'Higgins"
+        }
+    ],
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_created"
+}

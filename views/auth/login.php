@@ -10,6 +10,13 @@ $serverErrors = $_SESSION['validation_errors']['login'] ?? [];
 $oldInput = $_SESSION['old_input']['login'] ?? [];
 unset($_SESSION['validation_errors']['login'], $_SESSION['old_input']['login']);
 
+$siteToastQueue = array_map(static function ($toast) {
+    return [
+        'type' => $toast['type'] ?? 'info',
+        'message' => $toast['message'] ?? ''
+    ];
+}, SessionHelper::pullSiteToasts());
+
 $page_title = 'Iniciar Sesión - Lucatón';
 $page_description = 'Inicia sesión en tu cuenta de Lucatón para gestionar tus campañas y donaciones.';
 
@@ -51,6 +58,9 @@ $initialErrors = json_encode($serverErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TA
     <script>
         window.__LOGIN_INITIAL_FORM__ = <?= $initialForm ?> || {};
         window.__LOGIN_INITIAL_ERRORS__ = <?= $initialErrors ?> || {};
+        <?php if (!empty($siteToastQueue)): ?>
+        window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
+        <?php endif; ?>
     </script>
 
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -347,5 +357,7 @@ $initialErrors = json_encode($serverErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TA
             };
         }
     </script>
+
+    <div class="site-toast-stack" data-site-toast-container></div>
 </body>
 </html>

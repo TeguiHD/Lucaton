@@ -44,6 +44,35 @@ class CampaignUpdateController
             return;
         }
 
+        $goalAmount = (float)($campaign['goal_amount'] ?? 0);
+        $raisedAmount = (float)($campaign['raised_amount'] ?? 0);
+        $goalReached = $goalAmount > 0 && $raisedAmount >= $goalAmount;
+
+        $endTimestamp = null;
+        $rawEnd = trim((string)($campaign['end_date'] ?? ''));
+        if ($rawEnd !== '') {
+            $parsed = strtotime($rawEnd);
+            if ($parsed === false) {
+                $dateOnly = DateTime::createFromFormat('Y-m-d', $rawEnd);
+                if ($dateOnly instanceof DateTime) {
+                    $parsed = $dateOnly->getTimestamp();
+                }
+            }
+            if ($parsed !== false) {
+                $endTimestamp = $parsed;
+            }
+        }
+        $timeOver = $endTimestamp !== null && $endTimestamp < time();
+        $campaignStatus = strtolower((string)($campaign['status'] ?? ''));
+        $campaignFinalized = in_array($campaignStatus, ['completed', 'cancelled', 'archived'], true) || $goalReached || $timeOver;
+        $finalUpdateAlreadyPosted = !empty($campaign['funding_celebrated_at']);
+
+        if ($campaignFinalized && $finalUpdateAlreadyPosted) {
+            SessionHelper::setFlash('warning', 'Esta campaña ya fue cerrada definitivamente. Si necesitas compartir novedades, crea una nueva campaña o contáctanos.');
+            Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']) . '#actualizaciones');
+            return;
+        }
+
         $input = $this->collectInput();
         $errors = $this->validateInput($input);
 
@@ -62,6 +91,13 @@ class CampaignUpdateController
                 'status' => 'published',
                 'visibility' => 'public'
             ]);
+
+            if ($campaignFinalized && !$finalUpdateAlreadyPosted) {
+                $this->campaigns->markFundingMilestone((int)$campaign['id'], [
+                    'mark_celebrated' => true,
+                    'funding_celebrated_at' => date('Y-m-d H:i:s'),
+                ]);
+            }
         } catch (Throwable $exception) {
             Logger::error('No se pudo crear la actualización de campaña', [
                 'campaign_id' => $campaign['id'] ?? null,
@@ -74,7 +110,11 @@ class CampaignUpdateController
             return;
         }
 
-        SessionHelper::setFlash('success', 'Tu actualización se publicó correctamente.');
+        if ($campaignFinalized) {
+            SessionHelper::setFlash('success', 'Tu mensaje de cierre se publicó correctamente. ¡Gracias por acompañar a tu comunidad con transparencia!');
+        } else {
+            SessionHelper::setFlash('success', 'Tu actualización se publicó correctamente.');
+        }
         Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']) . '#actualizaciones');
     }
 

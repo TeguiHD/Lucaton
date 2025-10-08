@@ -1,0 +1,46 @@
+{
+    "from": {
+        "email": "noreply@lucaton.local",
+        "name": "Lucatón"
+    },
+    "to": [
+        {
+            "email": "tu@email.com",
+            "name": "Juan Perez"
+        }
+    ],
+    "subject": "Tu campaña \"Prueba 6 de octubre\" ya está publicada",
+    "body_text": "Hola Juan Perez,\n\n¡Listo! Tu campaña fue aprobada y quedó visible en la plataforma.\n\nRevisa que toda la información esté correcta y comparte el enlace con tu comunidad.\n\nEnlace directo: http:\/\/localhost\/Tesis\/campana\/prueba-6-de-octubre\n\nMeta: CLP 5.000.000 · Cierre: 07\/10\/2025",
+    "generated_at": "2025-10-06T19:22:30-03:00",
+    "context": {
+        "campaign": {
+            "id": 9,
+            "title": "Prueba 6 de octubre",
+            "slug": "prueba-6-de-octubre",
+            "status": "published",
+            "goal_amount": 5000000,
+            "currency": "CLP",
+            "progress": null,
+            "public_url": "http:\/\/localhost\/Tesis\/campana\/prueba-6-de-octubre"
+        },
+        "ai_prompt": "Diseña 3 publicaciones (texto, carrusel e historia) para redes sociales que celebren la publicación de \"Prueba 6 de octubre\" (ID 9). Sugiere también un incentivo creativo para los primeros donantes y métricas clave a monitorear durante la primera semana.",
+        "meta": {
+            "campaign_id": 9,
+            "campaign_slug": "prueba-6-de-octubre",
+            "event": "campaign_approved",
+            "slug": "prueba-6-de-octubre",
+            "campaign_url": "http:\/\/localhost\/Tesis\/campana\/prueba-6-de-octubre",
+            "manage_url": "http:\/\/localhost\/Tesis\/campana\/9\/editar",
+            "cta_url": "http:\/\/localhost\/Tesis\/campana\/prueba-6-de-octubre",
+            "cta_label": "Ver campaña publicada"
+        }
+    },
+    "cc": [
+        {
+            "email": "nlopetegui@pregrado.ubo.cl",
+            "name": "Proyecto Lucatón — Tesis Universidad Bernardo O'Higgins"
+        }
+    ],
+    "delivery_mode": "preview",
+    "event_key": "owner_campaign_published"
+}

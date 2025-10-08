@@ -62,10 +62,35 @@ class CampaignController {
         $isCampaignOwner = $currentUserId !== null
             && $ownerId !== null
             && (int)$ownerId === (int)$currentUserId;
-        $canManageUpdates = $isCampaignOwner;
+        $stats = $this->buildCampaignStats($campaign);
+        $campaignGoalReached = ($stats['goal_amount'] ?? 0) > 0
+            && ($stats['raised_amount'] ?? 0) >= ($stats['goal_amount'] ?? 0);
+        $campaignEndTimestamp = null;
+        $rawEndDate = trim((string)($campaign['end_date'] ?? ''));
+        if ($rawEndDate !== '') {
+            $parsedEnd = strtotime($rawEndDate);
+            if ($parsedEnd === false) {
+                $dateOnly = DateTime::createFromFormat('Y-m-d', $rawEndDate);
+                if ($dateOnly instanceof DateTime) {
+                    $parsedEnd = $dateOnly->getTimestamp();
+                }
+            }
+            if ($parsedEnd !== false) {
+                $campaignEndTimestamp = $parsedEnd;
+            }
+        }
+        $campaignTimeOver = $campaignEndTimestamp !== null && $campaignEndTimestamp < time();
+        $campaignFinalized = ($campaign['status'] ?? '') === 'completed'
+            || $campaignGoalReached
+            || $campaignTimeOver;
+        $finalUpdateAlreadyPosted = !empty($campaign['funding_celebrated_at']);
+        $allowFinalUpdate = $isCampaignOwner && $campaignFinalized && !$finalUpdateAlreadyPosted;
+
+        $canManageUpdates = $isCampaignOwner && (!$campaignFinalized || $allowFinalUpdate);
+        $finalUpdateAllowed = $allowFinalUpdate;
+        $campaignFinalLocked = $isCampaignOwner && $campaignFinalized && !$allowFinalUpdate;
 
         $recent_supporters = $this->donations->findByCampaignId($campaign['id'], 10, 0, true);
-        $stats = $this->buildCampaignStats($campaign);
 
         $mediaService = new CampaignMediaUploadService();
         $campaignImageUrl = null;

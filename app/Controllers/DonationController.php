@@ -21,6 +21,14 @@ class DonationController {
             return $this->respondError('No encontramos la campaña seleccionada.', 404, 'campanas');
         }
 
+        if (!SessionHelper::isAuthenticated()) {
+            $campaignSlug = $campaign['slug'] ?? $campaignId;
+            $target = Router::url('campana/' . $campaignSlug) . '#donar';
+            SessionHelper::setFlash('error', 'Inicia sesión para registrar tu aporte.');
+            $loginUrl = Router::url('login') . '?redirect=' . urlencode($target);
+            Router::redirect($loginUrl);
+        }
+
         if (!SessionHelper::checkRateLimit('donate_campaign_' . $campaignId, 5, 900)) {
             $slug = $campaign['slug'] ?? $campaignId;
             return $this->respondError('Hiciste demasiados intentos en poco tiempo. Intenta nuevamente en unos minutos.', 429, 'campana/' . $slug . '#donar');
@@ -62,11 +70,70 @@ class DonationController {
         }
     }
 
+    public function list($identifier) {
+        $campaign = $this->resolveCampaign($identifier);
+
+        if (!$campaign) {
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $status = strtolower((string)($campaign['status'] ?? 'draft'));
+        $visibility = strtolower((string)($campaign['visibility'] ?? 'public'));
+        $ownerId = $campaign['owner_id'] ?? $campaign['user_id'] ?? null;
+        $currentUser = SessionHelper::getUser();
+        $currentUserId = SessionHelper::getUserId();
+        if (is_array($currentUser) && isset($currentUser['id'])) {
+            $currentUserId = (int)$currentUser['id'];
+        }
+        $isOwner = $currentUserId !== null && $ownerId !== null && (int)$currentUserId === (int)$ownerId;
+        $isAdmin = is_array($currentUser) && (($currentUser['role'] ?? '') === 'admin');
+        $isPublic = in_array($status, ['published', 'completed'], true) && $visibility !== 'private';
+
+        if (!$isPublic && !$isOwner && !$isAdmin) {
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = 15;
+        $offset = ($page - 1) * $perPage;
+
+        $campaignId = (int)$campaign['id'];
+        $totalDonations = $this->donations->countByCampaignId($campaignId);
+        $totalPages = max(1, (int)ceil($totalDonations / $perPage));
+
+        if ($totalDonations === 0) {
+            $page = 1;
+            $totalPages = 1;
+            $donations = [];
+        } else {
+            if ($page > $totalPages) {
+                $page = $totalPages;
+                $offset = ($page - 1) * $perPage;
+            }
+            $donations = $this->donations->findByCampaignId($campaignId, $perPage, $offset, true);
+        }
+
+        $campaignSlug = $campaign['slug'] ?? $campaignId;
+        $breadcrumbs = [
+            ['name' => 'Inicio', 'href' => Router::url('/')],
+            ['name' => 'Campañas', 'href' => Router::url('campanas')],
+            ['name' => $campaign['title'] ?? 'Campaña', 'href' => Router::url('campana/' . $campaignSlug)],
+            ['name' => 'Aportes', 'href' => Router::url('campana/' . $campaignSlug . '/donaciones')],
+        ];
+
+        $page_title = 'Aportes de ' . ($campaign['title'] ?? 'Campaña') . ' - Lucatón';
+        $page_description = 'Historial de aportes registrados para la campaña ' . ($campaign['title'] ?? 'Lucatón') . '.';
+
+        include VIEWS_PATH . '/public/campaign-donations.php';
+    }
+
     private function collectPayload(int $campaignId): array {
         $old = [
             'amount' => trim($_POST['amount'] ?? ''),
-            'donor_name' => trim($_POST['donor_name'] ?? ''),
-            'donor_email' => trim($_POST['donor_email'] ?? ''),
             'message' => trim($_POST['message'] ?? ''),
             'payment_method' => $_POST['payment_method'] ?? 'manual',
             'is_anonymous' => isset($_POST['is_anonymous']) ? '1' : '0',
@@ -90,20 +157,30 @@ class DonationController {
             : 'manual';
 
         $userId = SessionHelper::getUserId();
-        $donorName = $old['donor_name'];
-        $donorEmail = $old['donor_email'];
+        $currentUser = SessionHelper::getUser();
 
-        if (!$userId) {
-            if (strlen($donorName) < 3) {
-                $errors['donor_name'] = 'Ingresa tu nombre para identificar el aporte.';
+        $donorName = '';
+        $donorEmail = '';
+
+        if ($currentUser) {
+            $nameParts = array_filter([
+                $currentUser['first_name'] ?? null,
+                $currentUser['last_name'] ?? null,
+            ]);
+            $donorName = trim(implode(' ', $nameParts));
+            if ($donorName === '' && !empty($currentUser['name'])) {
+                $donorName = trim((string)$currentUser['name']);
             }
-            if ($donorEmail === '' || !filter_var($donorEmail, FILTER_VALIDATE_EMAIL)) {
-                $errors['donor_email'] = 'Necesitamos un correo válido para confirmar el aporte.';
-            }
-        } else {
-            $currentUser = SessionHelper::getUser();
-            $donorName = $currentUser['name'] ?? $donorName;
-            $donorEmail = $currentUser['email'] ?? $donorEmail;
+
+            $donorEmail = trim((string)($currentUser['email'] ?? ''));
+        }
+
+        if (!$userId || !$currentUser) {
+            $errors['general'] = 'Debes iniciar sesión para registrar tu aporte.';
+        }
+
+        if ($donorEmail === '') {
+            $errors['general'] = 'Tu cuenta necesita un correo válido para completar el aporte.';
         }
 
         if (isset($_POST['message']) && strlen($old['message']) > 280) {
@@ -178,6 +255,14 @@ class DonationController {
         $requestedWith = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
 
         return str_contains($accept, 'application/json') || strtolower($requestedWith) === 'xmlhttprequest';
+    }
+
+    private function resolveCampaign($identifier): ?array {
+        if (is_numeric($identifier)) {
+            return $this->campaigns->findById((int)$identifier);
+        }
+
+        return $this->campaigns->findBySlug((string)$identifier);
     }
 }
 

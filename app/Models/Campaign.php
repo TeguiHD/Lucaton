@@ -568,19 +568,23 @@ class Campaign {
             return 0;
         }
 
-        $today = date('Y-m-d');
-
         try {
             $expired = $this->db->fetchAll(
-                "SELECT id FROM campaigns 
-                 WHERE end_date IS NOT NULL 
-                   AND end_date < ? 
+                "SELECT 
+                    c.id,
+                    c.end_date,
+                    c.goal_amount,
+                    c.status,
+                    c.funded_at,
+                    cm.raised_amount
+                 FROM campaigns c
+                 LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
+                 WHERE c.end_date IS NOT NULL 
                    AND (
-                        status IS NULL
-                        OR status = ''
-                        OR status IN ('published','under_review','paused')
-                   )",
-                [$today]
+                        c.status IS NULL
+                        OR c.status = ''
+                        OR c.status IN ('published','under_review','paused')
+                   )"
             );
         } catch (Exception $exception) {
             Logger::error('Failed to fetch expired campaigns', [
@@ -595,14 +599,47 @@ class Campaign {
 
         $closed = 0;
 
+        $now = time();
+
         foreach ($expired as $row) {
             $campaignId = (int)($row['id'] ?? 0);
             if ($campaignId <= 0) {
                 continue;
             }
 
+            $rawEnd = trim((string)($row['end_date'] ?? ''));
+            if ($rawEnd === '') {
+                continue;
+            }
+
+            $endTimestamp = strtotime($rawEnd);
+            if ($endTimestamp === false) {
+                $dateOnly = DateTime::createFromFormat('Y-m-d', $rawEnd);
+                if ($dateOnly instanceof DateTime) {
+                    $endTimestamp = $dateOnly->getTimestamp();
+                }
+            }
+
+            if ($endTimestamp === false || $endTimestamp > $now) {
+                continue;
+            }
+
+            $goal = (float)($row['goal_amount'] ?? 0);
+            $raised = (float)($row['raised_amount'] ?? 0);
+            $goalReached = $goal > 0 && $raised >= $goal;
+            $note = $goalReached
+                ? 'Cierre automático (meta alcanzada)'
+                : 'Cierre automático por fecha límite';
+
             try {
-                $this->changeStatus($campaignId, 'completed', null, 'Cierre automático por fecha límite');
+                $this->changeStatus($campaignId, 'completed', null, $note);
+
+                if ($goalReached && $this->supportsColumn('funded_at') && empty($row['funded_at'])) {
+                    $this->db->update('campaigns', [
+                        'funded_at' => date('Y-m-d H:i:s')
+                    ], 'id = ?', [$campaignId]);
+                }
+
                 $closed++;
             } catch (Throwable $exception) {
                 Logger::error('Failed to close expired campaign', [

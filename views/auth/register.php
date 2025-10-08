@@ -17,6 +17,18 @@ if (isset($_SESSION['old_input']['register'])) {
 
 $page_title = 'Crear Cuenta - Lucatón';
 $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfunding o apoya proyectos increíbles.';
+
+if (isset($_SESSION['flash_message'])) {
+    SessionHelper::pushSiteToast($_SESSION['flash_type'] ?? 'info', (string)$_SESSION['flash_message']);
+    unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+}
+
+$siteToastQueue = array_map(static function ($toast) {
+    return [
+        'type' => $toast['type'] ?? 'info',
+        'message' => $toast['message'] ?? ''
+    ];
+}, SessionHelper::pullSiteToasts());
 ?>
 
 <!DOCTYPE html>
@@ -47,6 +59,12 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
     <style>[x-cloak]{display:none !important;}</style>
     
+    <?php if (!empty($siteToastQueue)): ?>
+    <script>
+        window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
+    </script>
+    <?php endif; ?>
+
     <script>
     window.__REGISTER_INITIAL_FORM__ = <?= json_encode($oldInput, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
     window.__REGISTER_INITIAL_ERRORS__ = <?= json_encode($serverErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
@@ -717,5 +735,6 @@ $page_description = 'Únete a Lucatón y comienza a crear campañas de crowdfund
             }
         });
     </script>
+    <div class="site-toast-stack" data-site-toast-container></div>
 </body>
 </html>

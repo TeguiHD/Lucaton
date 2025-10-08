@@ -39,6 +39,12 @@ $page_description = 'Establece una nueva contraseña para tu cuenta de Lucatón.
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
     
+    <?php if (!empty($siteToastQueue)): ?>
+    <script>
+        window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
+    </script>
+    <?php endif; ?>
+    
     <!-- Alpine.js -->
     <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
 </head>
@@ -437,5 +443,6 @@ $page_description = 'Establece una nueva contraseña para tu cuenta de Lucatón.
             }
         });
     </script>
+    <div class="site-toast-stack" data-site-toast-container></div>
 </body>
 </html>

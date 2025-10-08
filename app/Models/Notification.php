@@ -2,6 +2,8 @@
 class Notification {
     private Database $db;
     private User $userModel;
+    private ?NewsArticle $newsModel = null;
+    private array $newsArticleCache = [];
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -345,6 +347,9 @@ class Notification {
     }
 
     private function formatNotificationRow(array $row): array {
+        $meta = $this->decodeMeta($row['meta'] ?? null);
+        $meta = $this->hydrateMeta($meta);
+
         return [
             'id' => (int)($row['id'] ?? 0),
             'title' => $row['title'] ?? '',
@@ -353,7 +358,7 @@ class Notification {
             'created_at' => $row['created_at'] ?? '',
             'is_read' => (bool)($row['is_read'] ?? false),
             'read_at' => $row['read_at'] ?? null,
-            'meta' => $this->decodeMeta($row['meta'] ?? null)
+            'meta' => $meta
         ];
     }
 
@@ -381,5 +386,84 @@ class Notification {
         }
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    private function hydrateMeta(?array $meta): ?array
+    {
+        if (empty($meta) || !isset($meta['news_article_id'])) {
+            return $meta;
+        }
+
+        $articleId = (int)$meta['news_article_id'];
+        if ($articleId <= 0) {
+            return $meta;
+        }
+
+        $article = $this->findNewsArticleById($articleId);
+        if ($article === null || empty($article['slug'])) {
+            return $meta;
+        }
+
+        $meta['news_article'] = [
+            'id' => (int)($article['id'] ?? 0),
+            'title' => (string)($article['title'] ?? ''),
+            'slug' => (string)($article['slug'] ?? ''),
+            'summary' => (string)($article['summary'] ?? ''),
+        ];
+
+        if (!empty($article['category_slug'])) {
+            $meta['news_article']['category_slug'] = (string)$article['category_slug'];
+        }
+
+        $url = isset($meta['url']) && is_string($meta['url']) && $meta['url'] !== ''
+            ? $meta['url']
+            : Router::url('noticias/' . $article['slug']);
+
+        $meta['url'] = $url;
+        if (empty($meta['link_label'])) {
+            $meta['link_label'] = 'Ver noticia';
+        }
+
+        return $meta;
+    }
+
+    private function findNewsArticleById(int $articleId): ?array
+    {
+        if ($articleId <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($articleId, $this->newsArticleCache)) {
+            return $this->newsArticleCache[$articleId];
+        }
+
+        if ($this->newsModel === null) {
+            if (!class_exists('NewsArticle')) {
+                $this->newsArticleCache[$articleId] = null;
+                return null;
+            }
+
+            $this->newsModel = new NewsArticle();
+        }
+
+        try {
+            $article = $this->newsModel->findById($articleId);
+        } catch (Throwable $exception) {
+            if (class_exists('Logger')) {
+                Logger::warning('No se pudo hidratar la noticia asociada a la notificación', [
+                    'article_id' => $articleId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+            $article = null;
+        }
+
+        if (is_array($article) && isset($article['status']) && $article['status'] !== 'published') {
+            $article = null;
+        }
+
+        $this->newsArticleCache[$articleId] = $article ?: null;
+
+        return $this->newsArticleCache[$articleId];
     }
 }

@@ -11,6 +11,8 @@ class SessionHelper {
         'admin' => 50,
         'superadmin' => 100,
     ];
+
+    private static array $lastSiteToasts = [];
     
     /**
      * Iniciar sesión segura
@@ -279,7 +281,106 @@ class SessionHelper {
             return $value !== null && $value !== '';
         });
     }
-    
+
+    private static function migrateFlashToToasts(): void
+    {
+        $flashMessages = $_SESSION['flash'] ?? [];
+
+        foreach ($flashMessages as $type => $messages) {
+            $normalized = in_array($type, ['success', 'error', 'warning', 'info', 'system'], true) ? $type : 'info';
+            $messages = is_array($messages) ? $messages : [$messages];
+
+            foreach ($messages as $message) {
+                if ($message === null) {
+                    continue;
+                }
+
+                $trimmed = trim((string)$message);
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                self::pushSiteToast($normalized, $trimmed);
+            }
+        }
+
+        $legacyKeys = ['success', 'error', 'warning', 'info', 'system'];
+        foreach ($legacyKeys as $legacyType) {
+            $sessionKey = 'flash_' . $legacyType;
+            if (!isset($_SESSION[$sessionKey])) {
+                continue;
+            }
+
+            $stored = $_SESSION[$sessionKey];
+            $messages = is_array($stored) ? $stored : [$stored];
+
+            foreach ($messages as $message) {
+                if ($message === null) {
+                    continue;
+                }
+
+                $trimmed = trim((string)$message);
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                self::pushSiteToast($legacyType, $trimmed);
+            }
+
+            unset($_SESSION[$sessionKey]);
+        }
+
+        unset($_SESSION['flash']);
+    }
+
+    public static function pushSiteToast(string $type, string $message): void
+    {
+        if (!isset($_SESSION['site_toasts']) || !is_array($_SESSION['site_toasts'])) {
+            $_SESSION['site_toasts'] = [];
+        }
+
+        $allowed = ['success', 'error', 'warning', 'info', 'system'];
+        if (!in_array($type, $allowed, true)) {
+            $type = 'info';
+        }
+
+        $message = trim($message);
+        if ($message === '') {
+            return;
+        }
+
+        $_SESSION['site_toasts'][] = [
+            'type' => $type,
+            'message' => $message,
+            'timestamp' => time(),
+        ];
+    }
+
+    public static function pullSiteToasts(): array
+    {
+        self::migrateFlashToToasts();
+
+        if (!isset($_SESSION['site_toasts']) || !is_array($_SESSION['site_toasts'])) {
+            self::$lastSiteToasts = [];
+            return [];
+        }
+
+        $toasts = array_values(array_filter($_SESSION['site_toasts'], static function ($toast) {
+            return is_array($toast) && !empty($toast['message']);
+        }));
+
+        unset($_SESSION['site_toasts']);
+
+        self::$lastSiteToasts = $toasts;
+
+        return $toasts;
+    }
+
+    public static function getLastSiteToasts(): array
+    {
+        return self::$lastSiteToasts;
+    }
+
     /**
      * Verificar tiempo de sesión (para timeout)
      */

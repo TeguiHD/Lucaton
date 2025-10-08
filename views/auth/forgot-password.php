@@ -38,6 +38,12 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
     <style>[x-cloak]{display:none !important;}</style>
     
+    <?php if (!empty($siteToastQueue)): ?>
+    <script>
+        window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
+    </script>
+    <?php endif; ?>
+    
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
@@ -419,5 +425,6 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
             }
         });
     </script>
+    <div class="site-toast-stack" data-site-toast-container></div>
 </body>
 </html>

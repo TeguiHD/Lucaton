@@ -10,6 +10,7 @@ $router->get('/', 'HomeController@index');
 $router->get('/campanas', 'CampaignController@index');
 $router->get('/campana/crear', 'CampaignController@create');
 $router->get('/campana/{id}', 'CampaignController@show');
+$router->get('/campana/{id}/donaciones', 'DonationController@list');
 $router->get('/noticias', 'NewsController@index');
 $router->get('/noticias/{slug}', 'NewsController@show');
 $router->get('/faq', 'PageController@faq');
@@ -35,7 +36,10 @@ $router->group(['middleware' => 'csrf'], function($router) {
     $router->post('/logout', 'AuthController@logout');
     $router->post('/recuperar', 'AuthController@sendResetLink');
     $router->post('/recuperar/restablecer/{token}', 'AuthController@resetPassword');
+    $router->post('/newsletter', 'NewsletterController@subscribe');
 });
+
+$router->get('/newsletter/desuscribir/{token}', 'NewsletterController@unsubscribe');
 
 // === RUTAS PROTEGIDAS DE USUARIO ===
 $router->group(['middleware' => 'auth'], function($router) {
@@ -58,6 +62,7 @@ $router->group(['middleware' => 'auth'], function($router) {
         $router->post('/api/ai/generate-text', 'AIController@generateText');
         $router->post('/api/ai/generate-image', 'AIController@generateImage');
         $router->post('/api/ai/moderate', 'AIController@moderate');
+        $router->post('/api/feedback', 'FeedbackController@store');
         $router->post('/perfil', 'UserController@updateProfile');
         $router->post('/perfil/preferencias', 'UserController@updatePreferences');
         $router->post('/perfil/seguridad', 'UserController@updateSecurity');
@@ -77,6 +82,7 @@ $router->group(['middleware' => 'admin'], function($router) {
     $router->get('/admin/usuarios/{id}', 'AdminController@showUser');
     $router->get('/admin/notificaciones', 'NotificationAdminController@index');
     $router->get('/admin/notificaciones/historial', 'NotificationAdminController@history');
+    $router->get('/admin/newsletter', 'NewsletterAdminController@index');
     $router->get('/admin/news', 'NewsAdminController@index');
     $router->get('/admin/news/create', 'NewsAdminController@create');
     $router->get('/admin/news/{id}/edit', 'NewsAdminController@edit');
@@ -85,6 +91,7 @@ $router->group(['middleware' => 'admin'], function($router) {
         $router->post('/admin/campana/{id}/aprobar', 'AdminController@approveCampaign');
         $router->post('/admin/campana/{id}/rechazar', 'AdminController@rejectCampaign');
         $router->post('/admin/notificaciones', 'NotificationAdminController@store');
+        $router->post('/admin/newsletter/enviar', 'NewsletterAdminController@send');
         $router->post('/admin/usuarios/{id}/reset-password', 'AdminController@resetUserPassword');
         $router->post('/admin/usuarios/{id}/role', 'AdminController@updateUserRole');
         $router->post('/admin/news', 'NewsAdminController@store');

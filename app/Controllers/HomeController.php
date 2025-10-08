@@ -38,6 +38,31 @@ class HomeController {
         $category_options = $this->getCategoryOptions();
         $recent_campaigns = $this->fetchRecentCampaigns();
         $urgent_campaigns = $this->filterUrgentCampaigns($recent_campaigns);
+        $donor_samples = $this->fetchDonorSamples();
+        $testimonial_showcase = $this->buildTestimonialShowcase(
+            $this->fetchCreatorFeedbackTestimonials()
+        );
+        $can_submit_creator_feedback = false;
+
+        if (SessionHelper::isAuthenticated()) {
+            $userId = SessionHelper::getUserId();
+            if ($userId !== null) {
+                try {
+                    $campaignModel = new Campaign();
+                    $hasCampaign = !empty($campaignModel->findByUserId((int)$userId, 1, 0));
+                } catch (Exception $e) {
+                    Logger::debug('Unable to verify creator campaigns', [
+                        'user_id' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $hasCampaign = false;
+                }
+
+                $role = SessionHelper::getUserRole();
+                $can_submit_creator_feedback = $hasCampaign
+                    || in_array($role, ['admin', 'superadmin'], true);
+            }
+        }
         include VIEWS_PATH . '/public/index.php';
     }
 
@@ -77,6 +102,41 @@ class HomeController {
         });
 
         return array_slice($urgent, 0, 3);
+    }
+
+    private function fetchDonorSamples(): array {
+        try {
+            $rows = $this->db->fetchAll(
+                "SELECT DISTINCT supporter_name 
+                 FROM donations
+                 WHERE status = 'completed'
+                 AND is_anonymous = 0
+                 AND supporter_name IS NOT NULL
+                 AND supporter_name <> ''
+                 ORDER BY RAND()
+                 LIMIT 12"
+            );
+
+            $names = array_map(fn ($row) => $row['supporter_name'], $rows);
+
+            if (!empty($names)) {
+                return $names;
+            }
+        } catch (Exception $e) {
+            Logger::warning('Failed to fetch donor samples', ['error' => $e->getMessage()]);
+        }
+
+        return [
+            'María P.',
+            'Ricardo L.',
+            'Camila V.',
+            'Javiera S.',
+            'Diego A.',
+            'Valentina R.',
+            'Tomás I.',
+            'Sofía G.',
+            'Matías H.',
+        ];
     }
 
     private function fetchImpactStats(): array {
@@ -326,12 +386,20 @@ class HomeController {
              WHERE cd.location_label IS NOT NULL AND cd.location_label <> ''"
         ) ?: ['total' => 0];
 
+        $userTotals = ['total' => 0];
+        try {
+            $userTotals = $this->db->fetch("SELECT COUNT(*) AS total FROM users");
+        } catch (Exception $e) {
+            Logger::warning('Failed modular user stats', ['error' => $e->getMessage()]);
+        }
+
         return [
             'supporters' => (int)$donationStats['total_donations'],
             'raised' => (float)$donationStats['total_amount'],
             'active_campaigns' => (int)$campaignStats['active'],
             'hours' => (int)$communities['total'],
-            'communities' => (int)$communities['total']
+            'communities' => (int)$communities['total'],
+            'registered_users' => (int)($userTotals['total'] ?? 0)
         ];
     }
 
@@ -370,12 +438,20 @@ class HomeController {
             }
         }
 
+        $userTotals = ['total' => 0];
+        try {
+            $userTotals = $this->db->fetch("SELECT COUNT(*) AS total FROM users");
+        } catch (Exception $e) {
+            Logger::warning('Failed legacy user stats', ['error' => $e->getMessage()]);
+        }
+
         return [
             'supporters' => (int)($donationStats['total_donations'] ?? 0),
             'raised' => (float)($donationStats['total_amount'] ?? 0),
             'active_campaigns' => (int)($campaignStats['active'] ?? 0),
             'hours' => $communitiesTotal,
-            'communities' => $communitiesTotal
+            'communities' => $communitiesTotal,
+            'registered_users' => (int)($userTotals['total'] ?? 0)
         ];
     }
 
@@ -534,6 +610,260 @@ class HomeController {
         });
 
         return array_slice($stories, 0, 3);
+    }
+
+    private function fetchCreatorFeedbackTestimonials(int $limit = 40): array
+    {
+        $path = ROOT_PATH . '/storage/feedback/creator-feedback.jsonl';
+        if (!is_readable($path)) {
+            return [];
+        }
+
+        $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!is_array($lines) || empty($lines)) {
+            return [];
+        }
+
+        $entries = [];
+        foreach ($lines as $line) {
+            $decoded = json_decode($line, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+
+            $rating = isset($decoded['rating']) ? (float)$decoded['rating'] : null;
+            $comment = isset($decoded['comment']) ? trim((string)$decoded['comment']) : '';
+            if ($rating === null || $rating < 1 || $comment === '') {
+                continue;
+            }
+
+            $decoded['rating'] = $rating;
+            $decoded['comment'] = $comment;
+            $entries[] = $decoded;
+        }
+
+        if (empty($entries)) {
+            return [];
+        }
+
+        usort($entries, static function (array $a, array $b): int {
+            $ratingDiff = ($b['rating'] ?? 0) <=> ($a['rating'] ?? 0);
+            if ($ratingDiff !== 0) {
+                return $ratingDiff;
+            }
+
+            $aDate = strtotime($a['created_at'] ?? '1970-01-01T00:00:00Z');
+            $bDate = strtotime($b['created_at'] ?? '1970-01-01T00:00:00Z');
+
+            return $bDate <=> $aDate;
+        });
+
+        return array_slice($entries, 0, max(1, $limit));
+    }
+
+    private function buildTestimonialShowcase(array $feedbackEntries): array
+    {
+        if (empty($feedbackEntries)) {
+            return [
+                'highlight' => null,
+                'secondary' => [],
+                'count' => 0,
+                'average' => null,
+                'distribution' => [],
+            ];
+        }
+
+        $userIds = array_values(array_filter(array_unique(array_map(
+            static fn ($entry) => (int)($entry['user_id'] ?? 0),
+            $feedbackEntries
+        )), static fn ($id) => $id > 0));
+
+        $usersById = $this->fetchUsersByIds($userIds);
+
+        $cards = [];
+        $ratingSum = 0.0;
+        $distribution = [];
+
+        foreach ($feedbackEntries as $entry) {
+            $rating = (float)($entry['rating'] ?? 0);
+            $ratingSum += $rating;
+
+            $bucket = (int)floor($rating);
+            $distribution[$bucket] = ($distribution[$bucket] ?? 0) + 1;
+
+            $userId = (int)($entry['user_id'] ?? 0);
+            $userData = $usersById[$userId] ?? null;
+
+            $name = trim((string)($entry['user_name'] ?? ''));
+            if ($name === '' && $userData !== null) {
+                $composed = trim(($userData['first_name'] ?? '') . ' ' . ($userData['last_name'] ?? ''));
+                if ($composed !== '') {
+                    $name = $composed;
+                } elseif (!empty($userData['username'])) {
+                    $name = $userData['username'];
+                }
+            }
+            if ($name === '') {
+                $name = 'Miembro de Lucatón';
+            }
+
+            $roleLabel = $this->mapRoleLabel($entry['user_role'] ?? ($userData['role'] ?? 'user'));
+
+            $avatar = SessionHelper::normalizeAvatarUrl($userData['avatar_url'] ?? null);
+            $quote = $this->truncateQuote($entry['comment'] ?? '');
+
+            if ($quote === '') {
+                continue;
+            }
+
+            $createdAt = $entry['created_at'] ?? null;
+            $createdLabel = null;
+            if ($createdAt) {
+                try {
+                    $createdLabel = (new DateTimeImmutable($createdAt))->format('d/m/Y');
+                } catch (Exception $e) {
+                    $createdLabel = null;
+                }
+            }
+
+            $cards[] = [
+                'quote' => $quote,
+                'name' => $name,
+                'role' => $roleLabel,
+                'rating' => $rating,
+                'rating_display' => number_format($rating, 1, ',', '.'),
+                'avatar' => $avatar,
+                'created_at' => $createdAt,
+                'created_label' => $createdLabel,
+            ];
+        }
+
+        if (empty($cards)) {
+            return [
+                'highlight' => null,
+                'secondary' => [],
+                'count' => 0,
+                'average' => null,
+                'distribution' => [],
+            ];
+        }
+
+        usort($cards, static function (array $a, array $b): int {
+            $ratingDiff = $b['rating'] <=> $a['rating'];
+            if ($ratingDiff !== 0) {
+                return $ratingDiff;
+            }
+
+            $aDate = strtotime($a['created_at'] ?? '1970-01-01T00:00:00Z');
+            $bDate = strtotime($b['created_at'] ?? '1970-01-01T00:00:00Z');
+
+            return $bDate <=> $aDate;
+        });
+
+        $topTier = array_filter($cards, static fn ($card) => $card['rating'] >= 4.7);
+        $midTier = array_filter($cards, static fn ($card) => $card['rating'] >= 4.0 && $card['rating'] < 4.7);
+
+        $selection = [];
+
+        foreach ($topTier as $card) {
+            $selection[] = $card;
+            if (count($selection) >= 2) {
+                break;
+            }
+        }
+
+        foreach ($midTier as $card) {
+            if (count($selection) >= 4) {
+                break;
+            }
+            $selection[] = $card;
+        }
+
+        if (count($selection) < 4) {
+            foreach ($cards as $card) {
+                if (in_array($card, $selection, true)) {
+                    continue;
+                }
+                $selection[] = $card;
+                if (count($selection) >= 4) {
+                    break;
+                }
+            }
+        }
+
+        $selection = array_slice($selection, 0, 4);
+
+        $highlight = $selection[0] ?? null;
+        $secondary = array_slice($selection, 1);
+
+        $cardCount = count($cards);
+
+        $distributionFormatted = [];
+        krsort($distribution);
+        foreach ($distribution as $bucket => $count) {
+            $distributionFormatted[] = [
+                'rating' => (int)$bucket,
+                'count' => $count,
+                'percentage' => $cardCount > 0 ? (int)round(($count / $cardCount) * 100) : 0
+            ];
+        }
+
+        return [
+            'highlight' => $highlight,
+            'secondary' => $secondary,
+            'count' => $cardCount,
+            'average' => round($ratingSum / $cardCount, 1),
+            'distribution' => $distributionFormatted,
+        ];
+    }
+
+    private function fetchUsersByIds(array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        try {
+            $rows = $this->db->fetchAll(
+                "SELECT id, first_name, last_name, username, avatar_url, role FROM users WHERE id IN ({$placeholders})",
+                $ids
+            );
+        } catch (Exception $exception) {
+            Logger::warning('Failed to fetch testimonial users', ['error' => $exception->getMessage()]);
+            return [];
+        }
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int)$row['id']] = $row;
+        }
+
+        return $map;
+    }
+
+    private function mapRoleLabel(?string $role): string
+    {
+        $normalized = strtolower(trim((string)$role));
+        return match ($normalized) {
+            'admin', 'superadmin' => 'Equipo Lucatón',
+            'creator', 'user' => 'Creador verificado',
+            default => 'Miembro de la comunidad',
+        };
+    }
+
+    private function truncateQuote(string $quote, int $maxLength = 320): string
+    {
+        $trimmed = trim($quote);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (mb_strlen($trimmed) <= $maxLength) {
+            return $trimmed;
+        }
+
+        return rtrim(mb_substr($trimmed, 0, $maxLength - 1)) . '…';
     }
 
     private function normalizeLegacyRow(array $row): array {

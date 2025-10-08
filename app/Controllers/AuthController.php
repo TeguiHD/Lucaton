@@ -35,7 +35,18 @@ class AuthController {
         try {
             $user = $this->users->authenticate($email, $password);
             SessionHelper::setUser($user);
-            SessionHelper::setFlash('success', 'Bienvenido de vuelta, ' . SessionHelper::getUser()['name'] . '!');
+
+            $welcomeName = SessionHelper::getUser()['name'] ?? ($user['first_name'] ?? '');
+            $welcomeName = trim($welcomeName) !== '' ? trim($welcomeName) : 'de vuelta';
+
+            $newsletterMessage = $this->completeNewsletterIntent($user);
+
+            $flashMessage = 'Bienvenido de vuelta, ' . $welcomeName . '!';
+            if ($newsletterMessage !== null) {
+                $flashMessage .= ' ' . $newsletterMessage;
+            }
+
+            SessionHelper::setFlash('success', $flashMessage);
 
             $redirect = $_SESSION['intended_url'] ?? Router::url('panel');
             unset($_SESSION['intended_url']);
@@ -462,6 +473,49 @@ class AuthController {
         }
 
         return $input;
+    }
+
+    private function completeNewsletterIntent(array $user): ?string
+    {
+        if (empty($_SESSION['newsletter_subscribe_intent'])) {
+            return null;
+        }
+
+        $intent = $_SESSION['newsletter_subscribe_intent'];
+        unset($_SESSION['newsletter_subscribe_intent']);
+
+        $requestedAt = isset($intent['requested_at']) ? (int)$intent['requested_at'] : null;
+        if ($requestedAt !== null && $requestedAt < (time() - 3600)) {
+            return null;
+        }
+
+        $email = trim((string)($user['email'] ?? ''));
+        if ($email === '') {
+            return null;
+        }
+
+        $nameParts = array_filter([
+            $user['first_name'] ?? null,
+            $user['last_name'] ?? null,
+        ]);
+        $name = trim(implode(' ', $nameParts));
+        if ($name === '' && !empty($user['name'])) {
+            $name = trim((string)$user['name']);
+        }
+
+        try {
+            $subscription = (new NewsletterSubscription())->subscribe($email, $name !== '' ? $name : null);
+            $destination = $subscription['email'] ?? $email;
+            $message = 'Te has suscrito a las novedades de Lucatón. Te enviaremos actualizaciones a ' . $destination . '. Podrás gestionar tu preferencia desde el enlace de cada correo.';
+            SessionHelper::pushSiteToast('success', $message);
+            return $message;
+        } catch (Exception $exception) {
+            Logger::warning('Intento de suscripción pendiente falló tras login', [
+                'email' => $email,
+                'error' => $exception->getMessage()
+            ]);
+            return null;
+        }
     }
 
 

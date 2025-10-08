@@ -26,8 +26,29 @@ $stats = $stats ?? [
     'days_left' => $campaign['days_left'] ?? null,
     'donors' => (int)($campaign['donor_count'] ?? $campaign['donors'] ?? 0)
 ];
+$finalUpdateAllowed = $finalUpdateAllowed ?? false;
+$campaignFinalLocked = $campaignFinalLocked ?? false;
+
+$campaign_goal_reached = !empty($campaign['goal_reached']);
+if (!$campaign_goal_reached && ($stats['goal_amount'] ?? 0) > 0) {
+    $campaign_goal_reached = ($stats['raised_amount'] ?? 0) >= ($stats['goal_amount'] ?? 0);
+}
+
+$campaign_end_timestamp = $campaign['end_timestamp'] ?? null;
+if ($campaign_end_timestamp === null && !empty($campaign['end_date'])) {
+    $parsedEnd = strtotime((string)$campaign['end_date']);
+    if ($parsedEnd !== false) {
+        $campaign_end_timestamp = $parsedEnd;
+    }
+}
+$campaign_time_over = $campaign_end_timestamp !== null && $campaign_end_timestamp < time();
+
+$acceptingDonations = in_array($campaign['status'] ?? 'draft', ['published', 'paused'], true)
+    && !$campaign_goal_reached
+    && !$campaign_time_over;
 
 $recent_supporters = $recent_supporters ?? [];
+$donationSidebarItems = array_slice($recent_supporters, 0, 4);
 $galleryMedia = $galleryMedia ?? [];
 $campaignUpdates = $campaignUpdates ?? [];
 $creatorProfileData = $creatorProfileData ?? [];
@@ -61,9 +82,40 @@ $status_badge = [
     'class' => $status_meta['badge_class'],
     'text' => $status_meta['label']
 ];
+
+if (($campaign['status'] ?? '') === 'completed') {
+    if ($campaign_goal_reached) {
+    $status_badge = [
+        'class' => 'bg-emerald-100 text-emerald-700',
+        'text' => 'Meta alcanzada'
+    ];
+    } elseif ($campaign_time_over) {
+        $status_badge = [
+            'class' => 'bg-amber-100 text-amber-700',
+            'text' => 'Meta no alcanzada'
+        ];
+    }
+}
 $donationFormErrors = $donationFormErrors ?? [];
 $donationFormOld = $donationFormOld ?? [];
 $isUserAuthenticated = SessionHelper::isAuthenticated();
+$currentUser = SessionHelper::getUser();
+$donorAccountName = '';
+$donorAccountEmail = '';
+
+if (is_array($currentUser)) {
+    $nameParts = array_filter([
+        $currentUser['first_name'] ?? null,
+        $currentUser['last_name'] ?? null,
+    ]);
+    $donorAccountName = trim(implode(' ', $nameParts));
+    if ($donorAccountName === '' && !empty($currentUser['name'])) {
+        $donorAccountName = trim((string)$currentUser['name']);
+    }
+
+    $donorAccountEmail = trim((string)($currentUser['email'] ?? ''));
+}
+
 $ai_assisted_flag = isset($campaign['ai_assisted']) ? (bool)$campaign['ai_assisted'] : null;
 
 $video_url = trim((string)($campaign['video_url'] ?? ''));
@@ -100,6 +152,9 @@ $donationOld = array_merge([
 $donationAmountValue = preg_replace('/[^0-9]/', '', $donationOld['amount'] ?? '') ?: '5000';
 $donationIsAnonymous = ($donationOld['is_anonymous'] ?? '0') === '1';
 $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
+$campaignShareSlug = $campaign['slug'] ?? $campaign['id'] ?? '';
+$donationRedirectTarget = Router::url('campana/' . $campaignShareSlug) . '#donar';
+$loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRedirectTarget);
 ?>
 
 <!DOCTYPE html>
@@ -177,7 +232,7 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                                 $favoriteEncoded = htmlspecialchars(json_encode($favoritePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                                 $favoriteIdAttr = htmlspecialchars((string)($campaign['id'] ?? $campaignSlug), ENT_QUOTES, 'UTF-8');
                             ?>
-                            <button class="btn-ghost" title="Compartir" onclick="shareCampaign(<?= $shareEncoded ?>)">
+                            <button class="btn-ghost" title="Compartir" onclick="shareCampaign(this, <?= $shareEncoded ?>)">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
                                 </svg>
@@ -292,10 +347,35 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                         <?php endif; ?>
                     </div>
 
+                    <?php if ($finalUpdateAllowed): ?>
+                        <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
+                            <h3 class="text-sm font-semibold text-amber-900">Tu mensaje de cierre</h3>
+                            <p class="mt-1 text-xs text-amber-800">La campaña está finalizada y esta es tu última actualización. Agradece a quienes apoyaron y cuéntales cómo cerrarás el proceso.</p>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($campaignFinalLocked): ?>
+                        <div class="mb-8 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                            <h3 class="text-sm font-semibold text-gray-800">Campaña cerrada</h3>
+                            <p class="mt-1 text-xs text-gray-600">Esta campaña ya no acepta donaciones ni nuevas actualizaciones. Si necesitas seguir recibiendo apoyo, puedes iniciar una nueva campaña con información actualizada.</p>
+                            <div class="mt-3">
+                                <a href="<?= Router::url('campana/crear'); ?>" class="inline-flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100">
+                                    Crear nueva campaña
+                                </a>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if ($canManageUpdates): ?>
                         <div class="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5" id="actualizaciones-form">
-                            <h3 class="text-sm font-semibold text-emerald-900">Publica una nueva actualización</h3>
-                            <p class="mt-1 text-xs text-emerald-800">Informa avances, comparte fotos o agradece a tu comunidad. Nos encargamos de notificar a tus seguidores.</p>
+                            <h3 class="text-sm font-semibold text-emerald-900">
+                                <?= $finalUpdateAllowed ? 'Publica tu mensaje de cierre' : 'Publica una nueva actualización'; ?>
+                            </h3>
+                            <p class="mt-1 text-xs text-emerald-800">
+                                <?= $finalUpdateAllowed
+                                    ? 'Agradece a quienes apoyaron, confirma la transparencia final y comparte próximos pasos. Este mensaje se enviará a tu comunidad.'
+                                    : 'Informa avances, comparte fotos o agradece a tu comunidad. Nos encargamos de notificar a tus seguidores.'; ?>
+                            </p>
 
                             <?php if (!empty($updateFormErrors)): ?>
                                 <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
@@ -476,15 +556,17 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                             <?php foreach ($recent_supporters as $supporter): ?>
                                 <li class="flex items-center justify-between">
                                     <div>
-                                        <p class="font-medium text-gray-900">
-                                            <?php
-                                            $name = trim(($supporter['first_name'] ?? '') . ' ' . ($supporter['last_name'] ?? ''));
-                                            if ($name === '') {
-                                                $name = $supporter['donor_name'] ?? $supporter['username'] ?? 'Donador anónimo';
+                                        <?php
+                                        $isAnonymousSupporter = !empty($supporter['is_anonymous']);
+                                        $supporterName = 'Aporte anónimo';
+                                        if (!$isAnonymousSupporter) {
+                                            $supporterName = trim(($supporter['first_name'] ?? '') . ' ' . ($supporter['last_name'] ?? ''));
+                                            if ($supporterName === '') {
+                                                $supporterName = $supporter['donor_name'] ?? $supporter['username'] ?? 'Colaborador';
                                             }
-                                            echo htmlspecialchars($name);
-                                            ?>
-                                        </p>
+                                        }
+                                        ?>
+                                        <p class="font-medium text-gray-900"><?= htmlspecialchars($supporterName) ?></p>
                                         <?php if (!empty($supporter['message'])): ?>
                                             <p class="text-sm text-gray-500"><?php echo htmlspecialchars($supporter['message']); ?></p>
                                         <?php endif; ?>
@@ -505,8 +587,8 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                     <div class="space-y-3">
                         <p class="text-3xl font-semibold text-gray-900">$<?php echo number_format($stats['raised_amount'], 0, ',', '.'); ?></p>
                         <p class="text-sm text-gray-500">de una meta de $<?php echo number_format($stats['goal_amount'], 0, ',', '.'); ?></p>
-                        <div class="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                            <div class="h-2 bg-gradient-to-r from-copihue-500 to-copihue-600" style="width: <?php echo min(100, $stats['progress']); ?>%"></div>
+                        <div class="progress" aria-hidden="true">
+                            <div class="progress-fill" style="width: <?php echo min(100, $stats['progress']); ?>%"></div>
                         </div>
                         <div class="flex justify-between text-sm text-gray-600">
                             <span><?php echo $stats['progress']; ?>% alcanzado</span>
@@ -518,92 +600,123 @@ $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
                     </div>
 
                     <div class="space-y-4" id="donar">
-                        <?php if (isset($donationFormErrors['general'])): ?>
-                            <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                <?= htmlspecialchars($donationFormErrors['general']) ?>
-                            </div>
-                        <?php endif; ?>
-                        <form method="POST" action="<?= Router::url('api/donate/' . ($campaign['id'] ?? 0)) ?>" class="space-y-4" novalidate>
-                            <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
-
-                            <div>
-                                <label for="donation-amount" class="block text-sm font-medium text-gray-700">Monto del aporte</label>
-                                <input id="donation-amount" name="amount" type="number" min="1000" step="500" required value="<?= htmlspecialchars($donationAmountValue) ?>" class="mt-1 w-full rounded-md border <?= isset($donationFormErrors['amount']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
-                                <?php if (isset($donationFormErrors['amount'])): ?>
-                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['amount']) ?></p>
-                                <?php else: ?>
-                                    <p class="mt-1 text-xs text-gray-500">Aportes simulados desde $1.000 CLP.</p>
-                                <?php endif; ?>
-                            </div>
-
-                            <?php if (!$isUserAuthenticated): ?>
-                                <div class="grid gap-4 sm:grid-cols-2">
-                                    <div>
-                                        <label for="donation-name" class="block text-sm font-medium text-gray-700">Tu nombre</label>
-                                        <input id="donation-name" name="donor_name" type="text" required value="<?= htmlspecialchars($donationOld['donor_name'] ?? '') ?>" class="mt-1 w-full rounded-md border <?= isset($donationFormErrors['donor_name']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
-                                        <?php if (isset($donationFormErrors['donor_name'])): ?>
-                                            <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['donor_name']) ?></p>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div>
-                                        <label for="donation-email" class="block text-sm font-medium text-gray-700">Correo electrónico</label>
-                                        <input id="donation-email" name="donor_email" type="email" required value="<?= htmlspecialchars($donationOld['donor_email'] ?? '') ?>" class="mt-1 w-full rounded-md border <?= isset($donationFormErrors['donor_email']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
-                                        <?php if (isset($donationFormErrors['donor_email'])): ?>
-                                            <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['donor_email']) ?></p>
-                                        <?php endif; ?>
-                                    </div>
+                        <?php if (!$acceptingDonations): ?>
+                            <?php if ($campaign_goal_reached): ?>
+                                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                                    Esta campaña alcanzó su meta y ya no recibe nuevos aportes. ¡Gracias por apoyar!
+                                </div>
+                            <?php else: ?>
+                                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                    Esta campaña finalizó y ya no recibe nuevos aportes. El tiempo terminó sin alcanzar la meta, pero agradecemos tu apoyo ✨
+                                </div>
+                            <?php endif; ?>
+                        <?php elseif (!$isUserAuthenticated): ?>
+                            <a href="<?= htmlspecialchars($loginRedirectUrl) ?>" class="btn-primary w-full text-center">Donar</a>
+                        <?php else: ?>
+                            <?php if (isset($donationFormErrors['general'])): ?>
+                                <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                    <?= htmlspecialchars($donationFormErrors['general']) ?>
                                 </div>
                             <?php endif; ?>
 
-                            <div>
-                                <label for="donation-payment-method" class="block text-sm font-medium text-gray-700">Método de aporte</label>
-                                <select id="donation-payment-method" name="payment_method" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
-                                    <?php
-                                    $paymentOptions = [
-                                        'manual' => 'Transferencia simulada',
-                                        'credit_card' => 'Tarjeta de crédito (demo)',
-                                        'debit_card' => 'Tarjeta de débito (demo)',
-                                        'bank_transfer' => 'Transferencia bancaria',
-                                        'paypal' => 'PayPal (demo)',
-                                        'webpay' => 'Webpay (demo)'
-                                    ];
-                                    foreach ($paymentOptions as $method => $label):
-                                    ?>
-                                        <option value="<?= htmlspecialchars($method) ?>" <?= $donationPaymentMethod === $method ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label for="donation-message" class="block text-sm font-medium text-gray-700">Mensaje para la campaña (opcional)</label>
-                                <textarea id="donation-message" name="message" rows="3" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500" placeholder="Comparte unas palabras de apoyo."><?= htmlspecialchars($donationOld['message'] ?? '') ?></textarea>
-                                <?php if (isset($donationFormErrors['message'])): ?>
-                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['message']) ?></p>
+                            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                                <p class="font-medium text-gray-900">Aportarás como <?= htmlspecialchars($donorAccountName !== '' ? $donorAccountName : 'tu cuenta') ?></p>
+                                <?php if ($donorAccountEmail !== ''): ?>
+                                    <p class="text-xs text-gray-500">Confirmaremos el aporte en <?= htmlspecialchars($donorAccountEmail) ?>.</p>
                                 <?php endif; ?>
+                                <p class="text-xs text-gray-500 mt-2">Marca la opción de donación anónima si prefieres ocultar tu nombre públicamente (igual registraremos el aporte en tu historial).</p>
                             </div>
 
-                            <div class="flex items-center gap-2">
-                                <input id="donation-anonymous" name="is_anonymous" type="checkbox" value="1" <?= $donationIsAnonymous ? 'checked' : '' ?> class="h-4 w-4 rounded border-gray-300 text-copihue-600 focus:ring-copihue-500">
-                                <label for="donation-anonymous" class="text-sm text-gray-700">Prefiero que mi aporte aparezca como anónimo</label>
-                            </div>
+                            <form method="POST" action="<?= Router::url('api/donate/' . ($campaign['id'] ?? 0)) ?>" class="space-y-4" novalidate>
+                                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
 
-                            <button type="submit" class="w-full inline-flex items-center justify-center rounded-md bg-copihue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-copihue-700">
-                                Registrar aporte simulado
-                            </button>
-                        </form>
-                        <p class="text-xs text-gray-500 text-center">
-                            Las donaciones se registran de forma simulada para fines académicos.
-                        </p>
-                    </div>
-                </div>
+                                <div>
+                                    <label for="donation-amount" class="block text-sm font-medium text-gray-700">Monto del aporte</label>
+                                    <input id="donation-amount" name="amount" type="number" min="1000" step="500" required value="<?= htmlspecialchars($donationAmountValue) ?>" class="mt-1 w-full rounded-md border <?= isset($donationFormErrors['amount']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
+                                    <?php if (isset($donationFormErrors['amount'])): ?>
+                                        <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['amount']) ?></p>
+                                    <?php else: ?>
+                                        <p class="mt-1 text-xs text-gray-500">Aportes simulados desde $1.000 CLP.</p>
+                                    <?php endif; ?>
+                                </div>
 
-                <div class="bg-white shadow-soft rounded-3xl p-6 space-y-4">
-                    <h2 class="text-lg font-semibold text-gray-900">Comparte esta campaña</h2>
-                    <div class="space-y-2">
-                        <button type="button" class="btn-outline w-full" onclick="shareCampaign(<?= $shareEncoded ?>)">Compartir campaña</button>
-                        <a class="btn-outline w-full" target="_blank" rel="noopener noreferrer" href="https://www.facebook.com/sharer/sharer.php?u=<?php echo urlencode(Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']))); ?>">Compartir en Facebook</a>
-                        <a class="btn-outline w-full" target="_blank" rel="noopener noreferrer" href="https://twitter.com/intent/tweet?url=<?php echo urlencode(Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']))); ?>&text=<?php echo urlencode($campaign['title']); ?>">Compartir en X</a>
+                                <div>
+                                    <label for="donation-payment-method" class="block text-sm font-medium text-gray-700">Método de aporte</label>
+                                    <select id="donation-payment-method" name="payment_method" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
+                                        <?php
+                                        $paymentOptions = [
+                                            'manual' => 'Transferencia simulada',
+                                            'credit_card' => 'Tarjeta de crédito (demo)',
+                                            'debit_card' => 'Tarjeta de débito (demo)',
+                                            'bank_transfer' => 'Transferencia bancaria',
+                                            'paypal' => 'PayPal (demo)',
+                                            'webpay' => 'Webpay (demo)'
+                                        ];
+                                        foreach ($paymentOptions as $method => $label):
+                                        ?>
+                                            <option value="<?= htmlspecialchars($method) ?>" <?= $donationPaymentMethod === $method ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="donation-message" class="block text-sm font-medium text-gray-700">Mensaje para la campaña (opcional)</label>
+                                    <textarea id="donation-message" name="message" rows="3" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500" placeholder="Comparte unas palabras de apoyo."><?= htmlspecialchars($donationOld['message'] ?? '') ?></textarea>
+                                    <?php if (isset($donationFormErrors['message'])): ?>
+                                        <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['message']) ?></p>
+                                    <?php endif; ?>
+                                </div>
+
+                                <label class="flex items-center gap-2 text-sm text-gray-700">
+                                    <input id="donation-anonymous" name="is_anonymous" type="checkbox" value="1" <?= $donationIsAnonymous ? 'checked' : '' ?> class="h-4 w-4 rounded border-gray-300 text-copihue-600 focus:ring-copihue-500">
+                                    Donar de forma anónima en la página pública
+                                </label>
+
+                                <button type="submit" class="w-full inline-flex items-center justify-center rounded-md bg-copihue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-copihue-700 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-2">
+                                    Registrar aporte simulado
+                                </button>
+                            </form>
+                            <p class="text-xs text-gray-500 text-center">
+                                Las donaciones se registran de forma simulada para fines académicos.
+                            </p>
+                        <?php endif; ?>
                     </div>
+
+                    <?php if (!empty($donationSidebarItems)): ?>
+                        <div class="space-y-3 pt-4 border-t border-gray-100">
+                            <h3 class="text-sm font-semibold text-gray-900">Aportes recientes</h3>
+                            <ul class="space-y-3">
+                                <?php foreach ($donationSidebarItems as $sidebarDonation): ?>
+                                    <?php
+                                    $isAnonymousSidebar = !empty($sidebarDonation['is_anonymous']);
+                                    $sidebarName = 'Aporte anónimo';
+                                    if (!$isAnonymousSidebar) {
+                                        $sidebarName = trim(($sidebarDonation['first_name'] ?? '') . ' ' . ($sidebarDonation['last_name'] ?? ''));
+                                        if ($sidebarName === '') {
+                                            $sidebarName = $sidebarDonation['donor_name'] ?? $sidebarDonation['username'] ?? 'Colaborador';
+                                        }
+                                    }
+                                    $sidebarAmount = '$' . number_format((float)($sidebarDonation['amount'] ?? 0), 0, ',', '.');
+                                    $sidebarDate = isset($sidebarDonation['created_at'])
+                                        ? date('d M Y', strtotime($sidebarDonation['created_at']))
+                                        : null;
+                                    ?>
+                                    <li class="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                                        <div class="flex-1">
+                                            <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($sidebarName) ?></p>
+                                            <?php if (!empty($sidebarDonation['message'])): ?>
+                                                <p class="text-xs text-gray-500 leading-snug"><?= htmlspecialchars($sidebarDonation['message']) ?></p>
+                                            <?php elseif ($sidebarDate): ?>
+                                                <p class="text-xs text-gray-500 leading-snug">Aportó el <?= htmlspecialchars($sidebarDate) ?></p>
+                                            <?php endif; ?>
+                                        </div>
+                                        <span class="ml-3 text-sm font-semibold text-copihue-600"><?= htmlspecialchars($sidebarAmount) ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <a href="<?= htmlspecialchars(Router::url('campana/' . $campaignShareSlug . '/donaciones')) ?>" class="btn-outline w-full text-center">Ver todos los aportes</a>
+                        </div>
+                    <?php endif; ?>
                 </div>
 
             </aside>

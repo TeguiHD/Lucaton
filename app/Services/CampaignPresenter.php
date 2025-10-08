@@ -19,11 +19,20 @@ class CampaignPresenter {
 
         $endDate = $row['end_date'] ?? null;
         $daysLeft = null;
+        $endTimestamp = null;
         if (!empty($endDate)) {
-            $timestamp = strtotime($endDate);
-            if ($timestamp !== false) {
-                $daysLeft = max(0, (int)ceil(($timestamp - time()) / 86400));
-                if (($status === '' || $status === null) && $timestamp < time()) {
+            $parsedTimestamp = strtotime($endDate);
+            if ($parsedTimestamp === false) {
+                $dateOnly = DateTime::createFromFormat('Y-m-d', $endDate);
+                if ($dateOnly instanceof DateTime) {
+                    $parsedTimestamp = $dateOnly->getTimestamp();
+                }
+            }
+
+            if ($parsedTimestamp !== false) {
+                $endTimestamp = $parsedTimestamp;
+                $daysLeft = max(0, (int)ceil(($parsedTimestamp - time()) / 86400));
+                if (($status === '' || $status === null) && $parsedTimestamp < time()) {
                     $status = 'ended';
                 }
             }
@@ -94,6 +103,15 @@ class CampaignPresenter {
         $summary = $row['summary'] ?? $row['short_description'] ?? ($row['description'] ?? '');
         $story = $row['story'] ?? $row['full_story'] ?? ($row['description'] ?? $summary);
 
+        $goalReached = $goal > 0 && $raised >= $goal;
+        $timeOver = $endTimestamp !== null && $endTimestamp < time();
+        $completionOutcome = null;
+        if ($goalReached) {
+            $completionOutcome = 'goal_reached';
+        } elseif ($timeOver) {
+            $completionOutcome = 'time_over';
+        }
+
         $presented = [
             'id' => isset($row['id']) ? (int)$row['id'] : null,
             'slug' => $row['slug'] ?? null,
@@ -108,6 +126,7 @@ class CampaignPresenter {
             'start_date' => $row['start_date'] ?? null,
             'end_date' => $endDate,
             'days_left' => $daysLeft,
+            'end_timestamp' => $endTimestamp,
             'cover_image_url' => $image,
             'image_url' => $image,
             'featured_image_url' => $image,
@@ -133,6 +152,9 @@ class CampaignPresenter {
             'funding_notified_at' => $row['funding_notified_at'] ?? null,
             'funding_celebrated_at' => $row['funding_celebrated_at'] ?? null,
             'visibility' => $row['visibility'] ?? null,
+            'goal_reached' => $goalReached,
+            'time_over' => $timeOver,
+            'completion_outcome' => $completionOutcome,
         ];
 
         // Backwards-compatibility aliases for legacy templates still in transition.

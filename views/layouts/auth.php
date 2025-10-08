@@ -1,3 +1,16 @@
+<?php
+if (isset($_SESSION['flash_message'])) {
+    SessionHelper::pushSiteToast($_SESSION['flash_type'] ?? 'info', (string)$_SESSION['flash_message']);
+    unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+}
+
+$siteToastQueue = array_map(static function ($toast) {
+    return [
+        'type' => $toast['type'] ?? 'info',
+        'message' => $toast['message'] ?? ''
+    ];
+}, SessionHelper::pullSiteToasts());
+?>
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-gray-50">
 <head>
@@ -15,6 +28,12 @@
     <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
     <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
     
+    <?php if (!empty($siteToastQueue)): ?>
+        <script>
+            window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
+        </script>
+    <?php endif; ?>
+
     <!-- Additional head content -->
     <?= $additional_head ?? '' ?>
 </head>
@@ -102,7 +121,9 @@
     
     <!-- JS de interacción ligera (sin CDN) -->
     <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
-    
+
+    <div class="site-toast-stack" data-site-toast-container></div>
+
     <!-- Additional scripts -->
     <?= $additional_scripts ?? '' ?>
 </body>

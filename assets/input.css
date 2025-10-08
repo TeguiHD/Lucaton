@@ -13,7 +13,8 @@
   }
   
   body {
-    @apply font-sans text-neutral-900 bg-neutral-50;
+    font-family: 'Inter', 'Poppins', 'system-ui', sans-serif;
+    @apply text-neutral-900 bg-neutral-50;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
   
@@ -41,7 +42,7 @@
   
   /* Enlaces base */
   a {
-    @apply transition-colors duration-200;
+    @apply transition-colors duration-300;
   }
 
   [x-cloak] {
@@ -91,8 +92,8 @@
   }
 
   /* === BOTONES === */
-.btn {
-    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   
   .btn-primary {
@@ -258,16 +259,28 @@
   }
   
   .skeleton {
-    @apply bg-neutral-200 rounded animate-pulse;
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    background: linear-gradient(90deg, #f2f2f2 0%, #f8f8f8 50%, #f2f2f2 100%);
+    background-size: 200% 100%;
+    animation: sheen 1.2s ease-in-out infinite;
   }
   
   /* === PROGRESO === */
   .progress-bar {
-    @apply w-full bg-neutral-200 rounded-full h-2 overflow-hidden;
+    background: #E5E7EB;
+    border-radius: 9999px;
+    overflow: hidden;
+    height: 10px;
+    width: 100%;
   }
   
   .progress-fill {
-    @apply h-full bg-brand-600 transition-all duration-300 ease-out;
+    background: linear-gradient(90deg, #E53E3E 0%, #F56565 100%);
+    height: 100%;
+    width: 0;
+    transition: width 0.8s ease-in-out;
   }
   
   /* === 2025 MODERN COMPONENTS === */
@@ -280,6 +293,12 @@
   .btn-floating { @apply inline-flex items-center justify-center h-12 w-12 rounded-full bg-copihue-600 text-white shadow-medium hover:bg-copihue-700 transition-colors; }
   .wave-top { background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160"><path fill="%23ffffff" d="M0,128L80,128C160,128,320,128,480,112C640,96,800,64,960,58.7C1120,53,1280,75,1360,85.3L1440,96L1440,0L1360,0C1280,0,1120,0,960,0C800,0,640,0,480,0C320,0,160,0,80,0L0,0Z"/></svg>') top center/cover no-repeat; }
   .wave-bottom { background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160"><path fill="%23f9fafb" d="M0,128L80,138.7C160,149,320,171,480,165.3C640,160,800,128,960,112C1120,96,1280,96,1360,96L1440,96L1440,160L1360,160C1280,160,1120,160,960,160C800,160,640,160,480,160C320,160,160,160,80,160L0,160Z"/></svg>') bottom center/cover no-repeat; }
+  .hover-rise { @apply transition-transform duration-300 ease-out; }
+  .hover-rise:hover { transform: translateY(-4px) scale(1.03); }
+  .fade-up { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .fade-up.is-visible { opacity: 1; transform: translateY(0); }
+  .slide-up { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .slide-up.is-visible { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes mobile-menu-slide-down {
@@ -317,6 +336,18 @@
   }
 }
 
+@keyframes sheen {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse-heartbeat {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.1); }
+  50% { transform: scale(0.95); }
+  70% { transform: scale(1.06); }
+}
+
 @layer utilities {
   .animate-float-soft {
     animation: float-soft 12s ease-in-out infinite;
@@ -329,6 +360,10 @@
 
   .animate-pulse-glow {
     animation: pulse-glow 4.5s ease-in-out infinite;
+  }
+
+  .animate-heartbeat-urgent {
+    animation: pulse-heartbeat 1.2s ease-in-out infinite;
   }
 
   .animation-delay-200 {
@@ -394,6 +429,28 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .progress-fill {
+    transition: none !important;
+  }
+
+  .skeleton {
+    animation: none !important;
+  }
+
+  .animate-float-soft,
+  .animate-float-soft-delay,
+  .animate-pulse-glow,
+  .animate-heartbeat-urgent {
+    animation: none !important;
+  }
+
+  .fade-up,
+  .slide-up {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 

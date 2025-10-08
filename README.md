@@ -18,6 +18,21 @@ Plataforma de crowdfunding social con asistencia de inteligencia artificial para
 - **Actualizaciones de Campaña**: Múltiples niveles de visibilidad (público, donantes, privado)
 - **Sistema de Celebración**: Overlays animados para logros y metas alcanzadas
 
+#### 📧 **Sistema de Newsletter y Comunicación Masiva**
+- **Gestión de Suscripciones**: Sistema completo de suscripción/desuscripción con tokens únicos
+- **Panel Administrativo**: Interface para crear campañas con templates predefinidos y vista previa
+- **Templates Profesionales**: Actualización general, mejoras de plataforma, historias de impacto
+- **Envío Masivo**: Sistema de colas y tracking de destinatarios con métricas detalladas
+- **Base de Datos**: 3 nuevas tablas para suscripciones, campañas y destinatarios
+
+#### 💬 **Sistema de Feedback de Creadores**
+- **Recopilación Estructurada**: Rating y comentarios de creadores sobre la plataforma
+- **Validación de Permisos**: Solo usuarios con campañas pueden enviar feedback
+- **Almacenamiento JSONL**: Sistema eficiente para análisis de datos
+- **Métricas de Satisfacción**: Tracking de experiencia de usuario para mejoras continuas
+- **Sistema de feedback** estructurado para mejora continua
+- **Métricas de satisfacción** y análisis de experiencia de usuario
+
 #### 🎨 **Página de Construcción Actualizada**
 - **Branding Lucatón**: Actualización completa de la identidad visual del proyecto
 - **Contenido Contextualizado**: Adaptación de todas las secciones al contexto de crowdfunding social
@@ -44,6 +59,8 @@ Plataforma de crowdfunding social con asistencia de inteligencia artificial para
 - Mejoras en la arquitectura MVC
 - Optimización de consultas y performance
 - Actualización completa de la página de construcción con branding Lucatón
+- Sistema de newsletter con base de datos completa y panel administrativo
+- Sistema de feedback de creadores con almacenamiento estructurado
 
 ## 🎯 Características Principales
 
@@ -121,6 +138,7 @@ Tesis/
 ├── 📄 .htaccess               # Configuración Apache principal
 ├── 📄 composer.json           # Dependencias PHP
 ├── 📄 composer.lock           # Lock de dependencias PHP
+├── 📄 database/migrations/018_create_newsletter_tables.sql  # Migración newsletter
 ├── 📄 index.php               # Punto de entrada principal
 ├── 📄 package.json            # Dependencias Node.js
 ├── 📄 PagConstrucción.html    # Página de construcción/landing con branding Lucatón
@@ -244,6 +262,7 @@ SESSION_LIFETIME=7200
 - ✅ **Auditoría y logs** de actividad
 - ✅ **Centro de noticias** con editor WYSIWYG
 - ✅ **Sistema de notificaciones masivas** con segmentación
+- ✅ **Newsletter y comunicación** con templates y métricas de envío
 - ✅ **Historial de notificaciones** con métricas de entrega
 - ✅ **Gestión de notificaciones** masivas
 

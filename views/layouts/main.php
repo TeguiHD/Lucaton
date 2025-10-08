@@ -1,5 +1,17 @@
 <?php 
 $current_page = $current_page ?? '';
+
+if (isset($_SESSION['flash_message'])) {
+    SessionHelper::pushSiteToast($_SESSION['flash_type'] ?? 'info', (string)$_SESSION['flash_message']);
+    unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+}
+
+$siteToastQueue = array_map(static function ($toast) {
+    return [
+        'type' => $toast['type'] ?? 'info',
+        'message' => $toast['message'] ?? ''
+    ];
+}, SessionHelper::pullSiteToasts());
 ?>
 <!DOCTYPE html>
 <html lang="es" class="h-full">
@@ -35,6 +47,12 @@ $current_page = $current_page ?? '';
     
     <!-- Preload critical resources -->
     <link rel="preload" href="<?= APP_URL ?>/public/assets/css/app.css" as="style">
+
+    <?php if (!empty($siteToastQueue)): ?>
+        <script>
+            window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
+        </script>
+    <?php endif; ?>
     
     <!-- Additional head content -->
     <?= $additional_head ?? '' ?>
@@ -51,18 +69,6 @@ $current_page = $current_page ?? '';
 
         <!-- Main Content -->
         <main id="main-content" class="flex-1" role="main">
-            <!-- Flash Messages -->
-            <?php if (isset($_SESSION['flash_message'])): ?>
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-                    <div class="alert alert-<?= $_SESSION['flash_type'] ?? 'info' ?>" role="alert">
-                        <?= htmlspecialchars($_SESSION['flash_message']) ?>
-                    </div>
-                </div>
-                <?php 
-                unset($_SESSION['flash_message'], $_SESSION['flash_type']); 
-                ?>
-            <?php endif; ?>
-
             <!-- Page Content -->
             <?= $content ?>
         </main>
@@ -70,6 +76,8 @@ $current_page = $current_page ?? '';
         <!-- Footer -->
         <?php include VIEWS_PATH . '/layouts/partials/footer.php'; ?>
     </div>
+
+    <div class="site-toast-stack" data-site-toast-container></div>
 
     <!-- Additional scripts -->
     <?= $additional_scripts ?? '' ?>

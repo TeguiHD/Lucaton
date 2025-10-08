@@ -7,6 +7,7 @@
 class Donation {
     private Database $db;
     private static $schemaCapabilities = null;
+    private static $campaignSchemaCapabilities = null;
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -17,10 +18,24 @@ class Donation {
                 'created_at' => $this->db->columnExists('donations', 'created_at'),
             ];
         }
+
+        if (self::$campaignSchemaCapabilities === null) {
+            self::$campaignSchemaCapabilities = [
+                'raised_amount' => $this->db->columnExists('campaigns', 'raised_amount'),
+                'donor_count' => $this->db->columnExists('campaigns', 'donor_count'),
+                'status' => $this->db->columnExists('campaigns', 'status'),
+                'goal_amount' => $this->db->columnExists('campaigns', 'goal_amount'),
+                'updated_at' => $this->db->columnExists('campaigns', 'updated_at'),
+            ];
+        }
     }
 
     private function supportsColumn(string $column): bool {
         return self::$schemaCapabilities[$column] ?? false;
+    }
+
+    private function campaignSupports(string $column): bool {
+        return self::$campaignSchemaCapabilities[$column] ?? false;
     }
 
     /**
@@ -34,7 +49,7 @@ class Donation {
             [$data['campaign_id']]
         );
 
-        if (!$campaign || !in_array($campaign['status'], ['published', 'completed', 'paused'], true)) {
+        if (!$campaign || !in_array($campaign['status'], ['published', 'paused'], true)) {
             throw new Exception('La campaña no está disponible para recibir donaciones');
         }
 
@@ -156,6 +171,18 @@ class Donation {
         $params[] = $offset;
 
         return $this->db->fetchAll($sql, $params);
+    }
+
+    public function countByCampaignId(int $campaignId): int {
+        $sql = 'SELECT COUNT(*) AS total FROM donations WHERE campaign_id = ?';
+        $params = [$campaignId];
+
+        if ($this->supportsColumn('status')) {
+            $sql .= " AND status = 'completed'";
+        }
+
+        $row = $this->db->fetch($sql, $params);
+        return (int)($row['total'] ?? 0);
     }
 
     /**
@@ -292,13 +319,15 @@ class Donation {
         }
 
         if (empty($data['user_id'])) {
-            if (empty($data['donor_name'])) {
-                throw new Exception('Nombre del donante requerido');
-            }
+            throw new Exception('Debes iniciar sesión para realizar un aporte.');
+        }
 
-            if (empty($data['donor_email']) || !filter_var($data['donor_email'], FILTER_VALIDATE_EMAIL)) {
-                throw new Exception('Ingresa un email válido');
-            }
+        if (empty($data['donor_email']) || !filter_var($data['donor_email'], FILTER_VALIDATE_EMAIL)) {
+            throw new Exception('No se pudo validar el correo asociado al aporte.');
+        }
+
+        if (empty($data['donor_name'])) {
+            throw new Exception('No se pudo identificar el nombre del aportante.');
         }
     }
 
@@ -340,6 +369,82 @@ class Donation {
                 $donation['campaign_id']
             ]
         );
+
+        $this->syncCampaignProgress((int)$donation['campaign_id'], $isRefund);
+    }
+
+    private function syncCampaignProgress(int $campaignId, bool $isRefund): void
+    {
+        if ($campaignId <= 0) {
+            return;
+        }
+
+        try {
+            $row = $this->db->fetch(
+                "SELECT c.id, c.status, c.goal_amount, c.raised_amount AS legacy_raised, c.donor_count AS legacy_donors,
+                        cm.raised_amount AS metrics_raised, cm.donor_count AS metrics_donors
+                 FROM campaigns c
+                 LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
+                 WHERE c.id = ?",
+                [$campaignId]
+            );
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo sincronizar el progreso de la campaña tras una donación', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage()
+            ]);
+            return;
+        }
+
+        if (!$row) {
+            return;
+        }
+
+        $raised = (float)($row['metrics_raised'] ?? $row['legacy_raised'] ?? 0);
+        $donors = (int)($row['metrics_donors'] ?? $row['legacy_donors'] ?? 0);
+
+        $updatePayload = [];
+        if ($this->campaignSupports('raised_amount')) {
+            $updatePayload['raised_amount'] = $raised;
+        }
+        if ($this->campaignSupports('donor_count')) {
+            $updatePayload['donor_count'] = max(0, $donors);
+        }
+        if ($this->campaignSupports('updated_at') && !empty($updatePayload)) {
+            $updatePayload['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        if (!empty($updatePayload)) {
+            try {
+                $this->db->update('campaigns', $updatePayload, 'id = ?', [$campaignId]);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo actualizar los totales agregados de la campaña', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
+        }
+
+        if ($isRefund) {
+            return;
+        }
+
+        $goal = (float)($row['goal_amount'] ?? 0);
+        $currentStatus = $row['status'] ?? null;
+        if ($goal <= 0 || $raised < $goal || $currentStatus === 'completed' || !$this->campaignSupports('status')) {
+            return;
+        }
+
+        try {
+            $campaignModel = new Campaign();
+            $campaignModel->changeStatus($campaignId, 'completed', null, 'Meta financiera alcanzada automáticamente');
+            $campaignModel->markFundingMilestone($campaignId, ['mark_funded' => true]);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo finalizar automáticamente la campaña tras alcanzar la meta', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage()
+            ]);
+        }
     }
 
     /**
