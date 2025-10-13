@@ -20,6 +20,7 @@ composer-setup.php
 # Uploaded files and user content
 /public/storage/uploads/*
 /public/storage/avatars/*
+/public/storage/campaigns/*
 /storage/ai_files/*
 
 # IDE and editor files
@@ -71,3 +72,8 @@ clover.xml
 !storage/private/.gitkeep
 !public/storage/uploads/.gitkeep
 !public/storage/avatars/.gitkeep
+!public/storage/campaigns/.gitkeep
+
+# Dev mail preview artifacts
+/storage/logs/mail-previews/*
+!storage/logs/mail-previews/.gitkeep

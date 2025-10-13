@@ -194,7 +194,9 @@ class Campaign {
         $joins = " FROM campaigns c";
 
         if ($hasMetricsTable) {
-            $select .= ", cm.raised_amount, cm.donor_count";
+            $select .= ",
+                cm.raised_amount AS metrics_raised_amount,
+                cm.donor_count AS metrics_donor_count";
             $joins .= " LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id";
         }
 
@@ -210,13 +212,35 @@ class Campaign {
 
         $campaigns = $this->db->fetchAll($sql, [$userId, $limit, $offset]);
 
-        if (!$hasMetricsTable) {
-            foreach ($campaigns as &$campaign) {
-                $campaign['raised_amount'] = $campaign['raised_amount'] ?? 0;
-                $campaign['donor_count'] = $campaign['donor_count'] ?? 0;
+        foreach ($campaigns as &$campaign) {
+            $raisedCandidates = [];
+            if (isset($campaign['raised_amount']) && $campaign['raised_amount'] !== null) {
+                $raisedCandidates[] = (float)$campaign['raised_amount'];
             }
-            unset($campaign);
+            if (isset($campaign['metrics_raised_amount']) && $campaign['metrics_raised_amount'] !== null) {
+                $raisedCandidates[] = (float)$campaign['metrics_raised_amount'];
+            }
+            if (isset($campaign['current_amount']) && $campaign['current_amount'] !== null) {
+                $raisedCandidates[] = (float)$campaign['current_amount'];
+            }
+
+            $campaign['raised_amount'] = !empty($raisedCandidates) ? max($raisedCandidates) : 0.0;
+            unset($campaign['metrics_raised_amount']);
+
+            $donorCandidates = [];
+            if (isset($campaign['donor_count']) && $campaign['donor_count'] !== null) {
+                $donorCandidates[] = (int)$campaign['donor_count'];
+            }
+            if (isset($campaign['metrics_donor_count']) && $campaign['metrics_donor_count'] !== null) {
+                $donorCandidates[] = (int)$campaign['metrics_donor_count'];
+            }
+
+            $campaign['donor_count'] = !empty($donorCandidates) ? max($donorCandidates) : 0;
+            unset($campaign['metrics_donor_count']);
+
+            unset($campaign['metrics_average_donation'], $campaign['metrics_share_count'], $campaign['metrics_view_count'], $campaign['metrics_last_donation_at']);
         }
+        unset($campaign);
 
         return $campaigns;
     }
@@ -612,11 +636,22 @@ class Campaign {
                 continue;
             }
 
-            $endTimestamp = strtotime($rawEnd);
-            if ($endTimestamp === false) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawEnd) === 1) {
                 $dateOnly = DateTime::createFromFormat('Y-m-d', $rawEnd);
                 if ($dateOnly instanceof DateTime) {
+                    $dateOnly->setTime(23, 59, 59);
                     $endTimestamp = $dateOnly->getTimestamp();
+                } else {
+                    $endTimestamp = strtotime($rawEnd);
+                }
+            } else {
+                $endTimestamp = strtotime($rawEnd);
+                if ($endTimestamp === false) {
+                    $dateOnly = DateTime::createFromFormat('Y-m-d', $rawEnd);
+                    if ($dateOnly instanceof DateTime) {
+                        $dateOnly->setTime(23, 59, 59);
+                        $endTimestamp = $dateOnly->getTimestamp();
+                    }
                 }
             }
 

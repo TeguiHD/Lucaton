@@ -185,8 +185,14 @@ function render_campaign_card($campaign, $options = []) {
 
         $html .= '<div class="flex justify-between text-xs text-gray-500 mt-1">';
         $html .= '<span>Meta: $' . number_format($goal_amount, 0, ',', '.') . '</span>';
-        if (in_array($status, ['published', 'active'], true) && $days_left !== null) {
-            $html .= '<span>' . max(0, (int)$days_left) . ' días restantes</span>';
+        if (in_array($status, ['published', 'active'], true)) {
+            if (!empty($campaign['time_over'])) {
+                $html .= '<span>Campaña finalizada</span>';
+            } elseif (!empty($campaign['time_remaining_label'])) {
+                $html .= '<span>' . htmlspecialchars($campaign['time_remaining_label']) . '</span>';
+            } elseif ($days_left !== null) {
+                $html .= '<span>' . max(0, (int)$days_left) . ' días restantes</span>';
+            }
         }
         $html .= '</div>';
         $html .= '</div>';

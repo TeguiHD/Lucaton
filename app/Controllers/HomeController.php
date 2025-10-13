@@ -94,7 +94,11 @@ class HomeController {
         $urgent = array_filter($campaigns, function ($campaign) {
             $daysLeft = $campaign['days_left'] ?? null;
             $status = $campaign['status'] ?? 'draft';
-            return in_array($status, ['published', 'active'], true) && $daysLeft !== null && $daysLeft <= 5;
+            $timeOver = !empty($campaign['time_over']);
+            return in_array($status, ['published', 'active'], true)
+                && $daysLeft !== null
+                && $daysLeft <= 5
+                && !$timeOver;
         });
 
         usort($urgent, function ($a, $b) {

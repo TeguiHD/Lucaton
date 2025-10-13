@@ -361,7 +361,16 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                                     $progressDisplay = number_format($progressPercent, 1, ',', '.');
                                     $donorCount = (int)($campaign['donor_count'] ?? 0);
                                     $raisedDisplay = number_format((float)($campaign['raised_amount'] ?? 0), 0, ',', '.');
-                                    $daysText = $campaign['days_left'] !== null ? (int)$campaign['days_left'] . ' días restantes' : 'Sin fecha límite';
+                                    $timeLabel = '';
+                                    if (!empty($campaign['time_over'])) {
+                                        $timeLabel = 'Campaña finalizada';
+                                    } elseif (!empty($campaign['time_remaining_label'])) {
+                                        $timeLabel = $campaign['time_remaining_label'];
+                                    } elseif ($campaign['days_left'] !== null) {
+                                        $timeLabel = (int)$campaign['days_left'] . ' días restantes';
+                                    } else {
+                                        $timeLabel = 'Sin fecha límite';
+                                    }
                                 ?>
                                 <div class="mt-4">
                                     <div class="flex items-center justify-between text-sm text-gray-500 mb-2">
@@ -373,7 +382,7 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                                     </div>
                                     <div class="mt-2 flex items-center justify-between text-sm text-gray-500">
                                         <span><?php echo $donorCount; ?> colaboradores</span>
-                                        <span><?php echo $daysText; ?></span>
+                                        <span><?php echo htmlspecialchars($timeLabel); ?></span>
                                     </div>
                                 </div>
                             </div>

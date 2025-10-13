@@ -19,6 +19,8 @@ $breadcrumbs = [
     ['name' => $campaign['title'], 'href' => Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']))]
 ];
 
+$statusSlug = strtolower((string)($campaign['status'] ?? 'draft'));
+
 $stats = $stats ?? [
     'goal_amount' => (float)($campaign['goal_amount'] ?? 0),
     'raised_amount' => (float)($campaign['raised_amount'] ?? 0),
@@ -41,9 +43,12 @@ if ($campaign_end_timestamp === null && !empty($campaign['end_date'])) {
         $campaign_end_timestamp = $parsedEnd;
     }
 }
-$campaign_time_over = $campaign_end_timestamp !== null && $campaign_end_timestamp < time();
+$campaign_time_over = !empty($campaign['time_over']);
+if (!$campaign_time_over && $campaign_end_timestamp !== null) {
+    $campaign_time_over = $campaign_end_timestamp <= time();
+}
 
-$acceptingDonations = in_array($campaign['status'] ?? 'draft', ['published', 'paused'], true)
+$acceptingDonations = in_array($statusSlug, ['published', 'paused'], true)
     && !$campaign_goal_reached
     && !$campaign_time_over;
 
@@ -77,13 +82,13 @@ $campaignUpdateAction = $campaignIdentifier !== ''
 $image_url = $campaignImageUrl
     ?? CampaignMediaUploadService::normalizePublicUrl($campaign['image_url'] ?? ($campaign['cover_image_url'] ?? null))
     ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg';
-$status_meta = CampaignPresenter::statusMeta($campaign['status'] ?? 'draft');
+$status_meta = CampaignPresenter::statusMeta($statusSlug);
 $status_badge = [
     'class' => $status_meta['badge_class'],
     'text' => $status_meta['label']
 ];
 
-if (($campaign['status'] ?? '') === 'completed') {
+if ($statusSlug === 'completed') {
     if ($campaign_goal_reached) {
     $status_badge = [
         'class' => 'bg-emerald-100 text-emerald-700',
@@ -594,14 +599,32 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                             <span><?php echo $stats['progress']; ?>% alcanzado</span>
                             <span><?php echo (int)($stats['donors'] ?? 0); ?> aportes</span>
                         </div>
-                        <?php if ($stats['days_left'] !== null): ?>
-                            <p class="text-sm text-gray-600"><?php echo max(0, (int)$stats['days_left']); ?> días restantes</p>
+                        <?php
+                            $timeLabel = null;
+                            if (!empty($campaign['time_over'])) {
+                                $timeLabel = 'Campaña finalizada';
+                            } elseif (!empty($campaign['time_remaining_label'])) {
+                                $timeLabel = $campaign['time_remaining_label'];
+                            } elseif ($stats['days_left'] !== null) {
+                                $timeLabel = max(0, (int)$stats['days_left']) . ' días restantes';
+                            }
+                        ?>
+                        <?php if ($timeLabel !== null): ?>
+                            <p class="text-sm text-gray-600"><?= htmlspecialchars($timeLabel); ?></p>
                         <?php endif; ?>
                     </div>
 
                     <div class="space-y-4" id="donar">
                         <?php if (!$acceptingDonations): ?>
-                            <?php if ($campaign_goal_reached): ?>
+                            <?php if (in_array($statusSlug, ['under_review', 'draft'], true)): ?>
+                                <div class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                                    Esta campaña está en revisión por el equipo de Lucatón. Pronto estará disponible para recibir aportes.
+                                </div>
+                            <?php elseif ($statusSlug === 'paused'): ?>
+                                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                    Esta campaña se encuentra en pausa temporalmente. Te avisaremos cuando vuelva a estar activa.
+                                </div>
+                            <?php elseif ($campaign_goal_reached): ?>
                                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                                     Esta campaña alcanzó su meta y ya no recibe nuevos aportes. ¡Gracias por apoyar!
                                 </div>

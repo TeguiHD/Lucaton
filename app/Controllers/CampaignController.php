@@ -228,6 +228,20 @@ class CampaignController {
         $page_title = 'Crear campaña';
         $categories = $this->getCategories();
         $draft_media = $this->getDraftMedia((int)SessionHelper::getUserId());
+        $userProfile = [];
+        $currentUserId = (int)(SessionHelper::getUserId() ?? 0);
+        if ($currentUserId > 0) {
+            try {
+                $userModel = new User();
+                $userProfile = $userModel->findById($currentUserId) ?: [];
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo recuperar el perfil del usuario para prefijar la creación de campañas', [
+                    'user_id' => $currentUserId,
+                    'error' => $exception->getMessage()
+                ]);
+                $userProfile = [];
+            }
+        }
         include VIEWS_PATH . '/pages/campaign-create.php';
     }
 
@@ -378,6 +392,7 @@ class CampaignController {
 
             $this->db->commit();
             $this->clearDraftMedia($ownerId);
+            $this->syncOwnerProfileWithCampaignData($ownerId, $data);
 
             try {
                 $lifecycleMailer = new CampaignLifecycleMailer();
@@ -1206,13 +1221,24 @@ class CampaignController {
         $existingAttachments = array_filter(array_map('trim', $input['existing_attachments'] ?? []));
         $removeAttachments = array_filter(array_map('trim', $input['remove_attachments'] ?? []));
 
+        $rawEndInput = $input['end_date'] ?? null;
+        $rawEndDatePart = trim((string)($input['end_date_date'] ?? ''));
+        $rawEndTimePart = trim((string)($input['end_date_time'] ?? ''));
+
+        if (($rawEndInput === null || trim((string)$rawEndInput) === '') && $rawEndDatePart !== '') {
+            $rawEndInput = $rawEndDatePart . 'T' . ($rawEndTimePart !== '' ? $rawEndTimePart : '12:00');
+        }
+
+        $normalizedEnd = $this->normalizeEndDateInput($rawEndInput);
+
         return [
             'title' => trim($input['title'] ?? ''),
             'short_description' => trim($input['short_description'] ?? ''),
             'description' => trim($input['description'] ?? ''),
             'goal_amount' => $goalAmount,
             'goal_amount_input' => $rawGoal,
-            'end_date' => $input['end_date'] ?? null,
+            'end_date' => $normalizedEnd['storage'],
+            'end_date_input' => $normalizedEnd['input'],
             'category' => $categorySlug,
             'category_slug' => $categorySlug,
             'location' => trim($input['location'] ?? ''),
@@ -1234,18 +1260,58 @@ class CampaignController {
         ];
     }
 
+    private function normalizeEndDateInput($value): array
+    {
+        $raw = is_string($value) ? trim($value) : ($value ?? '');
+
+        if ($raw === '') {
+            return [
+                'storage' => null,
+                'input' => '',
+            ];
+        }
+
+        $candidate = str_replace('/', '-', $raw);
+        $timestamp = strtotime($candidate);
+
+        if ($timestamp === false) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $candidate) === 1) {
+                $dateOnly = DateTime::createFromFormat('Y-m-d', $candidate);
+                if ($dateOnly instanceof DateTime) {
+                    $dateOnly->setTime(23, 59, 59);
+                    $timestamp = $dateOnly->getTimestamp();
+                }
+            }
+
+            if ($timestamp === false) {
+                return [
+                    'storage' => null,
+                    'input' => $raw,
+                ];
+            }
+        }
+
+        return [
+            'storage' => date('Y-m-d H:i:s', $timestamp),
+            'input' => date('Y-m-d\TH:i', $timestamp),
+        ];
+    }
+
     private function validateCampaignInput(array $data): array {
         $errors = [];
 
-        if (strlen($data['title']) < 10) {
+        $titleLength = mb_strlen($data['title'], 'UTF-8');
+        if ($titleLength < 10) {
             $errors['title'] = 'El título debe tener al menos 10 caracteres.';
+        } elseif ($titleLength > 120) {
+            $errors['title'] = 'El título no puede superar los 120 caracteres.';
         }
 
-        if (strlen($data['short_description']) < 30) {
+        if (mb_strlen($data['short_description'], 'UTF-8') < 30) {
             $errors['short_description'] = 'La descripción breve debe tener al menos 30 caracteres.';
         }
 
-        if (strlen($data['description']) < 100) {
+        if (mb_strlen($data['description'], 'UTF-8') < 100) {
             $errors['description'] = 'Cuéntanos más detalles de la campaña (mínimo 100 caracteres).';
         }
 
@@ -1253,8 +1319,15 @@ class CampaignController {
             $errors['goal_amount'] = 'Define una meta económica válida.';
         }
 
-        if (!$data['end_date'] || strtotime($data['end_date']) <= time()) {
-            $errors['end_date'] = 'La fecha de término debe ser futura.';
+        if (empty($data['end_date'])) {
+            $errors['end_date'] = 'Define una fecha y hora de término válida.';
+        } else {
+            $endTimestamp = strtotime($data['end_date']);
+            if ($endTimestamp === false) {
+                $errors['end_date'] = 'La fecha de término ingresada no es válida.';
+            } elseif ($endTimestamp <= time()) {
+                $errors['end_date'] = 'La fecha de término debe ser futura (considera la hora).';
+            }
         }
 
         $hasCategory = isset($this->categoryMap[$data['category_slug']])
@@ -1514,6 +1587,67 @@ class CampaignController {
 
         header('Location: ' . $redirect, true, 302);
         exit;
+    }
+
+    private function syncOwnerProfileWithCampaignData(int $ownerId, array $campaignData): void
+    {
+        if ($ownerId <= 0) {
+            return;
+        }
+
+        try {
+            $userModel = new User();
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo inicializar el modelo de usuario para sincronizar datos del perfil.', [
+                'user_id' => $ownerId,
+                'error' => $exception->getMessage(),
+            ]);
+            return;
+        }
+
+        try {
+            $userRecord = $userModel->findById($ownerId);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo cargar el perfil para sincronizar datos desde la campaña.', [
+                'user_id' => $ownerId,
+                'error' => $exception->getMessage(),
+            ]);
+            return;
+        }
+
+        if (!$userRecord) {
+            return;
+        }
+
+        $updates = [];
+
+        $currentPhone = trim((string)($userRecord['phone'] ?? ''));
+        if ($currentPhone === '' && !empty($campaignData['beneficiary_phone'])) {
+            $updates['phone'] = $campaignData['beneficiary_phone'];
+        }
+
+        $currentLocation = trim((string)($userRecord['location'] ?? ''));
+        if ($currentLocation === '' && !empty($campaignData['location'])) {
+            $updates['location'] = $campaignData['location'];
+        }
+
+        if (empty($updates)) {
+            return;
+        }
+
+        try {
+            $userModel->updateProfile($ownerId, $updates);
+            $refreshedUser = $userModel->findById($ownerId);
+            if (is_array($refreshedUser)) {
+                SessionHelper::updateUserProfile($refreshedUser);
+            }
+        } catch (Throwable $exception) {
+            Logger::warning('Fallo la sincronización de datos del perfil tras crear campaña.', [
+                'user_id' => $ownerId,
+                'updates' => array_keys($updates),
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function generateUniqueSlug(string $title): string {

@@ -165,6 +165,13 @@ if ($highlight_campaign === null) {
     $candidate_pool = !empty($featured_campaigns) ? $featured_campaigns : $recent_campaigns;
 
     if (!empty($candidate_pool)) {
+        $preferred_pool = array_values(array_filter($candidate_pool, static function (array $candidate): bool {
+            return empty($candidate['time_over']);
+        }));
+        if (!empty($preferred_pool)) {
+            $candidate_pool = $preferred_pool;
+        }
+
         usort($candidate_pool, static function (array $a, array $b): int {
             $gap_diff = lucaton_campaign_gap($b) <=> lucaton_campaign_gap($a);
             if ($gap_diff !== 0) {
@@ -189,10 +196,15 @@ $highlight_is_urgent = false;
 if ($highlight_campaign !== null) {
     $days_left = $highlight_campaign['days_left'] ?? null;
     $priority = (float)($highlight_campaign['priority'] ?? 0);
-    $highlight_is_urgent = !empty($highlight_campaign['urgent']) || ($days_left !== null && $days_left <= 5) || $priority >= 0.7;
+    $highlight_time_over = !empty($highlight_campaign['time_over']);
+    $highlight_is_urgent = !$highlight_time_over && (!empty($highlight_campaign['urgent']) || ($days_left !== null && $days_left <= 5) || $priority >= 0.7);
 }
 
-$active_campaigns = array_slice($recent_campaigns, 0, 6);
+$active_campaigns = array_values(array_filter($recent_campaigns, static function (array $campaign): bool {
+    $status = $campaign['status'] ?? 'draft';
+    return in_array($status, ['published', 'active'], true) && empty($campaign['time_over']);
+}));
+$active_campaigns = array_slice($active_campaigns, 0, 6);
 $active_state = !empty($active_campaigns) ? 'ready' : 'empty';
 $badge_weekly_donors = (int)round(max(1300, $marketing_active_donors * 0.34));
 if ($registered_users > 0) {
@@ -389,6 +401,8 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
                         $campaign_goal = (float)($highlight_campaign['goal_amount'] ?? 0);
                         $campaign_raised = (float)($highlight_campaign['raised_amount'] ?? 0);
                         $campaign_days_left = $highlight_campaign['days_left'] ?? null;
+                        $campaign_time_label = $highlight_campaign['time_remaining_label'] ?? null;
+                        $campaign_time_over = !empty($highlight_campaign['time_over']);
                         $campaign_currency = strtoupper($highlight_campaign['currency'] ?? 'CLP');
                         $campaign_goal_label = ($campaign_currency === 'CLP' ? '$' : $campaign_currency . ' ') . number_format($campaign_goal, 0, ',', '.');
                         $campaign_raised_label = ($campaign_currency === 'CLP' ? '$' : $campaign_currency . ' ') . number_format($campaign_raised, 0, ',', '.');
@@ -414,7 +428,17 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
                         <div class="p-8 lg:p-10 space-y-6 flex flex-col justify-between">
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between text-xs uppercase tracking-wide text-neutral-500">
-                                    <span><?= $campaign_days_left !== null ? max(0, (int)$campaign_days_left) . ' días restantes' : htmlspecialchars(CampaignPresenter::statusMeta($highlight_campaign['status'] ?? 'draft')['label']); ?></span>
+                                    <span>
+                                        <?php if ($campaign_time_over): ?>
+                                            Campaña finalizada
+                                        <?php elseif (!empty($campaign_time_label)): ?>
+                                            <?= htmlspecialchars($campaign_time_label); ?>
+                                        <?php elseif ($campaign_days_left !== null): ?>
+                                            <?= max(0, (int)$campaign_days_left); ?> días restantes
+                                        <?php else: ?>
+                                            <?= htmlspecialchars(CampaignPresenter::statusMeta($highlight_campaign['status'] ?? 'draft')['label']); ?>
+                                        <?php endif; ?>
+                                    </span>
                                     <span><?= $campaign_raised_label; ?> de <?= $campaign_goal_label; ?></span>
                                 </div>
                                 <h3 class="text-2xl font-semibold text-marino-900 leading-snug">
@@ -511,6 +535,7 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
                             $campaign_goal_reached = !empty($campaign['goal_reached']) || ($campaign_goal > 0 && $campaign_progress >= 100);
                             $campaign_time_over = !empty($campaign['time_over']);
                             $campaign_status = $campaign['status'] ?? 'draft';
+                            $campaign_time_label = $campaign['time_remaining_label'] ?? null;
                         ?>
                         <article class="group relative overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-soft transition duration-500 hover:-translate-y-2 hover:shadow-strong fade-up" data-animate="fade-up" data-animate-delay="<?= $animate_delay; ?>">
                             <div class="relative h-48 overflow-hidden">
@@ -557,7 +582,11 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
                                     </div>
                                     <div class="flex flex-wrap items-center justify-between text-sm text-neutral-500">
                                         <span><?= number_format((float)($campaign['donor_count'] ?? 0), 0, ',', '.'); ?> donantes</span>
-                                        <?php if ($campaign_days_left !== null): ?>
+                                        <?php if ($campaign_time_over): ?>
+                                            <span>Campaña finalizada</span>
+                                        <?php elseif (!empty($campaign_time_label)): ?>
+                                            <span><?= htmlspecialchars($campaign_time_label); ?></span>
+                                        <?php elseif ($campaign_days_left !== null): ?>
                                             <span><?= (int)$campaign_days_left; ?> días restantes</span>
                                         <?php else: ?>
                                             <span><?= htmlspecialchars(CampaignPresenter::statusMeta($campaign['status'] ?? 'draft')['label']); ?></span>

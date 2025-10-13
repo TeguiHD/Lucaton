@@ -12,6 +12,7 @@ class CampaignPresenter {
         $raised = (float)$raisedSource;
         $progress = $goal > 0 ? min(100, round(($raised / $goal) * 100, 2)) : 0.0;
 
+        $now = time();
         $status = $row['status'] ?? '';
         if (is_string($status)) {
             $status = trim($status);
@@ -20,19 +21,30 @@ class CampaignPresenter {
         $endDate = $row['end_date'] ?? null;
         $daysLeft = null;
         $endTimestamp = null;
+        $timeRemaining = null;
+        $timeRemainingLabel = null;
         if (!empty($endDate)) {
-            $parsedTimestamp = strtotime($endDate);
-            if ($parsedTimestamp === false) {
-                $dateOnly = DateTime::createFromFormat('Y-m-d', $endDate);
-                if ($dateOnly instanceof DateTime) {
-                    $parsedTimestamp = $dateOnly->getTimestamp();
-                }
-            }
-
-            if ($parsedTimestamp !== false) {
+            $parsedTimestamp = self::parseEndTimestamp($endDate);
+            if ($parsedTimestamp !== null) {
                 $endTimestamp = $parsedTimestamp;
-                $daysLeft = max(0, (int)ceil(($parsedTimestamp - time()) / 86400));
-                if (($status === '' || $status === null) && $parsedTimestamp < time()) {
+                $secondsRemaining = $parsedTimestamp - $now;
+                if ($secondsRemaining > 0) {
+                    $timeRemaining = self::describeInterval($secondsRemaining);
+                    $timeRemainingLabel = $timeRemaining['label'];
+                    $daysLeft = $timeRemaining['days'];
+                } else {
+                    $daysLeft = 0;
+                    $timeRemaining = [
+                        'seconds' => 0,
+                        'days' => 0,
+                        'hours' => 0,
+                        'minutes' => 0,
+                        'unit' => 'expired',
+                        'label' => 'Campaña finalizada'
+                    ];
+                    $timeRemainingLabel = $timeRemaining['label'];
+                }
+                if (($status === '' || $status === null) && $parsedTimestamp <= $now) {
                     $status = 'ended';
                 }
             }
@@ -104,7 +116,7 @@ class CampaignPresenter {
         $story = $row['story'] ?? $row['full_story'] ?? ($row['description'] ?? $summary);
 
         $goalReached = $goal > 0 && $raised >= $goal;
-        $timeOver = $endTimestamp !== null && $endTimestamp < time();
+        $timeOver = $endTimestamp !== null && $endTimestamp <= $now;
         $completionOutcome = null;
         if ($goalReached) {
             $completionOutcome = 'goal_reached';
@@ -127,6 +139,11 @@ class CampaignPresenter {
             'end_date' => $endDate,
             'days_left' => $daysLeft,
             'end_timestamp' => $endTimestamp,
+            'time_remaining' => $timeRemaining,
+            'time_remaining_label' => $timeRemainingLabel,
+            'time_remaining_unit' => $timeRemaining['unit'] ?? null,
+            'hours_left' => $timeRemaining['hours'] ?? null,
+            'minutes_left' => $timeRemaining['minutes'] ?? null,
             'cover_image_url' => $image,
             'image_url' => $image,
             'featured_image_url' => $image,
@@ -225,5 +242,87 @@ class CampaignPresenter {
 
     public static function statusLabel(string $status): string {
         return self::statusMeta($status)['label'];
+    }
+
+    private static function parseEndTimestamp($value): ?int
+    {
+        if ($value instanceof DateTimeInterface) {
+            return $value->getTimestamp();
+        }
+
+        if (is_numeric($value)) {
+            return (int)$value;
+        }
+
+        $stringValue = trim((string)$value);
+        if ($stringValue === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $stringValue) === 1) {
+            $dateOnly = DateTime::createFromFormat('Y-m-d', $stringValue);
+            if ($dateOnly instanceof DateTime) {
+                $dateOnly->setTime(23, 59, 59);
+                return $dateOnly->getTimestamp();
+            }
+        }
+
+        $timestamp = strtotime($stringValue);
+        if ($timestamp !== false) {
+            return $timestamp;
+        }
+
+        $dateWithTime = DateTime::createFromFormat('Y-m-d H:i', $stringValue);
+        if ($dateWithTime instanceof DateTime) {
+            return $dateWithTime->getTimestamp();
+        }
+
+        $dateOnly = DateTime::createFromFormat('Y-m-d', $stringValue);
+        if ($dateOnly instanceof DateTime) {
+            $dateOnly->setTime(23, 59, 59);
+            return $dateOnly->getTimestamp();
+        }
+
+        return null;
+    }
+
+    private static function describeInterval(int $seconds): array
+    {
+        $seconds = max(0, $seconds);
+        $days = intdiv($seconds, 86400);
+        $hoursTotal = (int)ceil($seconds / 3600);
+        $minutesTotal = (int)ceil($seconds / 60);
+
+        if ($days >= 2) {
+            $label = sprintf('%d días restantes', $days);
+            $unit = 'days';
+        } elseif ($days === 1) {
+            $label = '1 día restante';
+            $unit = 'days';
+        } elseif ($hoursTotal >= 2) {
+            $label = sprintf('%d horas restantes', $hoursTotal);
+            $unit = 'hours';
+        } elseif ($hoursTotal === 1) {
+            $label = '1 hora restante';
+            $unit = 'hours';
+        } elseif ($minutesTotal >= 2) {
+            $label = sprintf('%d minutos restantes', $minutesTotal);
+            $unit = 'minutes';
+        } elseif ($minutesTotal === 1) {
+            $label = '1 minuto restante';
+            $unit = 'minutes';
+        } else {
+            $label = 'Menos de 1 minuto restante';
+            $unit = 'minutes';
+        }
+
+        return [
+            'seconds' => $seconds,
+            'days' => $days,
+            'hours' => $hoursTotal,
+            'minutes' => $minutesTotal,
+            'unit' => $unit,
+            'label' => $label,
+        ];
     }
 }
