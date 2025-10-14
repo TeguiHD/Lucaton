@@ -111,6 +111,7 @@ class SessionHelper {
         return [
             'id' => $_SESSION['user_id'],
             'email' => $_SESSION['user_email'] ?? '',
+            'username' => $_SESSION['user_username'] ?? null,
             'name' => $_SESSION['user_name'] ?? '',
             'role' => self::getUserRole() ?? 'user',
             'status' => $_SESSION['user_status'] ?? 'active',
@@ -613,6 +614,12 @@ class SessionHelper {
             $_SESSION['user_email'] = $email;
         } elseif (!isset($_SESSION['user_email'])) {
             $_SESSION['user_email'] = '';
+        }
+
+        if (isset($user['username']) && $user['username'] !== '') {
+            $_SESSION['user_username'] = $user['username'];
+        } elseif (!isset($_SESSION['user_username'])) {
+            $_SESSION['user_username'] = null;
         }
 
         $_SESSION['user_name'] = self::resolveDisplayName($user);

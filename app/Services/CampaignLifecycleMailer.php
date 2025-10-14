@@ -921,12 +921,18 @@ HTML;
             return null;
         }
 
-        if (!empty($campaign['slug'])) {
-            return $base . '/campana/' . $campaign['slug'];
+        $username = $campaign['owner_username']
+            ?? $campaign['username']
+            ?? $campaign['creator_username']
+            ?? null;
+        $identifier = $campaign['slug'] ?? ($campaign['id'] ?? null);
+
+        if ($username !== null && $identifier !== null) {
+            return $base . '/campana/' . rawurlencode((string)$username) . '/' . rawurlencode((string)$identifier);
         }
 
-        if (!empty($campaign['id'])) {
-            return $base . '/campana/' . $campaign['id'];
+        if ($identifier !== null) {
+            return $base . '/campana/' . $identifier;
         }
 
         return null;

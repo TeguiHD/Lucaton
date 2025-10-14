@@ -130,51 +130,127 @@ class Campaign {
     }
 
     public function findById(int $id): ?array {
+        $ownerJoin = '';
+        $ownerSelect = '';
+        if ($this->supportsColumn('owner_id') && $this->ownerColumn !== '') {
+            $ownerSelect = ', u.username AS owner_username, u.first_name AS owner_first_name, u.last_name AS owner_last_name, u.avatar_url AS owner_avatar_url, u.created_at AS owner_created_at';
+            $ownerJoin = " LEFT JOIN users u ON u.id = c." . $this->ownerColumn;
+        }
+
         try {
             $row = $this->db->fetch(
                 "SELECT c.*, cd.beneficiary_name, cd.beneficiary_type, cd.beneficiary_contact, cd.location_label,
-                        cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug
+                        cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug{$ownerSelect}
                  FROM campaigns c
                  LEFT JOIN campaign_details cd ON cd.campaign_id = c.id
                  LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
                  LEFT JOIN campaign_categories cat ON cat.id = c.category_id
+                 {$ownerJoin}
                  WHERE c.id = ?",
                 [$id]
             );
         } catch (Exception $exception) {
             if ($this->isModularTableMissing($exception)) {
                 $row = $this->db->fetch('SELECT * FROM campaigns c WHERE c.id = ? LIMIT 1', [$id]);
-                return $row ? $this->hydrateLegacyCampaignRow($row) : null;
+                if (!$row) {
+                    return null;
+                }
+
+                $row = $this->hydrateLegacyCampaignRow($row);
+                if ($this->ownerColumn !== '' && isset($row[$this->ownerColumn]) && !isset($row['owner_username'])) {
+                    $userId = (int)$row[$this->ownerColumn];
+                    if ($userId > 0) {
+                        $userModel = new User();
+                        $owner = $userModel->findById($userId);
+                        if (is_array($owner) && !empty($owner['username'])) {
+                            $row['owner_username'] = $owner['username'];
+                        }
+                    }
+                }
+
+                return $row;
             }
 
             throw $exception;
         }
 
-        return $row ?: null;
+        if (!$row) {
+            return null;
+        }
+
+        if (!isset($row['owner_username']) && isset($row['username'])) {
+            $row['owner_username'] = $row['username'];
+        }
+
+        return $row;
     }
 
-    public function findBySlug(string $slug): ?array {
+    public function findBySlug(string $slug, ?string $ownerUsername = null): ?array {
+        $ownerJoin = '';
+        $ownerSelect = '';
+        $conditions = 'WHERE c.slug = ?';
+        $params = [$slug];
+
+        if ($this->supportsColumn('owner_id') && $this->ownerColumn !== '') {
+            $ownerSelect = ', u.username AS owner_username, u.first_name AS owner_first_name, u.last_name AS owner_last_name, u.avatar_url AS owner_avatar_url, u.created_at AS owner_created_at';
+            $ownerJoin = " LEFT JOIN users u ON u.id = c." . $this->ownerColumn;
+
+            if ($ownerUsername !== null && $ownerUsername !== '') {
+                $conditions .= ' AND u.username = ?';
+                $params[] = $ownerUsername;
+            }
+        }
+
         try {
             $row = $this->db->fetch(
                 "SELECT c.*, cd.beneficiary_name, cd.beneficiary_type, cd.beneficiary_contact, cd.location_label,
-                        cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug
+                        cm.raised_amount, cm.donor_count, cat.name AS category_name, cat.slug AS category_slug{$ownerSelect}
                  FROM campaigns c
                  LEFT JOIN campaign_details cd ON cd.campaign_id = c.id
                  LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
                  LEFT JOIN campaign_categories cat ON cat.id = c.category_id
-                 WHERE c.slug = ?",
-                [$slug]
+                 {$ownerJoin}
+                 {$conditions}",
+                $params
             );
         } catch (Exception $exception) {
             if ($this->isModularTableMissing($exception)) {
                 $row = $this->db->fetch('SELECT * FROM campaigns c WHERE c.slug = ? LIMIT 1', [$slug]);
-                return $row ? $this->hydrateLegacyCampaignRow($row) : null;
+                if (!$row) {
+                    return null;
+                }
+
+                $row = $this->hydrateLegacyCampaignRow($row);
+
+                if ($ownerUsername !== null && $ownerUsername !== '' && $this->ownerColumn !== '' && isset($row[$this->ownerColumn])) {
+                    $userId = (int)$row[$this->ownerColumn];
+                    if ($userId > 0) {
+                        $userModel = new User();
+                        $owner = $userModel->findById($userId);
+                        if (!$owner || strcasecmp((string)($owner['username'] ?? ''), $ownerUsername) !== 0) {
+                            return null;
+                        }
+                        if (!isset($row['owner_username']) && !empty($owner['username'])) {
+                            $row['owner_username'] = $owner['username'];
+                        }
+                    }
+                }
+
+                return $row;
             }
 
             throw $exception;
         }
 
-        return $row ?: null;
+        if (!$row) {
+            return null;
+        }
+
+        if (!isset($row['owner_username']) && isset($row['username'])) {
+            $row['owner_username'] = $row['username'];
+        }
+
+        return $row;
     }
 
     public function findByUserId(int $userId, int $limit = 10, int $offset = 0): array {
@@ -514,6 +590,14 @@ class Campaign {
 
         if (!isset($row['beneficiary_name']) && isset($row['beneficiary'])) {
             $row['beneficiary_name'] = $row['beneficiary'];
+        }
+
+        if (!isset($row['owner_username'])) {
+            if (isset($row['username']) && $row['username'] !== '') {
+                $row['owner_username'] = $row['username'];
+            } elseif (isset($row['creator_username']) && $row['creator_username'] !== '') {
+                $row['owner_username'] = $row['creator_username'];
+            }
         }
 
         return $row;

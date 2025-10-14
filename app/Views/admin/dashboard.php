@@ -316,7 +316,10 @@ $systemAlerts = $data['system_alerts'];
                                 </div>
                                 <div class="flex-grow-1 ms-3">
                                     <div class="fw-bold">
-                                        <?php $campaignUrl = Router::url('campana/' . ($campaign['slug'] ?? $campaign['id'])); ?>
+                                        <?php
+                                            $campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+                                            $campaignUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']));
+                                        ?>
                                         <a href="<?= htmlspecialchars($campaignUrl) ?>" class="text-decoration-none">
                                             <?= htmlspecialchars(substr($campaign['title'], 0, 25)) ?>...
                                         </a>

@@ -133,7 +133,8 @@ $availableStatuses = [
                     }
                     $campaignId = $campaignData['id'] ?? null;
                     $slug = $campaignData['slug'] ?? ($campaignId !== null ? (string)$campaignId : '');
-                    $campaignUrl = $slug !== '' ? Router::url('campana/' . $slug) : '#';
+                    $campaignPublicPath = $campaignData['public_path'] ?? CampaignPresenter::buildPublicPath($campaignData);
+                    $campaignUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : ($slug !== '' ? Router::url('campana/' . $slug) : '#');
                 ?>
                 <div class="col-lg-4 col-md-6 mb-4">
                     <div class="card h-100 shadow-sm">

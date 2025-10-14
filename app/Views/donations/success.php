@@ -11,7 +11,8 @@ $newRaised = $campaignRaised + (float)($donation['amount'] ?? 0);
 $campaignPercentage = $campaignGoal > 0 ? min(100, ($campaignRaised / $campaignGoal) * 100) : 0;
 $newPercentage = $campaignGoal > 0 ? min(100, ($newRaised / $campaignGoal) * 100) : 0;
 $campaignSlug = $campaign['slug'] ?? ($campaign['id'] ?? '');
-$campaignUrl = $campaignSlug !== '' ? Router::url('campana/' . $campaignSlug) : '#';
+$campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+$campaignUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : ($campaignSlug !== '' ? Router::url('campana/' . $campaignSlug) : '#');
 ?>
 
 <div class="container py-5">

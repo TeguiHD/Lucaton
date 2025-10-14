@@ -63,6 +63,7 @@ class CampaignMilestoneNotifier {
                 'campaign_id' => $campaignId,
                 'campaign_title' => $campaign['title'] ?? 'Campaña',
                 'campaign_slug' => $campaign['slug'] ?? null,
+                'campaign_owner_username' => $campaign['owner_username'] ?? $campaign['username'] ?? null,
                 'goal_amount' => (float)($stats['goal_amount'] ?? 0),
                 'raised_amount' => (float)($stats['raised_amount'] ?? 0),
                 'progress' => $progress,
@@ -103,6 +104,7 @@ class CampaignMilestoneNotifier {
                 'campaign_id' => $campaignId,
                 'campaign_title' => $campaign['title'] ?? 'Campaña',
                 'campaign_slug' => $campaign['slug'] ?? null,
+                'campaign_owner_username' => $campaign['owner_username'] ?? $campaign['username'] ?? null,
                 'goal_amount' => (float)($stats['goal_amount'] ?? 0),
                 'raised_amount' => (float)($stats['raised_amount'] ?? 0),
                 'progress' => $progress,
@@ -228,12 +230,17 @@ class CampaignMilestoneNotifier {
             return null;
         }
 
-        if (!empty($context['campaign_slug'])) {
-            return $base . '/campana/' . $context['campaign_slug'];
+        $ownerUsername = $context['campaign_owner_username']
+            ?? $context['owner_username']
+            ?? null;
+        $identifier = $context['campaign_slug'] ?? ($context['campaign_id'] ?? null);
+
+        if ($ownerUsername !== null && $identifier !== null) {
+            return $base . '/campana/' . rawurlencode((string)$ownerUsername) . '/' . rawurlencode((string)$identifier);
         }
 
-        if (!empty($context['campaign_id'])) {
-            return $base . '/campana/' . $context['campaign_id'];
+        if ($identifier !== null) {
+            return $base . '/campana/' . $identifier;
         }
 
         return null;

@@ -46,6 +46,12 @@ class Router {
     }
     
     public function dispatch($method, $uri) {
+        if ($uri !== '/' && substr($uri, -1) === '/') {
+            $uri = rtrim($uri, '/');
+            if ($uri === '') {
+                $uri = '/';
+            }
+        }
         foreach ($this->routes as $route) {
             if ($route['method'] !== $method) {
                 continue;

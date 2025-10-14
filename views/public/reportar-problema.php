@@ -100,7 +100,7 @@ $severities = [
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700" for="report-url">Enlace (opcional)</label>
-                        <input id="report-url" name="url" type="url" placeholder="<?= htmlspecialchars(APP_URL) ?>/campana/..." class="mt-1 w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
+                        <input id="report-url" name="url" type="url" placeholder="<?= htmlspecialchars(APP_URL) ?>/campana/tuUsuario/tu-campana" class="mt-1 w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
                     </div>
 
                     <div>

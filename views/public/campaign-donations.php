@@ -7,7 +7,11 @@ require_once __DIR__ . '/../components/cards.php';
 $campaign = $campaign ?? [];
 $campaignTitle = $campaign['title'] ?? 'Campaña';
 $campaignSlug = $campaign['slug'] ?? ($campaign['id'] ?? '');
-$campaignUrl = Router::url('campana/' . $campaignSlug);
+$campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+if ($campaignPublicPath === null && $campaignSlug !== '') {
+    $campaignPublicPath = 'campana/' . rawurlencode($campaignSlug);
+}
+$campaignUrl = $campaignPublicPath !== null ? Router::url($campaignPublicPath) : Router::url('campanas');
 $breadcrumbs = $breadcrumbs ?? [];
 $donations = $donations ?? [];
 $page = max(1, (int)($page ?? 1));
@@ -18,7 +22,9 @@ $firstItem = $totalDonations > 0 ? (($page - 1) * $perPage) + 1 : 0;
 $lastItem = $totalDonations > 0 ? min($totalDonations, $firstItem + count($donations) - 1) : 0;
 $page_title = $page_title ?? ('Aportes de ' . $campaignTitle . ' - Lucatón');
 $page_description = $page_description ?? ('Historial de aportes registrados para la campaña ' . $campaignTitle . '.');
-$baseDonationsUrl = Router::url('campana/' . $campaignSlug . '/donaciones');
+$baseDonationsUrl = $campaignPublicPath !== null
+    ? Router::url(rtrim($campaignPublicPath, '/') . '/donaciones')
+    : Router::url('campana/' . $campaignSlug . '/donaciones');
 ?>
 
 <!DOCTYPE html>

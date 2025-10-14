@@ -30,9 +30,25 @@ class CampaignController {
         $this->detectSchema();
     }
 
-    public function show($identifier) {
+    public function show($usernameOrIdentifier, $identifier = null) {
         (new Campaign())->closeExpiredCampaigns();
-        $campaign = $this->fetchCampaign($identifier, true);
+
+        if ($identifier === null) {
+            $campaign = $this->fetchCampaign($usernameOrIdentifier, true);
+
+            if ($campaign) {
+                $publicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+                if ($publicPath !== null) {
+                    $legacyUrl = Router::url('campana/' . $usernameOrIdentifier);
+                    $targetUrl = Router::url($publicPath);
+                    if ($legacyUrl !== $targetUrl) {
+                        Router::redirect($publicPath);
+                    }
+                }
+            }
+        } else {
+            $campaign = $this->fetchCampaign($identifier, true, (string)$usernameOrIdentifier);
+        }
 
         if (!$campaign) {
             http_response_code(404);
@@ -135,6 +151,138 @@ class CampaignController {
         $celebrationOverlay = $this->buildCampaignCelebrationPayload($campaign, $stats, $isCampaignOwner);
 
         include VIEWS_PATH . '/public/campaign-detail.php';
+    }
+
+    public function showCreatorProfile($username) {
+        $username = trim((string)$username);
+        if ($username === '') {
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $userModel = new User();
+        $campaignModel = new Campaign();
+
+        try {
+            $userRecord = $userModel->findByUsername($username);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo recuperar el perfil público del usuario', [
+                'username' => $username,
+                'error' => $exception->getMessage(),
+            ]);
+            $userRecord = null;
+        }
+
+        if (!$userRecord) {
+            $legacyCampaign = $this->fetchCampaign($username, true);
+            if ($legacyCampaign && isset($legacyCampaign['public_path'])) {
+                Router::redirect($legacyCampaign['public_path']);
+            }
+
+            http_response_code(404);
+            include VIEWS_PATH . '/errors/404.php';
+            return;
+        }
+
+        $userId = (int)($userRecord['id'] ?? 0);
+        $rawCampaigns = [];
+        if ($userId > 0) {
+            try {
+                $rawCampaigns = $campaignModel->findByUserId($userId, 30, 0);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudieron recuperar las campañas públicas del usuario', [
+                    'user_id' => $userId,
+                    'error' => $exception->getMessage(),
+                ]);
+                $rawCampaigns = [];
+            }
+        }
+
+        $publicStatuses = $this->getPublicStatuses();
+        $campaigns = [];
+        foreach ($rawCampaigns as $row) {
+            $status = strtolower((string)($row['status'] ?? ''));
+            $visibility = strtolower((string)($row['visibility'] ?? 'public'));
+
+            if ($visibility === 'private') {
+                continue;
+            }
+
+            if ($status !== '' && !in_array($status, $publicStatuses, true)) {
+                continue;
+            }
+
+            $row['username'] = $userRecord['username'] ?? ($row['username'] ?? null);
+            $row['owner_username'] = $userRecord['username'] ?? ($row['owner_username'] ?? null);
+            $row['first_name'] = $userRecord['first_name'] ?? ($row['first_name'] ?? null);
+            $row['last_name'] = $userRecord['last_name'] ?? ($row['last_name'] ?? null);
+            $row['avatar_url'] = $userRecord['avatar_url'] ?? ($row['avatar_url'] ?? null);
+
+            $campaigns[] = CampaignPresenter::present($row);
+        }
+
+        usort($campaigns, static function (array $a, array $b) {
+            $left = $a['created_at'] ?? $a['start_date'] ?? null;
+            $right = $b['created_at'] ?? $b['start_date'] ?? null;
+
+            if ($left === $right) {
+                return 0;
+            }
+
+            if ($left === null) {
+                return 1;
+            }
+
+            if ($right === null) {
+                return -1;
+            }
+
+            return strcmp((string)$right, (string)$left);
+        });
+
+        $totalRaised = array_reduce($campaigns, static function (float $carry, array $campaign) {
+            return $carry + (float)($campaign['raised_amount'] ?? 0.0);
+        }, 0.0);
+
+        $totalSupporters = array_reduce($campaigns, static function (int $carry, array $campaign) {
+            return $carry + (int)($campaign['donor_count'] ?? 0);
+        }, 0);
+
+        $normalizedAvatar = SessionHelper::normalizeAvatarUrl($userRecord['avatar_url'] ?? null)
+            ?? APP_URL . '/public/assets/images/avatars/default.jpg';
+        $displayName = trim(($userRecord['first_name'] ?? '') . ' ' . ($userRecord['last_name'] ?? ''));
+        if ($displayName === '') {
+            $displayName = $userRecord['username'] ?? 'Campañista';
+        }
+
+        $profile = [
+            'id' => $userId,
+            'username' => $userRecord['username'] ?? '',
+            'name' => $displayName,
+            'bio' => $userRecord['bio'] ?? null,
+            'location' => $userRecord['location'] ?? null,
+            'avatar' => $normalizedAvatar,
+            'joined_at' => $userRecord['created_at'] ?? null,
+            'campaign_count' => count($campaigns),
+            'total_raised' => $totalRaised,
+            'total_supporters' => $totalSupporters,
+        ];
+
+        $profileBreadcrumbUrl = $profile['username'] !== ''
+            ? Router::url('campana/' . rawurlencode($profile['username']))
+            : null;
+
+        $breadcrumbs = [
+            ['name' => 'Inicio', 'href' => Router::url('/')],
+            ['name' => 'Campañas', 'href' => Router::url('campanas')],
+            ['name' => '@' . ($profile['username'] ?: 'campanista'), 'href' => $profileBreadcrumbUrl],
+        ];
+
+        $page_title = 'Campañas de ' . $profile['name'] . ' - Lucatón';
+        $page_description = 'Revisa las campañas públicas creadas por ' . $profile['name'] . ' en Lucatón.';
+
+        include VIEWS_PATH . '/public/campaign-owner.php';
     }
 
     public function index() {
@@ -622,7 +770,16 @@ class CampaignController {
             Logger::audit('campaign_updated', $currentUserId, ['campaign_id' => $campaignId]);
 
             $slug = $campaign['slug'] ?? $campaignId;
-            Router::redirect('/campana/' . $slug);
+            $ownerUsername = $campaign['owner_username']
+                ?? ($campaign['username'] ?? null)
+                ?? (SessionHelper::getUser()['username'] ?? null);
+
+            $publicPath = null;
+            if ($ownerUsername !== null && $slug !== null) {
+                $publicPath = 'campana/' . rawurlencode((string)$ownerUsername) . '/' . rawurlencode((string)$slug);
+            }
+
+            Router::redirect($publicPath ?? ('/campana/' . $slug));
         } catch (Exception $exception) {
             Logger::error('Failed to update campaign', [
                 'campaign_id' => $campaignId,
@@ -867,15 +1024,15 @@ class CampaignController {
         return (int)($result['total'] ?? 0);
     }
 
-    private function fetchCampaign($identifier, bool $includeDraft = false): ?array {
+    private function fetchCampaign($identifier, bool $includeDraft = false, ?string $ownerUsername = null): ?array {
         if ($this->hasModularSchema) {
-            return $this->fetchCampaignModular($identifier, $includeDraft);
+            return $this->fetchCampaignModular($identifier, $includeDraft, $ownerUsername);
         }
 
-        return $this->fetchCampaignLegacy($identifier, $includeDraft);
+        return $this->fetchCampaignLegacy($identifier, $includeDraft, $ownerUsername);
     }
 
-    private function fetchCampaignModular($identifier, bool $includeDraft = false): ?array {
+    private function fetchCampaignModular($identifier, bool $includeDraft = false, ?string $ownerUsername = null): ?array {
         $params = [];
         if (is_numeric($identifier)) {
             $where = 'c.id = ?';
@@ -883,6 +1040,11 @@ class CampaignController {
         } else {
             $where = 'c.slug = ?';
             $params[] = $identifier;
+        }
+
+        if ($ownerUsername !== null && $ownerUsername !== '') {
+            $where .= ' AND u.username = ?';
+            $params[] = $ownerUsername;
         }
 
         if (!$includeDraft) {
@@ -937,7 +1099,18 @@ class CampaignController {
 
         $campaign = $this->db->fetch($sql, $params);
 
-        return $campaign ? $this->transformCampaignCard($campaign) : null;
+        if (!$campaign) {
+            return null;
+        }
+
+        $presented = $this->transformCampaignCard($campaign);
+        if ($ownerUsername !== null && $ownerUsername !== '' && isset($presented['owner_username'])) {
+            if (strcasecmp((string)$presented['owner_username'], $ownerUsername) !== 0) {
+                return null;
+            }
+        }
+
+        return $presented;
     }
 
     private function transformCampaignCard(array $row): array {
@@ -1038,7 +1211,8 @@ class CampaignController {
             $manageUrl = Router::url('campana/' . $campaign['id'] . '/editar');
         }
 
-        $publicUrl = Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']));
+        $campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+        $publicUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']));
 
         try {
             (new Campaign())->markFundingMilestone($campaignId, ['mark_celebrated' => true]);
@@ -1973,7 +2147,7 @@ class CampaignController {
         return in_array($column, $this->campaignColumns, true);
     }
 
-    private function fetchCampaignLegacy($identifier, bool $includeDraft = false): ?array {
+    private function fetchCampaignLegacy($identifier, bool $includeDraft = false, ?string $ownerUsername = null): ?array {
         $conditions = [];
         $params = [];
 
@@ -2006,6 +2180,10 @@ class CampaignController {
         if (in_array($this->ownerColumn, $this->campaignColumns, true)) {
             $select .= ', u.first_name, u.last_name, u.username, u.avatar_url';
             $joins = "LEFT JOIN users u ON u.id = c.{$this->ownerColumn}";
+            if ($ownerUsername !== null && $ownerUsername !== '') {
+                $conditions[] = 'u.username = ?';
+                $params[] = $ownerUsername;
+            }
         }
 
         $sql = "SELECT {$select}
@@ -2025,7 +2203,14 @@ class CampaignController {
             return null;
         }
 
-        return $this->transformLegacyRow($campaign);
+        $presented = $this->transformLegacyRow($campaign);
+        if ($ownerUsername !== null && $ownerUsername !== '' && isset($presented['owner_username'])) {
+            if (strcasecmp((string)$presented['owner_username'], $ownerUsername) !== 0) {
+                return null;
+            }
+        }
+
+        return $presented;
     }
 
     private function createLegacyCampaign(int $ownerId, array $data, string $slug, string $now, bool $requiresPeerReview = false): int {

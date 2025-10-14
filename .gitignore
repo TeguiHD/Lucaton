@@ -72,8 +72,13 @@ clover.xml
 !storage/private/.gitkeep
 !public/storage/uploads/.gitkeep
 !public/storage/avatars/.gitkeep
-!public/storage/campaigns/.gitkeep
 
-# Dev mail preview artifacts
+# Campaign uploads and mail previews (development)
+/public/storage/campaigns/*
+!public/storage/campaigns/.gitkeep
 /storage/logs/mail-previews/*
 !storage/logs/mail-previews/.gitkeep
+
+# Pendientes and task files (local development only)
+/Pendientes/
+pendientes*.txt

@@ -21,23 +21,37 @@ class DonationController {
             return $this->respondError('No encontramos la campaña seleccionada.', 404, 'campanas');
         }
 
+        if (!isset($campaign['public_path'])) {
+            $campaign = CampaignPresenter::present(array_merge($campaign, [
+                'id' => $campaign['id'] ?? $campaignId,
+            ]));
+        }
+
         if (!SessionHelper::isAuthenticated()) {
-            $campaignSlug = $campaign['slug'] ?? $campaignId;
-            $target = Router::url('campana/' . $campaignSlug) . '#donar';
+            $campaignPublicUrl = isset($campaign['public_path'])
+                ? Router::url($campaign['public_path'])
+                : Router::url('campana/' . ($campaign['slug'] ?? $campaignId));
+            $target = $campaignPublicUrl . '#donar';
             SessionHelper::setFlash('error', 'Inicia sesión para registrar tu aporte.');
             $loginUrl = Router::url('login') . '?redirect=' . urlencode($target);
             Router::redirect($loginUrl);
         }
 
         if (!SessionHelper::checkRateLimit('donate_campaign_' . $campaignId, 5, 900)) {
-            $slug = $campaign['slug'] ?? $campaignId;
-            return $this->respondError('Hiciste demasiados intentos en poco tiempo. Intenta nuevamente en unos minutos.', 429, 'campana/' . $slug . '#donar');
+            $slug = $campaign['public_path'] ?? ('campana/' . ($campaign['slug'] ?? $campaignId));
+            return $this->respondError('Hiciste demasiados intentos en poco tiempo. Intenta nuevamente en unos minutos.', 429, $slug . '#donar');
         }
 
         $payload = $this->collectPayload($campaignId);
 
         if (!empty($payload['errors'])) {
-            return $this->handleValidationFailure($campaignId, $payload['errors'], $payload['old'], 422, $campaign['slug'] ?? null);
+            return $this->handleValidationFailure(
+                $campaignId,
+                $payload['errors'],
+                $payload['old'],
+                422,
+                $campaign['public_path'] ?? ($campaign['slug'] ?? null)
+            );
         }
 
         try {
@@ -65,13 +79,13 @@ class DonationController {
                 ['general' => 'No pudimos procesar tu donación simulada. Intenta nuevamente.'],
                 $payload['old'],
                 500,
-                $campaign['slug'] ?? null
+                $campaign['public_path'] ?? ($campaign['slug'] ?? null)
             );
         }
     }
 
-    public function list($identifier) {
-        $campaign = $this->resolveCampaign($identifier);
+    public function list($username, $identifier) {
+        $campaign = $this->resolveCampaign($username, $identifier);
 
         if (!$campaign) {
             http_response_code(404);
@@ -117,12 +131,15 @@ class DonationController {
             $donations = $this->donations->findByCampaignId($campaignId, $perPage, $offset, true);
         }
 
+        $campaignPublicUrl = isset($campaign['public_path'])
+            ? Router::url($campaign['public_path'])
+            : Router::url('campana/' . ($campaign['slug'] ?? $campaignId));
         $campaignSlug = $campaign['slug'] ?? $campaignId;
         $breadcrumbs = [
             ['name' => 'Inicio', 'href' => Router::url('/')],
             ['name' => 'Campañas', 'href' => Router::url('campanas')],
-            ['name' => $campaign['title'] ?? 'Campaña', 'href' => Router::url('campana/' . $campaignSlug)],
-            ['name' => 'Aportes', 'href' => Router::url('campana/' . $campaignSlug . '/donaciones')],
+            ['name' => $campaign['title'] ?? 'Campaña', 'href' => $campaignPublicUrl],
+            ['name' => 'Aportes', 'href' => Router::url(rtrim($campaign['public_path'] ?? ('campana/' . $campaignSlug), '/') . '/donaciones')],
         ];
 
         $page_title = 'Aportes de ' . ($campaign['title'] ?? 'Campaña') . ' - Lucatón';
@@ -206,7 +223,7 @@ class DonationController {
         return compact('data', 'errors', 'old');
     }
 
-    private function handleValidationFailure(int $campaignId, array $errors, array $old, int $status = 422, ?string $campaignSlug = null) {
+    private function handleValidationFailure(int $campaignId, array $errors, array $old, int $status = 422, ?string $campaignPath = null) {
         if ($this->isJsonRequest()) {
             return $this->respondJson(['success' => false, 'errors' => $errors], $status);
         }
@@ -216,8 +233,8 @@ class DonationController {
 
         SessionHelper::setFlash('error', $errors['general'] ?? 'Corrige los campos marcados para completar tu aporte.');
 
-        $target = $campaignSlug ?? $campaignId;
-        Router::redirect('/campana/' . $target . '#donar');
+        $targetPath = $campaignPath ?? ('campana/' . $campaignId);
+        Router::redirect($targetPath . '#donar');
     }
 
     private function respondSuccess(array $campaign, int $donationId) {
@@ -229,8 +246,8 @@ class DonationController {
             ]);
         }
 
-        $slug = $campaign['slug'] ?? $campaign['id'];
-        Router::redirect('/campana/' . $slug . '#donar');
+        $publicPath = $campaign['public_path'] ?? ('campana/' . ($campaign['slug'] ?? $campaign['id']));
+        Router::redirect($publicPath . '#donar');
     }
 
     private function respondError(string $message, int $status, ?string $redirectPath = null) {
@@ -257,12 +274,27 @@ class DonationController {
         return str_contains($accept, 'application/json') || strtolower($requestedWith) === 'xmlhttprequest';
     }
 
-    private function resolveCampaign($identifier): ?array {
+    private function resolveCampaign($username, $identifier): ?array {
+        $record = null;
+
         if (is_numeric($identifier)) {
-            return $this->campaigns->findById((int)$identifier);
+            $record = $this->campaigns->findById((int)$identifier);
+        } else {
+            $record = $this->campaigns->findBySlug((string)$identifier, (string)$username);
         }
 
-        return $this->campaigns->findBySlug((string)$identifier);
+        if (!$record) {
+            return null;
+        }
+
+        if (!isset($record['public_path'])) {
+            if (!isset($record['owner_username']) && $username !== null) {
+                $record['owner_username'] = $username;
+            }
+            $record = CampaignPresenter::present($record);
+        }
+
+        return $record;
     }
 }
 

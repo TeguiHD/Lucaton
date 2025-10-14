@@ -12,6 +12,15 @@ $siteToastQueue = array_map(static function ($toast) {
         'message' => $toast['message'] ?? ''
     ];
 }, SessionHelper::pullSiteToasts());
+
+$body_classes = $body_classes ?? '';
+if (is_array($body_classes)) {
+    $body_classes = implode(' ', $body_classes);
+}
+$body_classes = trim((string)$body_classes);
+if ($body_classes === '') {
+    $body_classes = 'h-full bg-gray-50 font-sans antialiased';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es" class="h-full">
@@ -57,7 +66,7 @@ $siteToastQueue = array_map(static function ($toast) {
     <!-- Additional head content -->
     <?= $additional_head ?? '' ?>
 </head>
-<body class="h-full bg-gray-50 font-sans antialiased">
+<body class="<?= htmlspecialchars($body_classes, ENT_QUOTES, 'UTF-8') ?>">
     <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
         Saltar al contenido principal

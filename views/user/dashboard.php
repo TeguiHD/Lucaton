@@ -193,7 +193,8 @@ $buttonIcons = [
                                 ?? (APP_URL . '/public/assets/images/campaigns/placeholder.jpg');
                                         $status = $campaign['status'] ?? 'draft';
                                         $statusMeta = $statusLabels[$status] ?? ['label' => ucfirst($status), 'class' => 'bg-gray-100 text-gray-700'];
-                                        $campaignUrl = !empty($campaign['slug']) ? Router::url('campana/' . $campaign['slug']) : '#';
+                                        $campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+                                        $campaignUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : '#';
                                         $categoryLabel = $campaign['category_name'] ?? null;
                                         $endDate = !empty($campaign['end_date']) ? strtotime($campaign['end_date']) : null;
                                         $daysLeft = null;

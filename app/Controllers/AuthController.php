@@ -36,12 +36,23 @@ class AuthController {
             $user = $this->users->authenticate($email, $password);
             SessionHelper::setUser($user);
 
-            $welcomeName = SessionHelper::getUser()['name'] ?? ($user['first_name'] ?? '');
-            $welcomeName = trim($welcomeName) !== '' ? trim($welcomeName) : 'de vuelta';
-
+            $sessionUser = SessionHelper::getUser();
+            $welcomeUsername = trim((string)($user['username'] ?? ''));
+            if ($welcomeUsername === '' && is_array($sessionUser)) {
+                $welcomeUsername = trim((string)($sessionUser['username'] ?? ''));
+            }
+            if ($welcomeUsername === '' && is_array($sessionUser)) {
+                $welcomeUsername = trim((string)($sessionUser['name'] ?? ''));
+            }
+            if ($welcomeUsername === '' && isset($user['first_name'])) {
+                $welcomeUsername = trim((string)$user['first_name']);
+            }
             $newsletterMessage = $this->completeNewsletterIntent($user);
 
-            $flashMessage = 'Bienvenido de vuelta, ' . $welcomeName . '!';
+            $flashMessage = 'Bienvenido de vuelta!';
+            if ($welcomeUsername !== '') {
+                $flashMessage = 'Bienvenido de vuelta ' . $welcomeUsername . '!';
+            }
             if ($newsletterMessage !== null) {
                 $flashMessage .= ' ' . $newsletterMessage;
             }

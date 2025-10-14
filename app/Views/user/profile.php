@@ -16,6 +16,9 @@ $normalizeCampaign = function ($campaign) {
     $data['image_url'] = $data['image_url'] ?? $data['cover_image_url'] ?? APP_URL . '/public/assets/images/campaigns/placeholder.jpg';
     $data['category_name'] = $data['category_name'] ?? $data['category'] ?? 'Causa social';
     $data['summary'] = $data['summary'] ?? ($data['description'] ?? '');
+    if (!isset($data['public_path'])) {
+        $data['public_path'] = CampaignPresenter::buildPublicPath($data);
+    }
     return $data;
 };
 
@@ -28,6 +31,10 @@ $campaignProgress = function (array $campaign) {
 };
 
 $campaignUrl = function (array $campaign) {
+    if (!empty($campaign['public_path'])) {
+        return Router::url($campaign['public_path']);
+    }
+
     return $campaign['slug'] !== '' ? Router::url('campana/' . $campaign['slug']) : '#';
 };
 ?>

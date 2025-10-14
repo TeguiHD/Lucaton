@@ -197,6 +197,53 @@ class User {
         return $user;
     }
 
+    private function shouldGrantSuperadmin(?array $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        $email = strtolower(trim((string)($user['email'] ?? '')));
+        if ($email === '') {
+            return false;
+        }
+
+        if (env('APP_SUPERADMIN_AUTO_PROMOTE', 'false') !== 'true') {
+            return false;
+        }
+
+        $seedList = env('SUPERADMIN_SEEDS_HASHED', '');
+        if ($seedList === '') {
+            return false;
+        }
+
+        $hashes = array_filter(array_map('trim', explode(',', $seedList)));
+        if (!$hashes) {
+            return false;
+        }
+
+        $algo = strtolower(env('SUPERADMIN_SEEDS_ALGO', 'sha256'));
+        if (!in_array($algo, hash_algos(), true)) {
+            Logger::warning('Algoritmo de hash inválido para SUPERADMIN_SEEDS_ALGO', [
+                'algorithm' => $algo,
+            ]);
+            return false;
+        }
+
+        $secret = env('SUPERADMIN_SEEDS_SECRET', '');
+        $computed = $secret !== ''
+            ? hash_hmac($algo, $email, $secret)
+            : hash($algo, $email);
+
+        foreach ($hashes as $hash) {
+            if ($hash !== '' && hash_equals($hash, $computed)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function applyAdminOverrides(?array $user): ?array
     {
         if (!$user) {
@@ -205,8 +252,7 @@ class User {
 
         $user = $this->ensureRoleSignature($user);
 
-        $email = strtolower($user['email'] ?? '');
-        if ($email !== 'nlopetegui@pregrado.ubo.cl') {
+        if (!$this->shouldGrantSuperadmin($user)) {
             return $user;
         }
 
@@ -248,7 +294,12 @@ class User {
                 'user_id' => $user['id'],
                 'error' => $e->getMessage(),
             ]);
+            return $user;
         }
+
+        Logger::audit('superadmin_auto_promote', (int)$user['id'], [
+            'email' => $user['email'] ?? null,
+        ]);
 
         $user['role'] = 'superadmin';
         if ($superadminRoleId !== null) {

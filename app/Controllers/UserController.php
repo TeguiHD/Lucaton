@@ -752,7 +752,8 @@ class UserController {
                 ]);
             }
 
-            $publicUrl = Router::url('campana/' . ($campaignData['slug'] ?? $campaignId));
+            $campaignPublicPath = $campaignData['public_path'] ?? CampaignPresenter::buildPublicPath(array_merge($campaignData, ['id' => $campaignId]));
+            $publicUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : Router::url('campana/' . ($campaignData['slug'] ?? $campaignId));
             $manageUrl = Router::url('campana/' . $campaignId . '/editar');
 
             return [

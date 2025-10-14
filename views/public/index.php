@@ -102,6 +102,11 @@ if (!function_exists('lucaton_campaign_gap')) {
 
 if (!function_exists('lucaton_campaign_url')) {
     function lucaton_campaign_url(array $campaign): string {
+        $publicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+        if ($publicPath !== null) {
+            return Router::url($publicPath);
+        }
+
         $identifier = $campaign['slug'] ?? ($campaign['id'] ?? null);
         if ($identifier === null) {
             return Router::url('campanas');
@@ -228,34 +233,13 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
     $testimonial_cards = array_slice($testimonial_secondary, 0, 3);
 }
 
+$meta_description = $meta_description ?? $page_description;
+$current_page = $current_page ?? 'home';
+$body_classes = $body_classes ?? 'h-full bg-white text-neutral-900 font-sans antialiased';
+
+ob_start();
 ?>
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($page_title); ?></title>
-    <meta name="description" content="<?= htmlspecialchars($page_description); ?>">
-
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="<?= Router::url('/'); ?>">
-    <meta property="og:title" content="<?= htmlspecialchars($page_title); ?>">
-    <meta property="og:description" content="<?= htmlspecialchars($page_description); ?>">
-    <meta property="og:image" content="<?= APP_URL ?>/public/assets/images/og-image.jpg">
-
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-</head>
-<body class="bg-white text-neutral-900 font-sans antialiased">
-    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md">
-        Saltar al contenido principal
-    </a>
-
-    <?php include __DIR__ . '/../layouts/partials/header.php'; ?>
-
-    <main id="main" class="flex flex-col gap-0">
+<div class="flex flex-col gap-0">
         <!-- HERO JUVENIL -->
         <section class="relative isolate overflow-hidden bg-gradient-to-br from-marino-950 via-marino-900 to-marino-800 text-white">
             <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
@@ -598,7 +582,8 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
                                         $share_target = $campaign['slug'] ?? ($campaign['id'] ?? '');
                                     $share_payload = [
                                         'slug' => $share_target,
-                                        'title' => $campaign['title'] ?? 'Campaña Lucatón'
+                                        'title' => $campaign['title'] ?? 'Campaña Lucatón',
+                                        'url' => lucaton_campaign_url($campaign)
                                     ];
                                     $share_attr = htmlspecialchars(json_encode($share_payload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                                     ?>
@@ -712,7 +697,7 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
                 </div>
             </div>
         </section>
-    </main>
+    </div>
 
     <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4 py-6" role="dialog" aria-modal="true" aria-label="Feedback de creadores" data-feedback-modal>
         <div class="relative w-full max-w-2xl rounded-3xl bg-white shadow-strong">
@@ -1182,5 +1167,7 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
             initFeedbackModal();
         });
     </script>
-</body>
-</html>
+<?php
+$content = ob_get_clean();
+include VIEWS_PATH . '/layouts/main.php';
+?>

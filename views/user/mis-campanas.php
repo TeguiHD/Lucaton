@@ -167,10 +167,8 @@ $statusGuidance = [
                             } elseif ($visibilityLabel) {
                                 $visibilityLabel = ucfirst($visibilityLabel);
                             }
-                            $viewUrl = null;
-                            if ($campaignSlug || $campaignId) {
-                                $viewUrl = $campaignSlug ? Router::url('campana/' . $campaignSlug) : Router::url('campana/' . $campaignId);
-                            }
+                            $campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+                            $viewUrl = $campaignPublicPath ? Router::url($campaignPublicPath) : null;
                             $editUrl = $campaignId ? Router::url('campana/' . $campaignId . '/editar') : null;
                         ?>
                         <?php

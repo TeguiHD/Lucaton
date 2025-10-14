@@ -84,7 +84,8 @@ $searchQuery = $filters['search'] ?? '';
                                         </span>
                                         <?php if (!empty($campaign['slug'])): ?>
                                             <span class="text-xs text-gray-500">
-                                                <a href="<?= Router::url('campana/' . $campaign['slug']) ?>" class="text-copihue-600 hover:text-copihue-700" target="_blank" rel="noopener">
+                                                <?php $campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign); ?>
+                                                <a href="<?= htmlspecialchars($campaignPublicPath ? Router::url($campaignPublicPath) : Router::url('campana/' . $campaign['slug'])) ?>" class="text-copihue-600 hover:text-copihue-700" target="_blank" rel="noopener">
                                                     Ver ficha pública
                                                 </a>
                                             </span>

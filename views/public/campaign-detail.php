@@ -11,12 +11,21 @@ if (!isset($campaign)) {
     return;
 }
 
+$campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+if ($campaignPublicPath === null) {
+    $fallbackIdentifier = (string)($campaign['slug'] ?? $campaign['id'] ?? '');
+    if ($fallbackIdentifier !== '') {
+        $campaignPublicPath = 'campana/' . rawurlencode($fallbackIdentifier);
+    }
+}
+$campaignPublicUrl = $campaignPublicPath !== null ? Router::url($campaignPublicPath) : Router::url('campanas');
+
 $page_title = htmlspecialchars($campaign['title']) . ' - Lucatón';
 $page_description = htmlspecialchars($campaign['summary'] ?? substr($campaign['story'] ?? '', 0, 150));
 $breadcrumbs = [
     ['name' => 'Inicio', 'href' => Router::url('/')],
     ['name' => 'Campañas', 'href' => Router::url('campanas')],
-    ['name' => $campaign['title'], 'href' => Router::url('campana/' . ($campaign['slug'] ?? $campaign['id']))]
+    ['name' => $campaign['title'], 'href' => $campaignPublicUrl]
 ];
 
 $statusSlug = strtolower((string)($campaign['status'] ?? 'draft'));
@@ -75,9 +84,13 @@ $updateMediaUrls = array_map(static function ($value) {
 $updateMediaUrls = array_pad($updateMediaUrls, 3, '');
 $celebrationOverlay = $celebrationOverlay ?? null;
 $campaignIdentifier = (string)($campaign['slug'] ?? $campaign['id'] ?? '');
-$campaignUpdateAction = $campaignIdentifier !== ''
-    ? Router::url('campana/' . rawurlencode($campaignIdentifier) . '/actualizaciones')
-    : Router::url('campana/' . ($campaign['id'] ?? ''));
+$campaignUpdatePath = null;
+if ($campaignPublicPath !== null) {
+    $campaignUpdatePath = rtrim($campaignPublicPath, '/') . '/actualizaciones';
+} elseif ($campaignIdentifier !== '') {
+    $campaignUpdatePath = 'campana/' . rawurlencode($campaignIdentifier) . '/actualizaciones';
+}
+$campaignUpdateAction = $campaignUpdatePath !== null ? Router::url($campaignUpdatePath) : Router::url('campanas');
 
 $image_url = $campaignImageUrl
     ?? CampaignMediaUploadService::normalizePublicUrl($campaign['image_url'] ?? ($campaign['cover_image_url'] ?? null))
@@ -158,7 +171,10 @@ $donationAmountValue = preg_replace('/[^0-9]/', '', $donationOld['amount'] ?? ''
 $donationIsAnonymous = ($donationOld['is_anonymous'] ?? '0') === '1';
 $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
 $campaignShareSlug = $campaign['slug'] ?? $campaign['id'] ?? '';
-$donationRedirectTarget = Router::url('campana/' . $campaignShareSlug) . '#donar';
+$donationRedirectTarget = $campaignPublicUrl . '#donar';
+$campaignDonationsUrl = $campaignPublicPath !== null
+    ? Router::url(rtrim($campaignPublicPath, '/') . '/donaciones')
+    : Router::url('campana/' . $campaignShareSlug . '/donaciones');
 $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRedirectTarget);
 ?>
 
@@ -171,7 +187,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
     <meta name="description" content="<?php echo $page_description; ?>">
 
     <meta property="og:type" content="website">
-    <meta property="og:url" content="<?php echo Router::url('campana/' . ($campaign['slug'] ?? $campaign['id'])); ?>">
+    <meta property="og:url" content="<?php echo $campaignPublicUrl; ?>">
     <meta property="og:title" content="<?php echo htmlspecialchars($campaign['title']); ?>">
     <meta property="og:description" content="<?php echo $page_description; ?>">
     <meta property="og:image" content="<?php echo htmlspecialchars($image_url); ?>">
@@ -226,6 +242,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                 $campaignSlug = $campaign['slug'] ?? $campaign['id'] ?? '';
                                 $sharePayload = [
                                     'slug' => $campaignSlug,
+                                    'url' => $campaignPublicUrl,
                                     'title' => $campaign['title'] ?? 'Campaña Lucatón'
                                 ];
                                 $shareEncoded = htmlspecialchars(json_encode($sharePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
@@ -737,7 +754,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                     </li>
                                 <?php endforeach; ?>
                             </ul>
-                            <a href="<?= htmlspecialchars(Router::url('campana/' . $campaignShareSlug . '/donaciones')) ?>" class="btn-outline w-full text-center">Ver todos los aportes</a>
+                            <a href="<?= htmlspecialchars($campaignDonationsUrl) ?>" class="btn-outline w-full text-center">Ver todos los aportes</a>
                         </div>
                     <?php endif; ?>
                 </div>

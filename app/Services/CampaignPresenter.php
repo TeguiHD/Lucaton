@@ -73,6 +73,10 @@ class CampaignPresenter {
         $categorySlug = $row['category_slug'] ?? null;
 
         $ownerId = $row['user_id'] ?? $row['owner_id'] ?? null;
+        $ownerUsername = $row['owner_username']
+            ?? $row['username']
+            ?? $row['creator_username']
+            ?? null;
         $ownerAvatar = SessionHelper::normalizeAvatarUrl($row['avatar_url'] ?? ($row['creator_avatar'] ?? null));
         $imageCandidates = [
             $row['cover_image_url'] ?? null,
@@ -150,6 +154,7 @@ class CampaignPresenter {
             'video_url' => $row['video_url'] ?? null,
             'owner_id' => $ownerId !== null ? (int)$ownerId : null,
             'owner_name' => $ownerName,
+            'owner_username' => $ownerUsername,
             'owner_avatar' => $ownerAvatar,
             'category_id' => isset($row['category_id']) ? (int)$row['category_id'] : null,
             'category_name' => $categoryName,
@@ -181,8 +186,41 @@ class CampaignPresenter {
         $presented['creator_name'] = $presented['owner_name'];
         $presented['creator'] = $presented['owner_name'];
         $presented['supporters_count'] = $presented['donor_count'];
+        $presented['public_path'] = self::buildPublicPath($presented);
 
         return $presented;
+    }
+
+    /**
+     * Construye la ruta pública canónica para una campaña.
+     */
+    public static function buildPublicPath(array $row): ?string
+    {
+        $ownerUsername = $row['owner_username']
+            ?? $row['username']
+            ?? $row['creator_username']
+            ?? null;
+        $ownerUsername = is_string($ownerUsername) ? trim($ownerUsername) : '';
+
+        $identifier = null;
+        if (!empty($row['slug'])) {
+            $identifier = (string)$row['slug'];
+        } elseif (!empty($row['public_identifier'])) {
+            $identifier = (string)$row['public_identifier'];
+        } elseif (isset($row['id'])) {
+            $identifier = (string)$row['id'];
+        }
+        $identifier = is_string($identifier) ? trim($identifier) : '';
+
+        if ($ownerUsername !== '' && $identifier !== '') {
+            return 'campana/' . rawurlencode($ownerUsername) . '/' . rawurlencode($identifier);
+        }
+
+        if ($identifier !== '') {
+            return 'campana/' . rawurlencode($identifier);
+        }
+
+        return null;
     }
 
     private static function normalizeImageUrl(?string $value, string $fallback): string {

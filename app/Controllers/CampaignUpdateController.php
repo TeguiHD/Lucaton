@@ -11,7 +11,7 @@ class CampaignUpdateController
         $this->updates = new CampaignUpdate();
     }
 
-    public function store($identifier): void
+    public function store($username, $identifier): void
     {
         if (!SessionHelper::isAuthenticated()) {
             SessionHelper::setFlash('warning', 'Debes iniciar sesión para publicar una actualización.');
@@ -26,12 +26,14 @@ class CampaignUpdateController
             return;
         }
 
-        $campaign = $this->resolveCampaign($identifier);
+        $campaign = $this->resolveCampaign($username, $identifier);
         if (!$campaign) {
             http_response_code(404);
             include VIEWS_PATH . '/errors/404.php';
             return;
         }
+
+        $campaignUpdatesTarget = ($campaign['public_path'] ?? ('campana/' . ($campaign['slug'] ?? $campaign['id']))) . '#actualizaciones';
 
         $currentUserId = (int)SessionHelper::getUserId();
         $ownerId = (int)($campaign['owner_id'] ?? $campaign['user_id'] ?? 0);
@@ -40,7 +42,7 @@ class CampaignUpdateController
         if (!$canManageCampaign) {
             http_response_code(403);
             SessionHelper::setFlash('error', 'No tienes permisos para actualizar esta campaña.');
-            Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']));
+            Router::redirect($campaign['public_path'] ?? ('campana/' . ($campaign['slug'] ?? $campaign['id'])));
             return;
         }
 
@@ -69,7 +71,7 @@ class CampaignUpdateController
 
         if ($campaignFinalized && $finalUpdateAlreadyPosted) {
             SessionHelper::setFlash('warning', 'Esta campaña ya fue cerrada definitivamente. Si necesitas compartir novedades, crea una nueva campaña o contáctanos.');
-            Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']) . '#actualizaciones');
+            Router::redirect($campaignUpdatesTarget);
             return;
         }
 
@@ -79,7 +81,7 @@ class CampaignUpdateController
         if (!empty($errors)) {
             $_SESSION['campaign_update_errors'] = $errors;
             $_SESSION['campaign_update_old'] = $input;
-            Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']) . '#actualizaciones');
+            Router::redirect($campaignUpdatesTarget);
             return;
         }
 
@@ -106,7 +108,7 @@ class CampaignUpdateController
             ]);
 
             SessionHelper::setFlash('error', 'Ocurrió un error al guardar la actualización. Intenta de nuevo en unos minutos.');
-            Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']) . '#actualizaciones');
+            Router::redirect($campaignUpdatesTarget);
             return;
         }
 
@@ -115,20 +117,31 @@ class CampaignUpdateController
         } else {
             SessionHelper::setFlash('success', 'Tu actualización se publicó correctamente.');
         }
-        Router::redirect('campana/' . ($campaign['slug'] ?? $campaign['id']) . '#actualizaciones');
+        Router::redirect($campaignUpdatesTarget);
     }
 
-    private function resolveCampaign($identifier): ?array
+    private function resolveCampaign($username, $identifier): ?array
     {
+        $record = null;
+
         if (is_numeric($identifier)) {
-            return $this->campaigns->findById((int)$identifier);
+            $record = $this->campaigns->findById((int)$identifier);
+        } elseif (is_string($identifier) && $identifier !== '') {
+            $record = $this->campaigns->findBySlug($identifier, (string)$username);
         }
 
-        if (is_string($identifier) && $identifier !== '') {
-            return $this->campaigns->findBySlug($identifier);
+        if (!$record) {
+            return null;
         }
 
-        return null;
+        if (!isset($record['public_path'])) {
+            if (!isset($record['owner_username']) && $username !== null) {
+                $record['owner_username'] = $username;
+            }
+            $record = CampaignPresenter::present($record);
+        }
+
+        return $record;
     }
 
     private function collectInput(): array

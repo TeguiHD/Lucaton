@@ -58,17 +58,21 @@ function render_campaign_card($campaign, $options = []) {
         ?? '';
     $creator_avatar = $campaign['owner_avatar'] ?? $campaign['creator_avatar'] ?? null;
 
-    $slug = $campaign['slug'] ?? null;
-    if ($slug === null) {
-        if (!empty($campaign['id'])) {
-            $slug = (string)$campaign['id'];
-        } elseif (!empty($campaign['title'])) {
-            $slug = trim(strtolower(preg_replace('/[^a-z0-9]+/i', '-', $campaign['title'])), '-');
-        } else {
-            $slug = 'detalle';
+    $publicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign);
+    if ($publicPath === null) {
+        $slug = $campaign['slug'] ?? null;
+        if ($slug === null) {
+            if (!empty($campaign['id'])) {
+                $slug = (string)$campaign['id'];
+            } elseif (!empty($campaign['title'])) {
+                $slug = trim(strtolower(preg_replace('/[^a-z0-9]+/i', '-', $campaign['title'])), '-');
+            } else {
+                $slug = 'detalle';
+            }
         }
+        $publicPath = 'campana/' . rawurlencode($slug);
     }
-    $detail_url = Router::url('campana/' . rawurlencode($slug));
+    $detail_url = Router::url($publicPath);
 
     $progress_percentage = $goal_amount > 0 ? min(100, ($raised_amount / $goal_amount) * 100) : 0;
 
@@ -209,7 +213,8 @@ function render_campaign_card($campaign, $options = []) {
         $share_target = $slug ?? ($campaign['id'] ?? '');
         $share_payload = [
             'slug' => $share_target,
-            'title' => $campaign['title'] ?? 'Campaña Lucatón'
+            'title' => $campaign['title'] ?? 'Campaña Lucatón',
+            'url' => $detail_url
         ];
         $share_attr = htmlspecialchars(json_encode($share_payload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
         $html .= '<button type="button" class="btn-ghost p-2" onclick="shareCampaign(this, ' . $share_attr . ')" title="Compartir">';

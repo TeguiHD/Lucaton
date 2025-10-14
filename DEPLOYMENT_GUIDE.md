@@ -65,6 +65,18 @@ OPENAI_API_KEY=tu_openai_key_real    # Tu API key real
 GEMINI_API_KEY=tu_gemini_key_real    # Tu API key real
 ```
 
+Si necesitas otorgar rol `superadmin` a cuentas iniciales sin exponer correos en el repositorio, configura las variables:
+
+```env
+APP_SUPERADMIN_AUTO_PROMOTE=true
+SUPERADMIN_SEEDS_ALGO=sha256
+SUPERADMIN_SEEDS_SECRET=clave_secreta_larga
+SUPERADMIN_SEEDS_HASHED=hash_generado
+```
+
+Genera cada hash con `php scripts/generate_superadmin_seed.php correo@ejemplo.com`
+siguiendo la guía `docs/security/superadmin-seeds.md`.
+
 ### 2. Configurar Base de Datos
 
 #### Opción A: Exportar/Importar BD completa

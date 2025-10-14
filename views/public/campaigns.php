@@ -338,8 +338,9 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                             <div class="p-6 flex-1">
                                 <div class="flex items-center justify-between">
                                     <div class="flex-1">
+                                        <?php $campaignPublicPath = $campaign['public_path'] ?? CampaignPresenter::buildPublicPath($campaign); ?>
                                         <h3 class="text-lg font-medium text-gray-900">
-                    <a href="<?= Router::url('campana/' . ($campaign['slug'] ?? $campaign['id'])) ?>" class="hover:text-copihue-600">
+                    <a href="<?= htmlspecialchars($campaignPublicPath ? Router::url($campaignPublicPath) : '#') ?>" class="hover:text-copihue-600">
                         <?php echo htmlspecialchars($campaign['title']); ?>
                     </a>
                                         </h3>
