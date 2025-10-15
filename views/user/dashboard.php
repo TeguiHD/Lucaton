@@ -96,12 +96,12 @@ $buttonIcons = [
     <title><?= htmlspecialchars($page_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
 
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-professional min-h-screen">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
         Saltar al contenido principal
     </a>
@@ -148,7 +148,7 @@ $buttonIcons = [
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 space-y-8">
-                <section class="bg-white shadow rounded-lg">
+                <section class="bg-card-premium shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <div class="flex items-center justify-between mb-4">
                             <div>
@@ -277,7 +277,7 @@ $buttonIcons = [
                     </div>
                 </section>
 
-                <section class="bg-white shadow rounded-lg">
+                <section class="bg-card-premium shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <div class="flex items-center justify-between mb-4">
                             <div>
@@ -326,7 +326,7 @@ $buttonIcons = [
             </div>
 
             <aside class="space-y-8">
-                <section class="bg-white shadow rounded-lg">
+                <section class="bg-card-premium shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <h2 class="text-lg font-medium text-gray-900 mb-4">Acciones rápidas</h2>
                         <div class="space-y-3">
@@ -364,7 +364,7 @@ $buttonIcons = [
                     </div>
                 </section>
 
-                <section class="bg-white shadow rounded-lg">
+                <section class="bg-card-premium shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="text-lg font-medium text-gray-900">Notificaciones</h2>
@@ -414,7 +414,7 @@ $buttonIcons = [
                     </div>
                 </section>
 
-                <section class="bg-white shadow rounded-lg">
+                <section class="bg-card-premium shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <h2 class="text-lg font-medium text-gray-900 mb-3">Consejos para mejorar</h2>
                         <ul class="space-y-3 text-sm text-gray-600">

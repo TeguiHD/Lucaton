@@ -53,9 +53,9 @@ $gallery = $article['gallery'] ?? [];
     <meta name="twitter:title" content="<?= htmlspecialchars($page_title) ?>">
     <meta name="twitter:description" content="<?= htmlspecialchars($page_description) ?>">
     <meta name="twitter:image" content="<?= htmlspecialchars($cover_image) ?>">
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
 </head>
 <body class="bg-gray-50 text-marino-900">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">Saltar al contenido principal</a>
@@ -286,7 +286,7 @@ $gallery = $article['gallery'] ?? [];
 
     <?php include VIEWS_PATH . '/layouts/partials/footer.php'; ?>
 
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
+    <script src="<?= asset_url('js/app.js') ?>" defer></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const copyButton = document.querySelector('[data-copy-link]');

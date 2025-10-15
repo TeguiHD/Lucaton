@@ -248,7 +248,7 @@ ob_start();
             </div>
             <div class="absolute inset-0 bg-gradient-to-r from-marino-950/90 via-marino-900/75 to-transparent"></div>
             <div class="absolute inset-y-0 right-0 w-full md:w-1/2 lg:w-[48%]">
-                <img src="<?= APP_URL ?>/public/assets/images/campaigns/emprendimiento-valpo.svg" alt="Personas celebrando una campaña financiada" class="h-full w-full object-cover opacity-85" loading="lazy">
+                <img src="<?= asset_url('images/campaigns/emprendimiento-valpo.svg') ?>" alt="Personas celebrando una campaña financiada" class="h-full w-full object-cover opacity-85" loading="lazy">
                 <div class="absolute inset-0 bg-gradient-to-l from-marino-900/85 via-marino-900/40 to-transparent"></div>
             </div>
 
@@ -285,7 +285,7 @@ ob_start();
                     </div>
 
                     <div class="lg:pl-10">
-                        <article class="glass rounded-3xl bg-white/15 p-8 text-white shadow-strong backdrop-blur-lg fade-up" data-animate="fade-up" data-animate-delay="160">
+                        <article class="glass-hero rounded-3xl p-8 text-white shadow-strong fade-up" data-animate="fade-up" data-animate-delay="160">
                             <header class="flex items-center justify-between">
                                 <h2 class="text-lg font-semibold">Transparencia en vivo</h2>
                                 <span class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">

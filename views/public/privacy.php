@@ -30,11 +30,11 @@ $last_updated = '29 de septiembre de 2025';
     <meta property="twitter:description" content="<?php echo $page_description; ?>">
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
 
     <!-- Styles -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     
     
 </head>

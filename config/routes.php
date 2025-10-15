@@ -38,6 +38,7 @@ $router->group(['middleware' => 'csrf'], function($router) {
     $router->post('/recuperar', 'AuthController@sendResetLink');
     $router->post('/recuperar/restablecer/{token}', 'AuthController@resetPassword');
     $router->post('/newsletter', 'NewsletterController@subscribe');
+    $router->post('/reportar', 'SupportController@store');
 });
 
 $router->get('/newsletter/desuscribir/{token}', 'NewsletterController@unsubscribe');
@@ -90,6 +91,7 @@ $router->group(['middleware' => 'admin'], function($router) {
     $router->get('/admin/news', 'NewsAdminController@index');
     $router->get('/admin/news/create', 'NewsAdminController@create');
     $router->get('/admin/news/{id}/edit', 'NewsAdminController@edit');
+    $router->get('/admin/reportes', 'AdminController@supportTickets');
 
     $router->group(['middleware' => 'csrf'], function($router) {
         $router->post('/admin/campana/{id}/aprobar', 'AdminController@approveCampaign');

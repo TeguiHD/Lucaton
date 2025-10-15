@@ -1,7 +1,8 @@
 <?php
 class PageController {
     public function faq() {
-        $current_page = 'faq';
+        $current_page = 'help_center';
+        $page_context = 'faq';
         include VIEWS_PATH . '/public/faq.php';
     }
 
@@ -42,6 +43,7 @@ class PageController {
 
     public function help() {
         $current_page = 'help_center';
+        $page_context = 'help';
         include VIEWS_PATH . '/public/centro-de-ayuda.php';
     }
 }

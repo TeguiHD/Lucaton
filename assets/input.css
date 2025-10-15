@@ -284,7 +284,31 @@
   }
   
   /* === 2025 MODERN COMPONENTS === */
-  .glass { @apply bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border border-white/40 shadow-soft; }
+  /* Efectos cristal mejorados */
+  .glass { 
+    @apply bg-white/70 backdrop-blur-md supports-[backdrop-filter]:bg-white/60 border border-white/40 shadow-soft;
+    backdrop-filter: blur(12px) saturate(180%);
+  }
+  
+  .glass-strong { 
+    @apply bg-white/80 backdrop-blur-lg supports-[backdrop-filter]:bg-white/70 border border-white/50 shadow-medium;
+    backdrop-filter: blur(16px) saturate(200%);
+  }
+  
+  .glass-subtle { 
+    @apply bg-white/50 backdrop-blur-sm supports-[backdrop-filter]:bg-white/40 border border-white/30 shadow-sm;
+    backdrop-filter: blur(8px) saturate(150%);
+  }
+  
+  .glass-dark { 
+    @apply bg-black/20 backdrop-blur-md supports-[backdrop-filter]:bg-black/15 border border-white/20 shadow-soft text-white;
+    backdrop-filter: blur(12px) saturate(180%);
+  }
+  
+  .glass-hero { 
+    @apply bg-white/15 backdrop-blur-lg supports-[backdrop-filter]:bg-white/10 border border-white/20 shadow-strong;
+    backdrop-filter: blur(20px) saturate(200%) brightness(110%);
+  }
   .card-neo { @apply bg-white rounded-2xl shadow-soft border border-neutral-200/70 transition-all duration-300 hover:shadow-strong hover:-translate-y-0.5 hover:scale-[1.01]; }
   .chip { @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-neutral-100 text-neutral-700 border border-neutral-200 transition-all duration-200 hover:bg-neutral-200; }
   .chip-active { @apply bg-marino-700 text-white border-transparent shadow-sm; }

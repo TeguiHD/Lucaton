@@ -24,9 +24,9 @@ $nav_items = [
         'auth_required' => true
     ],
     [
-        'name' => 'Preguntas Frecuentes',
-        'href' => 'faq',
-        'current' => $current_page === 'faq'
+        'name' => 'Centro de Ayuda',
+        'href' => 'ayuda',
+        'current' => in_array($current_page, ['help_center', 'faq'], true)
     ]
 ];
 
@@ -76,7 +76,7 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                 <!-- Logo -->
                 <div class="flex-shrink-0">
                     <a href="<?= Router::url('/') ?>" class="flex items-center">
-                        <img class="h-8 w-auto" src="<?= APP_URL ?>/public/assets/images/logo.svg" alt="Lucatón">
+                        <img class="h-8 w-auto" src="<?= asset_url('images/logo.svg') ?>" alt="Lucatón">
                         <span class="ml-2 text-xl font-bold text-marino-900">Lucatón</span>
                     </a>
                 </div>

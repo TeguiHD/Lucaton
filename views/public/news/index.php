@@ -24,9 +24,9 @@ $min_date_to = $date_from !== '' ? $date_from : '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($page_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
 </head>
 <body class="bg-gray-50 text-marino-900">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">Saltar al contenido principal</a>
@@ -231,6 +231,6 @@ $min_date_to = $date_from !== '' ? $date_from : '';
     </main>
 
     <?php include VIEWS_PATH . '/layouts/partials/footer.php'; ?>
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
+    <script src="<?= asset_url('js/app.js') ?>" defer></script>
 </body>
 </html>

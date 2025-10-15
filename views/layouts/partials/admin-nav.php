@@ -39,6 +39,12 @@ $admin_nav_items = [
         'current' => $current_page === 'admin-newsletter'
     ],
     [
+        'name' => 'Reportes',
+        'href' => '/admin/reportes',
+        'icon' => 'help-circle',
+        'current' => $current_page === 'admin-support'
+    ],
+    [
         'name' => 'Moderación IA',
         'href' => '/admin/ia',
         'icon' => 'sparkles',
@@ -71,6 +77,8 @@ $icons = [
     'mail' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z" />',
     'newspaper' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 5H8a2 2 0 00-2 2v11a1 1 0 01-1 1H5a1 1 0 01-1-1V6a2 2 0 012-2h13a1 1 0 011 1v11a2 2 0 01-2 2H9" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7h2M16 11h2M16 15h2M10 7h2M10 11h2M10 15h2" />'
+    ,
+    'help-circle' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10a4 4 0 118 0c0 1.657-1.343 3-3 3h-1v1m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />'
 ];
 ?>
 

@@ -386,7 +386,7 @@ class User {
         // Verificar si la cuenta está bloqueada
         if ($this->supportsColumn('locked_until') && $this->isAccountLocked($user)) {
             $this->logFailedLogin($email, 'account_locked');
-            throw new Exception('Cuenta bloqueada temporalmente');
+            throw new Exception('Cuenta bloqueada temporalmente. Inténtalo nuevamente en 15 minutos.');
         }
 
         // Verificar contraseña
@@ -787,9 +787,28 @@ class User {
      * Verificar si la cuenta está bloqueada
      */
     private function isAccountLocked($user) {
-        if ($this->supportsColumn('locked_until') && $user['locked_until'] && strtotime($user['locked_until']) > time()) {
+        if (!$this->supportsColumn('locked_until')) {
+            return false;
+        }
+
+        $lockedUntilRaw = $user['locked_until'] ?? null;
+        if (!$lockedUntilRaw) {
+            return false;
+        }
+
+        $lockedUntil = strtotime($lockedUntilRaw);
+        if ($lockedUntil === false) {
+            return false;
+        }
+
+        if ($lockedUntil > time()) {
             return true;
         }
+
+        if ($this->supportsColumn('failed_login_attempts') && !empty($user['id']) && (int)($user['failed_login_attempts'] ?? 0) > 0) {
+            $this->resetFailedAttempts((int)$user['id']);
+        }
+
         return false;
     }
     
@@ -802,21 +821,36 @@ class User {
             [$userId]
         );
 
-        // Bloquear cuenta después de 5 intentos
         $user = $this->findById($userId);
-        if ($user['failed_login_attempts'] >= 4) { // +1 del incremento anterior
-            if ($this->supportsColumn('locked_until')) {
-                $lockUntil = date('Y-m-d H:i:s', strtotime('+30 minutes'));
-                $this->db->update('users', [
-                    'locked_until' => $lockUntil
-                ], 'id = ?', [$userId]);
-            }
-
-            Logger::security('account_locked', 'high', [
-                'user_id' => $userId,
-                'attempts' => $user['failed_login_attempts'] + 1
-            ]);
+        if (!$user) {
+            return;
         }
+
+        $attempts = (int)($user['failed_login_attempts'] ?? 0);
+
+        if ($attempts < 5) {
+            return;
+        }
+
+        $updates = [];
+
+        if ($this->supportsColumn('locked_until')) {
+            $updates['locked_until'] = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+        }
+
+        if ($this->supportsColumn('failed_login_attempts')) {
+            $updates['failed_login_attempts'] = 5;
+        }
+
+        if (!empty($updates)) {
+            $this->db->update('users', $updates, 'id = ?', [$userId]);
+        }
+
+        Logger::security('account_locked', 'high', [
+            'user_id' => $userId,
+            'attempts' => $attempts,
+            'lock_duration_minutes' => 15
+        ]);
     }
     
     /**

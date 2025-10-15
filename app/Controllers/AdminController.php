@@ -7,6 +7,7 @@ class AdminController {
     private Donation $donations;
     private Notification $notifications;
     private AuditLogReader $auditReader;
+    private SupportTicketStore $supportTicketStore;
     private array $campaignColumns = [];
     private ?string $campaignOwnerColumn = null;
     private bool $campaignHasStatus = false;
@@ -24,6 +25,7 @@ class AdminController {
         $this->donations = new Donation();
         $this->notifications = new Notification();
         $this->auditReader = new AuditLogReader();
+        $this->supportTicketStore = new SupportTicketStore();
         $this->detectCampaignSchema();
     }
 
@@ -304,6 +306,69 @@ class AdminController {
         $ai_pending_count = $this->getAiPendingCount();
 
         include VIEWS_PATH . '/admin/statistics.php';
+    }
+
+    public function supportTickets(): void {
+        $this->ensureAdmin();
+
+        $filterSeverity = strtolower(trim($_GET['severity'] ?? 'all'));
+        $filterType = strtolower(trim($_GET['type'] ?? 'all'));
+        $filterStatus = strtolower(trim($_GET['status'] ?? 'all'));
+        $search = strtolower(trim($_GET['q'] ?? ''));
+
+        $tickets = $this->supportTicketStore->all(200);
+        $stats = $this->summarizeSupportTickets($tickets);
+
+        $filteredTickets = array_values(array_filter($tickets, static function (array $ticket) use ($filterSeverity, $filterType, $filterStatus, $search): bool {
+            $severity = strtolower((string)($ticket['severity'] ?? ''));
+            $type = strtolower((string)($ticket['type'] ?? ''));
+            $status = strtolower((string)($ticket['status'] ?? 'open'));
+
+            if ($filterSeverity !== 'all' && $severity !== $filterSeverity) {
+                return false;
+            }
+
+            if ($filterType !== 'all' && $type !== $filterType) {
+                return false;
+            }
+
+            if ($filterStatus !== 'all' && $status !== $filterStatus) {
+                return false;
+            }
+
+            if ($search === '') {
+                return true;
+            }
+
+            $haystack = [
+                strtolower((string)($ticket['id'] ?? '')),
+                strtolower((string)($ticket['name'] ?? '')),
+                strtolower((string)($ticket['email'] ?? '')),
+                strtolower((string)($ticket['description'] ?? '')),
+                strtolower((string)($ticket['url'] ?? '')),
+            ];
+
+            foreach ($haystack as $value) {
+                if ($value !== '' && str_contains($value, $search)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+
+        $page_title = 'Reportes de soporte';
+        $current_page = 'admin-support';
+        $pending_campaigns_count = $this->getPendingCampaignCount();
+        $ai_pending_count = $this->getAiPendingCount();
+        $filters = [
+            'severity' => $filterSeverity,
+            'type' => $filterType,
+            'status' => $filterStatus,
+            'q' => $search,
+        ];
+
+        include VIEWS_PATH . '/admin/support-tickets.php';
     }
 
     public function users(): void {
@@ -1986,6 +2051,48 @@ class AdminController {
         }
 
         return $stats;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $tickets
+     * @return array<string, mixed>
+     */
+    private function summarizeSupportTickets(array $tickets): array {
+        $severities = ['alta', 'media', 'baja'];
+        $summary = [
+            'total' => count($tickets),
+            'open' => 0,
+            'by_severity' => array_fill_keys($severities, 0),
+            'by_type' => [],
+            'latest_created_at' => null,
+        ];
+
+        foreach ($tickets as $ticket) {
+            $status = strtolower((string)($ticket['status'] ?? 'open'));
+            if ($status === 'open') {
+                $summary['open']++;
+            }
+
+            $severity = strtolower((string)($ticket['severity'] ?? 'baja'));
+            if (!array_key_exists($severity, $summary['by_severity'])) {
+                $summary['by_severity'][$severity] = 0;
+            }
+            $summary['by_severity'][$severity]++;
+
+            $type = strtolower((string)($ticket['type'] ?? 'otro'));
+            if (!array_key_exists($type, $summary['by_type'])) {
+                $summary['by_type'][$type] = 0;
+            }
+            $summary['by_type'][$type]++;
+        }
+
+        arsort($summary['by_type']);
+
+        if (!empty($tickets)) {
+            $summary['latest_created_at'] = $tickets[0]['created_at'] ?? null;
+        }
+
+        return $summary;
     }
 
     private function getAiPendingCount(): int {

@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Página no encontrada - Lucatón</title>
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     <style>
         body {
             min-height: 100vh;

@@ -18,9 +18,9 @@ $siteToastQueue = array_map(static function ($toast) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($page_title ?? 'Newsletter Lucatón') ?></title>
     <meta name="description" content="<?= htmlspecialchars($page_description ?? '') ?>">
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     <?php if (!empty($siteToastQueue)): ?>
         <script>
             window.__SITE_TOASTS__ = <?= json_encode($siteToastQueue, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?>;
@@ -56,6 +56,6 @@ $siteToastQueue = array_map(static function ($toast) {
 
     <?php include __DIR__ . '/../layouts/partials/footer.php'; ?>
     <div class="site-toast-stack" data-site-toast-container></div>
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
 </body>
 </html>

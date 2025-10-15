@@ -36,26 +36,26 @@ if ($body_classes === '') {
     <meta property="og:url" content="<?= APP_URL . $_SERVER['REQUEST_URI'] ?>">
     <meta property="og:title" content="<?= $page_title ?? 'Lucatón' ?>">
     <meta property="og:description" content="<?= $meta_description ?? 'Plataforma de crowdfunding ética con IA' ?>">
-    <meta property="og:image" content="<?= APP_URL ?>/public/assets/images/og-image.jpg">
+    <meta property="og:image" content="<?= asset_url('images/og-image.jpg') ?>">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="<?= APP_URL . $_SERVER['REQUEST_URI'] ?>">
     <meta property="twitter:title" content="<?= $page_title ?? 'Lucatón' ?>">
     <meta property="twitter:description" content="<?= $meta_description ?? 'Plataforma de crowdfunding ética con IA' ?>">
-    <meta property="twitter:image" content="<?= APP_URL ?>/public/assets/images/og-image.jpg">
+    <meta property="twitter:image" content="<?= asset_url('images/og-image.jpg') ?>">
 
     <title><?= $page_title ?? 'Lucatón' ?> - Crowdfunding Ético con IA</title>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
     
     <!-- CSS -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     
     <!-- Preload critical resources -->
-    <link rel="preload" href="<?= APP_URL ?>/public/assets/css/app.css" as="style">
+    <link rel="preload" href="<?= asset_url('css/app.css') ?>" as="style">
 
     <?php if (!empty($siteToastQueue)): ?>
         <script>

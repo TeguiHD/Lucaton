@@ -31,11 +31,11 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
     <meta property="twitter:description" content="<?php echo $page_description; ?>">
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
 
     <!-- Styles -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     <style>[x-cloak]{display:none !important;}</style>
     
     <?php if (!empty($siteToastQueue)): ?>
@@ -46,7 +46,7 @@ $page_description = 'Recupera el acceso a tu cuenta de Lucatón mediante tu corr
     
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Skip to content link -->

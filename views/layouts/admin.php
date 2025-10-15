@@ -43,11 +43,11 @@ $siteToastQueue = array_map(static function ($toast) {
     <title><?= $page_title ?? 'Administración' ?> - Lucatón</title>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
     
     <!-- CSS -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
 
     <style>[x-cloak]{display:none !important;}</style>
 
@@ -59,7 +59,7 @@ $siteToastQueue = array_map(static function ($toast) {
 
     <!-- Scripts -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
 
     <!-- Additional head content -->
     <?= $additional_head ?? '' ?>
@@ -297,12 +297,12 @@ $siteToastQueue = array_map(static function ($toast) {
     <?php endif; ?>
 
     <!-- JS de interacción ligera (sin CDN) -->
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
+    <script src="<?= asset_url('js/app.js') ?>" defer></script>
     
     <div class="site-toast-stack" data-site-toast-container></div>
 
     <!-- Additional scripts -->
 <?= $additional_scripts ?? '' ?>
-<script src="<?= APP_URL ?>/public/assets/js/campaign-doc-modal.js?v=2025020503"></script>
+<script src="<?= asset_url('js/campaign-doc-modal.js') ?>"></script>
 </body>
 </html>

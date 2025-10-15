@@ -132,10 +132,10 @@ $current_page = 'my_campaigns';
     <title><?= htmlspecialchars($page_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
 
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
     <template data-datetime-modal-template>
         <div class="datetime-overlay" data-datetime-overlay hidden>
             <div class="datetime-modal" data-modal tabindex="-1" role="dialog" aria-modal="true" aria-label="Definir fecha y hora de término">

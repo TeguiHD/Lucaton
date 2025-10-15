@@ -12,8 +12,8 @@ class AuthController {
     }
 
     public function login() {
-        if (!SessionHelper::checkRateLimit('login', RATE_LIMIT_LOGIN, RATE_LIMIT_WINDOW)) {
-            return $this->respondError('Demasiados intentos de acceso. Intenta nuevamente en unos minutos.', 429, ['rate_limit' => 'exceeded']);
+        if (!SessionHelper::checkRateLimit('login', RATE_LIMIT_LOGIN, RATE_LIMIT_LOGIN_WINDOW)) {
+            return $this->respondError('Demasiados intentos de acceso. Intenta nuevamente en 15 minutos.', 429, ['rate_limit' => 'exceeded']);
         }
 
         $email = trim($_POST['email'] ?? '');
@@ -84,7 +84,7 @@ class AuthController {
 
             if ($message === 'Cuenta bloqueada temporalmente') {
                 $errors = [
-                    'general' => 'Tu cuenta fue bloqueada temporalmente por intentos fallidos. Intenta nuevamente en unos minutos.'
+                    'general' => 'Tu cuenta fue bloqueada temporalmente por intentos fallidos. Intenta nuevamente en 15 minutos.'
                 ];
                 return $this->respondValidationErrors($errors, 423);
             }

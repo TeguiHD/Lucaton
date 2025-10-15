@@ -66,7 +66,19 @@ define('APP_DEBUG', env('APP_DEBUG', 'true') === 'true');
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $hostHeader = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $script = $_SERVER['SCRIPT_NAME'] ?? '';
-$basePath = rtrim(str_replace('\\', '/', dirname($script)), '/.');
+
+// Para el servidor de desarrollo PHP integrado, no incluir el path del script
+$isDevServer = isset($_SERVER['SERVER_SOFTWARE']) && 
+               strpos($_SERVER['SERVER_SOFTWARE'], 'Development Server') !== false;
+
+if ($isDevServer) {
+    // En servidor de desarrollo, usar solo el host sin path
+    $basePath = '';
+} else {
+    // En servidor web normal, calcular el path base
+    $basePath = rtrim(str_replace('\\', '/', dirname($script)), '/.');
+}
+
 $computedAppUrl = $scheme . '://' . $hostHeader . ($basePath ? $basePath : '');
 
 $envAppUrl = env('APP_URL');
@@ -110,11 +122,34 @@ define('PROJECT_DISCLAIMER', env('PROJECT_DISCLAIMER', 'Prototipo académico sin
 define('MAIL_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', 'noreply@lucaton.local'));
 define('MAIL_FROM_NAME', env('MAIL_FROM_NAME', 'Lucatón'));
 
+$assetVersionEnv = env('ASSET_VERSION');
+if ($assetVersionEnv !== null && $assetVersionEnv !== '') {
+    $assetVersion = $assetVersionEnv;
+} else {
+    $assetVersionSeed = '';
+    foreach ([
+        ROOT_PATH . '/public/assets/css/app.css',
+        ROOT_PATH . '/public/assets/css/aliases.css',
+        ROOT_PATH . '/public/assets/js/app.js',
+    ] as $assetCandidate) {
+        if (file_exists($assetCandidate)) {
+            $assetVersionSeed .= (string)filemtime($assetCandidate);
+        }
+    }
+
+    $assetVersion = $assetVersionSeed !== ''
+        ? substr(hash('sha256', $assetVersionSeed), 0, 12)
+        : (string)time();
+}
+
+define('ASSET_VERSION', $assetVersion);
+
 // Cargar helper de base de datos// Incluir helpers
 require_once ROOT_PATH . '/app/Helpers/Database.php';
 require_once ROOT_PATH . '/app/Helpers/Logger.php';
 require_once ROOT_PATH . '/app/Helpers/SessionHelper.php';
 require_once ROOT_PATH . '/app/Helpers/Router.php';
+require_once ROOT_PATH . '/app/Helpers/AssetHelper.php';
 
 // Incluir middleware
 require_once ROOT_PATH . '/app/Middleware/AuthMiddleware.php';
@@ -135,6 +170,7 @@ require_once ROOT_PATH . '/app/Services/CampaignMediaUploadService.php';
 require_once ROOT_PATH . '/app/Services/CampaignLifecycleMailer.php';
 require_once ROOT_PATH . '/app/Services/CampaignMilestoneNotifier.php';
 require_once ROOT_PATH . '/app/Services/AuditLogReader.php';
+require_once ROOT_PATH . '/app/Services/SupportTicketStore.php';
 
 // Incluir controladores
 require_once ROOT_PATH . '/app/Controllers/HomeController.php';
@@ -147,6 +183,7 @@ require_once ROOT_PATH . '/app/Controllers/NewsController.php';
 require_once ROOT_PATH . '/app/Controllers/NewsAdminController.php';
 require_once ROOT_PATH . '/app/Controllers/NotificationController.php';
 require_once ROOT_PATH . '/app/Controllers/NotificationAdminController.php';
+require_once ROOT_PATH . '/app/Controllers/SupportController.php';
 
 // Configurar archivos y uploads
 define('UPLOAD_MAX_SIZE', (int)env('UPLOAD_MAX_SIZE', 10485760)); // 10MB
@@ -164,6 +201,7 @@ define('GEMINI_MODEL', env('GEMINI_MODEL', 'gemini-1.5-flash'));
 
 // Configurar límites de seguridad
 define('RATE_LIMIT_LOGIN', (int)env('RATE_LIMIT_LOGIN', 5));
+define('RATE_LIMIT_LOGIN_WINDOW', (int)env('RATE_LIMIT_LOGIN_WINDOW', 900));
 define('RATE_LIMIT_AI_REQUESTS', (int)env('RATE_LIMIT_AI_REQUESTS', 10));
 define('RATE_LIMIT_WINDOW', (int)env('RATE_LIMIT_WINDOW', 3600));
 
@@ -177,6 +215,40 @@ define('ROLE_SIGNATURE_KEY', env('ROLE_SIGNATURE_KEY', hash('sha256', SESSION_SI
 // Configurar logs
 define('LOG_LEVEL', env('LOG_LEVEL', 'info'));
 define('LOG_PATH', env('LOG_PATH', 'storage/logs'));
+
+// Función helper para generar URLs de assets
+function asset_url($path) {
+    $path = ltrim($path, '/');
+    
+    // Detectar si estamos en el servidor de desarrollo PHP integrado
+    $isDevServer = isset($_SERVER['SERVER_SOFTWARE']) && 
+                   strpos($_SERVER['SERVER_SOFTWARE'], 'Development Server') !== false;
+    
+    if ($isDevServer) {
+        // Servidor de desarrollo PHP integrado sirviendo desde public/
+        return APP_URL . '/assets/' . $path;
+    } else {
+        // Servidor web normal (Apache/Nginx)
+        return APP_URL . '/public/assets/' . $path;
+    }
+}
+
+// Función helper para generar URLs públicas
+function public_url($path) {
+    $path = ltrim($path, '/');
+    
+    // Detectar si estamos en el servidor de desarrollo
+    $isDevServer = isset($_SERVER['SERVER_SOFTWARE']) && 
+                   strpos($_SERVER['SERVER_SOFTWARE'], 'Development Server') !== false;
+    
+    if ($isDevServer) {
+        // Servidor de desarrollo PHP integrado sirviendo desde public/
+        return APP_URL . '/' . $path;
+    } else {
+        // Servidor web normal (Apache/Nginx)
+        return APP_URL . '/public/' . $path;
+    }
+}
 define('LOG_MAX_FILES', (int)env('LOG_MAX_FILES', 30));
 
 // Configurar modo académico

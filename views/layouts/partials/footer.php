@@ -6,10 +6,10 @@ $footer_sections = [
         ['name' => 'Campañas', 'href' => Router::url('campanas')],
         ['name' => 'Noticias', 'href' => Router::url('noticias')],
         ['name' => 'Crear Campaña', 'href' => Router::url('campana/crear')],
-        ['name' => 'Preguntas Frecuentes', 'href' => Router::url('faq')]
+        ['name' => 'Centro de Ayuda y FAQ', 'href' => Router::url('ayuda')]
     ],
     'Soporte' => [
-        ['name' => 'Centro de Ayuda', 'href' => Router::url('ayuda')],
+        ['name' => 'Guías y preguntas frecuentes', 'href' => Router::url('ayuda') . '#preguntas-frecuentes'],
         ['name' => 'Contacto', 'href' => Router::url('contacto')],
         ['name' => 'Reportar Problema', 'href' => Router::url('reportar')],
         ['name' => 'Estado del Sistema', 'href' => Router::url('estado')]
@@ -62,7 +62,7 @@ $social_links = [
             <!-- Información principal -->
             <div class="space-y-8 xl:col-span-1">
                 <div class="flex items-center">
-                    <img class="h-10 w-auto" src="<?= APP_URL ?>/public/assets/images/logo.svg" alt="Lucatón">
+                    <img class="h-10 w-auto" src="<?= asset_url('images/logo.svg') ?>" alt="Lucatón">
                     <span class="ml-3 text-2xl font-bold text-marino-900">Lucatón</span>
                 </div>
                 <p class="text-gray-500 text-base max-w-md">
@@ -293,4 +293,4 @@ $social_links = [
     </div>
 </div>
 <!-- JS de interacción ligera (sin CDN) -->
-<script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
+<script src="<?= asset_url('js/app.js') ?>" defer></script>

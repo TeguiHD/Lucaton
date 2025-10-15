@@ -67,13 +67,13 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
     <title><?= htmlspecialchars($page_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
 
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
-    <script defer src="<?= APP_URL ?>/public/assets/js/profile.js?v=2025020101"></script>
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
+    <script defer src="<?= asset_url('js/profile.js') ?>"></script>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-professional min-h-screen">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
         Saltar al contenido principal
     </a>
@@ -156,7 +156,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
 
         <div class="grid gap-6 lg:grid-cols-3">
             <section class="lg:col-span-2 space-y-6">
-                <div class="bg-white shadow rounded-lg p-6 space-y-6">
+                <div class="bg-card-premium shadow rounded-lg p-6 space-y-6">
                     <header class="border-b border-gray-100 pb-4">
                         <h2 class="text-lg font-semibold text-gray-900">Información básica</h2>
                         <p class="mt-1 text-sm text-gray-500">Actualiza tus datos personales y la información que la comunidad ve en tu perfil.</p>
@@ -370,7 +370,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
                         </form>
                     </div>
                 </div>
-                <form method="POST" action="<?= Router::url('perfil/preferencias') ?>" class="bg-white shadow rounded-lg p-6 space-y-6">
+                <form method="POST" action="<?= Router::url('perfil/preferencias') ?>" class="bg-card-premium shadow rounded-lg p-6 space-y-6">
                     <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars($csrfToken) ?>">
                     <header class="border-b border-gray-100 pb-4">
                         <h2 class="text-lg font-semibold text-gray-900">Preferencias de comunicación</h2>
@@ -408,7 +408,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
             </section>
 
             <section class="space-y-6">
-                <form method="POST" action="<?= Router::url('perfil/seguridad') ?>" class="bg-white shadow rounded-lg p-6 space-y-4">
+                <form method="POST" action="<?= Router::url('perfil/seguridad') ?>" class="bg-card-premium shadow rounded-lg p-6 space-y-4">
                     <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars($csrfToken) ?>">
                     <header class="border-b border-gray-100 pb-4">
                         <h2 class="text-lg font-semibold text-gray-900">Seguridad de la cuenta</h2>
@@ -440,7 +440,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
                     </div>
                 </form>
 
-                <form method="POST" action="<?= Router::url('perfil/password') ?>" class="bg-white shadow rounded-lg p-6 space-y-4">
+                <form method="POST" action="<?= Router::url('perfil/password') ?>" class="bg-card-premium shadow rounded-lg p-6 space-y-4">
                     <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars($csrfToken) ?>">
                     <header class="border-b border-gray-100 pb-4">
                         <h2 class="text-lg font-semibold text-gray-900">Cambiar contraseña</h2>
@@ -473,7 +473,7 @@ $lastPasswordReset = $securityOverview['last_password_reset'] ?? null;
                     </div>
                 </form>
 
-                <div class="bg-white shadow rounded-lg p-6">
+                <div class="bg-card-premium shadow rounded-lg p-6">
                     <h2 class="text-lg font-semibold text-gray-900">Soporte rápido</h2>
                     <p class="mt-2 text-sm text-gray-600">¿Necesitas ayuda para actualizar datos o resolver un incidente?</p>
                     <ul class="mt-4 space-y-3 text-sm text-gray-700">

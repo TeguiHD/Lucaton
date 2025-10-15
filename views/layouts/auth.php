@@ -22,11 +22,11 @@ $siteToastQueue = array_map(static function ($toast) {
     <title><?= $page_title ?? 'Autenticación' ?> - Lucatón</title>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
     
     <!-- CSS -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     
     <?php if (!empty($siteToastQueue)): ?>
         <script>
@@ -120,7 +120,7 @@ $siteToastQueue = array_map(static function ($toast) {
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
     <!-- JS de interacción ligera (sin CDN) -->
-    <script src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503" defer></script>
+    <script src="<?= asset_url('js/app.js') ?>" defer></script>
 
     <div class="site-toast-stack" data-site-toast-container></div>
 

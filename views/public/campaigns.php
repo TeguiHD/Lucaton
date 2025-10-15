@@ -49,11 +49,11 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
     <meta property="og:image" content="/assets/images/og-campaigns.jpg">
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
 
     <!-- Styles -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
 
@@ -75,12 +75,14 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
             ['name' => 'Campañas', 'href' => Router::url('campanas')]
         ]); ?>
 
+        
+
         <!-- Page Header -->
         <div class="md:flex md:items-center md:justify-between mb-8">
             <div class="flex-1 min-w-0">
-                <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
                     Campañas de Crowdfunding
-                </h1>
+                </h2>
                 <p class="mt-1 text-sm text-gray-500">
                     Descubre proyectos increíbles y ayuda a hacerlos realidad
                 </p>
@@ -101,15 +103,6 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                 <!-- Título de la sección -->
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-medium text-gray-900">Buscar Campañas</h3>
-                    <?php if (!empty($search_query) || !empty($category_filter) || !empty($status_filter) || !empty($sort_by)): ?>
-                        <a href="<?= Router::url('campanas') ?>" 
-                           class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors">
-                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                            Limpiar filtros
-                        </a>
-                    <?php endif; ?>
                 </div>
 
                 <!-- Campo de búsqueda principal y filtros en estructura móvil optimizada -->

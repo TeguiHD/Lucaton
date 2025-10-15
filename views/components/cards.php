@@ -132,7 +132,7 @@ function render_campaign_card($campaign, $options = []) {
 
         if (!empty($options['show_category']) && !empty($category_label)) {
             $html .= '<div class="absolute top-2 left-2">';
-            $html .= '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/90 text-gray-800">';
+            $html .= '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium glass-subtle text-gray-800">';
             $html .= htmlspecialchars($category_label);
             $html .= '</span>';
             $html .= '</div>';

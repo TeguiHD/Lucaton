@@ -45,11 +45,11 @@ $initialErrors = json_encode($serverErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TA
     <meta property="twitter:description" content="<?= htmlspecialchars($page_description) ?>">
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/public/assets/images/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
 
     <!-- Styles -->
-    <link href="<?= APP_URL ?>/public/assets/css/app.css" rel="stylesheet">
-    <link href="<?= APP_URL ?>/public/assets/css/aliases.css" rel="stylesheet">
+    <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
+    <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
 
     <style>
         [x-cloak] { display: none !important; }
@@ -64,7 +64,7 @@ $initialErrors = json_encode($serverErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TA
     </script>
 
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="<?= APP_URL ?>/public/assets/js/app.js?v=2025020503"></script>
+    <script defer src="<?= asset_url('js/app.js') ?>"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-copihue-600 text-white px-4 py-2 rounded-md z-50">
