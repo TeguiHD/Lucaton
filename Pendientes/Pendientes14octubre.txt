@@ -1,0 +1,45 @@
+Pendientes del proyecto — Ordenado (14 de octubre)
+
+Criterios de organización
+- Priorización por impacto en el MVP, dependencias y esfuerzo.
+- En MVP se permiten flujos simulados (ej. pasarela de pagos). Estos están marcados como [Simulado].
+- Los ítems que no bloquean el MVP o requieren más tiempo van a Backlog [Post‑MVP].
+
+Funcional — Campañas y Donaciones (MVP)
+- [Alta] Corregir la lógica de donaciones [Simulado].
+- [Alta] Implementar sistema de actualizaciones en campaña si el usuario es el creador (habilitar opción segura).
+- [Alta] El admin debe poder pausar campañas con motivo (moderación).
+- [Alta] Poder hacer denuncias/reportar campaña (moderación, trazabilidad).
+- [Media] Popup “dejar mi opinión” centrado y con tamaño correcto.
+
+Moderación y Soporte (MVP)
+- [Media] Panel de consulta para comunicarme con administración (soporte). Estado: En curso.
+
+UX/UI — Noticias
+- [Media] Corrección de los botones en noticias (todas las categorías).
+- [Media] Compartir en noticia igual que en campañas (popup + animación).
+- [Media] Galería de imágenes en noticias (popup con navegación izquierda/derecha).
+- [Baja] Cambiar icono de autor dentro de noticias.
+- [Media] Mejorar botón de limpiar en barra de búsqueda de noticias.
+
+UX/UI — General
+- [Baja] Fotos redondas en inicio para componente de “impacto real”.
+- [Baja] Efecto palpitante en “esta causa nos necesita hoy” (ritmo 1‑pam 1‑pam).
+- [Media] Destacadas: color por categoría (salud, tecnología, medio ambiente) en semitransparente.
+
+Seguridad y Auditoría
+- [Media] Panel de últimos login con IP capturada (auditoría de acceso).
+
+IA — Asistencia al Creador
+- [Baja] Sugerencias de la IA: cómo abordar la campaña, crear comunidad, redes útiles.
+
+Informe / Contenido
+- [Media] Agenda 2030 — Incorporar alineamiento con los lineamientos de la página.
+
+Backlog [Post‑MVP]
+- Entrega de dinero por porcentajes/hitos al dueño de la campaña para evitar mal uso [Simulado].
+
+Notas de implementación
+- Los flujos de pago del MVP se simulan: no se integran pasarelas reales.
+- Para actualizaciones de campaña, validar ownership con controles de seguridad.
+- Moderación: pausar y denuncias requieren registros y auditoría básica.
