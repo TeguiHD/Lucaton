@@ -102,8 +102,12 @@ class AuthMiddleware {
      */
     public static function verifyCsrf() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $token = $_POST['csrf_token'] ?? '';
-            
+            $token = $_POST[CSRF_TOKEN_NAME] ?? '';
+
+            if ($token === '' && isset($_SERVER['HTTP_X_CSRF_TOKEN'])) {
+                $token = (string)$_SERVER['HTTP_X_CSRF_TOKEN'];
+            }
+
             if (!SessionHelper::verifyCSRFToken($token)) {
                 http_response_code(403);
                 SessionHelper::setFlashMessage('error', 'Token de seguridad inválido');

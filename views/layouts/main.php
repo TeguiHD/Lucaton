@@ -1,5 +1,6 @@
 <?php 
 $current_page = $current_page ?? '';
+$csrfToken = htmlspecialchars(SessionHelper::getCSRFToken(), ENT_QUOTES, 'UTF-8');
 
 if (isset($_SESSION['flash_message'])) {
     SessionHelper::pushSiteToast($_SESSION['flash_type'] ?? 'info', (string)$_SESSION['flash_message']);
@@ -30,6 +31,7 @@ if ($body_classes === '') {
     <meta name="description" content="<?= $meta_description ?? 'Lucatón - Plataforma de crowdfunding ética con asistencia de IA para campañas de impacto social en Chile' ?>">
     <meta name="keywords" content="crowdfunding, chile, inteligencia artificial, campañas sociales, donaciones">
     <meta name="author" content="Lucatón">
+    <meta name="csrf-token" content="<?= $csrfToken ?>">
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">

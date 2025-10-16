@@ -18,7 +18,7 @@ Diseño de evaluación (Semanas 5–6)
 Ética y privacidad
 - Consentimiento informado (uso académico, datos anonimizados, retiro voluntario).
 - Marcar “Contenido generado con IA” cuando aplique.
-- Aviso de privacidad y uso de servicios externos (OpenAI/Gemini).
+- Aviso de privacidad y uso de servicios externos (OpenRouter/Gemini).
 
 Seguridad (evidencia)
 - Checklist OWASP del MVP (SQLi, XSS, CSRF, uploads, sesiones, roles, rate limit).

@@ -23,7 +23,7 @@ Admin
 - POST `/admin/usuario/{id}/activar|desactivar|rol`
 
 IA
-- POST `/generate_text.php` → Generar texto IA (OpenAI)
+- POST `/generate_text.php` → Generar texto IA (OpenRouter)
 - POST `/generate_image.php` → Generar imagen IA (Gemini)
 - POST `/ai/moderate_text.php` → Moderación ligera (opcional; integrado en generate_text)
 - GET  `/file/ai/{id}` → Servir asset privado (sólo owner/admin)

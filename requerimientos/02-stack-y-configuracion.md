@@ -5,7 +5,7 @@
 - BD: MariaDB 10.6+ o MySQL 8 (BD: lucaton)
 - Frontend: HTML5, JS (Vanilla)
 - Estilos: Tailwind CSS (Mobile‑First) con build local en producción (pnpm). HTML: `<link rel="/assets/app.css">`
-- IA: OpenAI (texto) y Gemini (imágenes) invocados desde PHP (cURL), sin exponer API keys en cliente.
+- IA: OpenRouter (DeepSeek Chimera) para texto y Google Gemini para imágenes, invocados desde PHP (cURL) sin exponer API keys en cliente.
 
 ### Dependencias PHP
 - Recomendado por tiempo: sin Composer (cURL nativo + cargador simple de .env)
@@ -16,7 +16,8 @@
 - UPLOAD_DIR (público opcional), LOG_DIR
 - UPLOAD_DIR_PRIVATE (recomendado, fuera de docroot) y UPLOAD_DIR_PUBLIC (sirve assets aprobados)
 - APP_TIMEZONE (ej. America/Santiago)
-- OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
+- OPENROUTER_API_KEY, OPENROUTER_BASE_URL, OPENROUTER_MODEL
+- GOOGLE_AI_API_KEYS, GOOGLE_AI_TEXT_MODEL
 - GEMINI_API_KEY, GEMINI_IMAGE_MODEL
 - AI_MAX_REQ_PER_HOUR, LOGIN_MAX_ATTEMPTS, COOKIE_SECURE, CSP_ENABLE
 

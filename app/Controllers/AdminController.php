@@ -264,6 +264,7 @@ class AdminController {
         $aiFilters = $aiData['filters'];
         $aiStatusMeta = $aiData['status_meta'];
         $aiPolicyMeta = $aiData['policy_meta'];
+        $aiUsageMetrics = $this->collectApiUsageMetrics();
 
         include VIEWS_PATH . '/admin/ai-moderation.php';
     }
@@ -714,7 +715,266 @@ class AdminController {
             }
         }
 
+        $metrics['api_usage'] = $this->collectApiUsageMetrics();
+
         return $metrics;
+    }
+
+    private function collectApiUsageMetrics(): array {
+        $result = [
+            'supported' => false,
+            'providers' => [],
+            'totals' => [
+                'total' => 0,
+                'success' => 0,
+                'failed' => 0,
+                'last_24h' => 0,
+                'tokens_input' => 0,
+                'tokens_output' => 0,
+                'cost' => 0.0,
+            ],
+            'columns' => [
+                'has_status' => false,
+                'has_last_24h' => false,
+                'has_latency' => false,
+                'has_tokens_input' => false,
+                'has_tokens_output' => false,
+                'has_cost' => false,
+                'has_token_totals' => false,
+            ],
+        ];
+
+        if (!$this->db->tableExists('ai_generations')) {
+            return $result;
+        }
+
+        $hasProvider = $this->db->columnExists('ai_generations', 'provider');
+        $hasStatus = $this->db->columnExists('ai_generations', 'status');
+        $hasCreatedAt = $this->db->columnExists('ai_generations', 'created_at');
+        $hasLatency = $this->db->columnExists('ai_generations', 'latency_ms');
+        $hasTokensInput = $this->db->columnExists('ai_generations', 'tokens_input');
+        $hasTokensOutput = $this->db->columnExists('ai_generations', 'tokens_output');
+        $hasCost = $this->db->columnExists('ai_generations', 'cost_estimate');
+        $hasTokenTotals = $hasTokensInput || $hasTokensOutput;
+
+        $result['supported'] = true;
+        $result['columns'] = [
+            'has_status' => $hasStatus,
+            'has_last_24h' => $hasCreatedAt,
+            'has_latency' => $hasLatency,
+            'has_tokens_input' => $hasTokensInput,
+            'has_tokens_output' => $hasTokensOutput,
+            'has_cost' => $hasCost,
+            'has_token_totals' => $hasTokenTotals,
+        ];
+
+        $providerMeta = [
+            'google_ai' => [
+                'label' => 'Google AI (Gemini)',
+                'tag' => 'Gemini',
+                'accent' => 'bg-emerald-100 text-emerald-700',
+            ],
+            'openrouter' => [
+                'label' => 'OpenRouter (DeepSeek)',
+                'tag' => 'DeepSeek',
+                'accent' => 'bg-copihue-100 text-copihue-700',
+            ],
+            'fallback' => [
+                'label' => 'Fallback',
+                'tag' => 'Fallback',
+                'accent' => 'bg-amber-100 text-amber-700',
+            ],
+        ];
+
+        if (!$hasProvider) {
+            $selectParts = ['COUNT(*) AS total'];
+            if ($hasStatus) {
+                $selectParts[] = "SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed";
+                $selectParts[] = "SUM(CASE WHEN status IN ('failed','rejected') THEN 1 ELSE 0 END) AS failed";
+            }
+            if ($hasCreatedAt) {
+                $selectParts[] = "SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) AS last_24h";
+            }
+            if ($hasLatency) {
+                $selectParts[] = 'AVG(latency_ms) AS avg_latency';
+            }
+            if ($hasTokensInput) {
+                $selectParts[] = 'AVG(tokens_input) AS avg_tokens_input';
+                $selectParts[] = 'SUM(tokens_input) AS sum_tokens_input';
+            }
+            if ($hasTokensOutput) {
+                $selectParts[] = 'AVG(tokens_output) AS avg_tokens_output';
+                $selectParts[] = 'SUM(tokens_output) AS sum_tokens_output';
+            }
+            if ($hasCost) {
+                $selectParts[] = 'AVG(cost_estimate) AS avg_cost';
+                $selectParts[] = 'SUM(cost_estimate) AS sum_cost';
+            }
+
+            $row = $this->db->fetch('SELECT ' . implode(', ', $selectParts) . ' FROM ai_generations');
+            if ($row) {
+                $total = (int)($row['total'] ?? 0);
+                $success = $hasStatus ? (int)($row['completed'] ?? 0) : 0;
+                $failed = $hasStatus ? (int)($row['failed'] ?? 0) : 0;
+                $last24h = $hasCreatedAt ? (int)($row['last_24h'] ?? 0) : 0;
+                $sumTokensInput = $hasTokensInput ? (float)($row['sum_tokens_input'] ?? 0) : 0.0;
+                $sumTokensOutput = $hasTokensOutput ? (float)($row['sum_tokens_output'] ?? 0) : 0.0;
+                $sumCost = $hasCost ? (float)($row['sum_cost'] ?? 0) : 0.0;
+
+                $result['providers'][] = [
+                    'key' => 'unknown',
+                    'label' => 'Sin proveedor registrado',
+                    'tag' => 'Desconocido',
+                    'accent' => 'bg-gray-100 text-gray-700',
+                    'total' => $total,
+                    'success' => $success,
+                    'failed' => $failed,
+                    'last_24h' => $last24h,
+                    'avg_latency' => $hasLatency && $row['avg_latency'] !== null ? (float)$row['avg_latency'] : null,
+                    'avg_tokens_input' => $hasTokensInput && $row['avg_tokens_input'] !== null ? (float)$row['avg_tokens_input'] : null,
+                    'avg_tokens_output' => $hasTokensOutput && $row['avg_tokens_output'] !== null ? (float)$row['avg_tokens_output'] : null,
+                    'avg_tokens_total' => $this->calculateAverageTokens($row, $hasTokensInput, $hasTokensOutput),
+                    'avg_cost' => $hasCost && $row['avg_cost'] !== null ? (float)$row['avg_cost'] : null,
+                    'total_tokens_input' => $hasTokensInput ? $sumTokensInput : null,
+                    'total_tokens_output' => $hasTokensOutput ? $sumTokensOutput : null,
+                    'total_tokens' => $hasTokenTotals ? $this->sumTokenValues($sumTokensInput, $sumTokensOutput) : null,
+                    'total_cost' => $hasCost ? $sumCost : null,
+                ];
+
+                $result['totals']['total'] = $total;
+                $result['totals']['success'] = $success;
+                $result['totals']['failed'] = $failed;
+                $result['totals']['last_24h'] = $last24h;
+                if ($hasTokensInput) {
+                    $result['totals']['tokens_input'] = $sumTokensInput;
+                }
+                if ($hasTokensOutput) {
+                    $result['totals']['tokens_output'] = $sumTokensOutput;
+                }
+                if ($hasCost) {
+                    $result['totals']['cost'] = $sumCost;
+                }
+            }
+
+            return $result;
+        }
+
+        $selectParts = ['provider', 'COUNT(*) AS total'];
+        if ($hasStatus) {
+            $selectParts[] = "SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed";
+            $selectParts[] = "SUM(CASE WHEN status IN ('failed','rejected') THEN 1 ELSE 0 END) AS failed";
+        }
+        if ($hasCreatedAt) {
+            $selectParts[] = "SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END) AS last_24h";
+        }
+        if ($hasLatency) {
+            $selectParts[] = 'AVG(latency_ms) AS avg_latency';
+        }
+        if ($hasTokensInput) {
+            $selectParts[] = 'AVG(tokens_input) AS avg_tokens_input';
+            $selectParts[] = 'SUM(tokens_input) AS sum_tokens_input';
+        }
+        if ($hasTokensOutput) {
+            $selectParts[] = 'AVG(tokens_output) AS avg_tokens_output';
+            $selectParts[] = 'SUM(tokens_output) AS sum_tokens_output';
+        }
+        if ($hasCost) {
+            $selectParts[] = 'AVG(cost_estimate) AS avg_cost';
+            $selectParts[] = 'SUM(cost_estimate) AS sum_cost';
+        }
+
+        $query = sprintf(
+            'SELECT %s FROM ai_generations GROUP BY provider ORDER BY total DESC',
+            implode(', ', $selectParts)
+        );
+        $rows = $this->db->fetchAll($query);
+
+        foreach ($rows as $row) {
+            $providerKey = (string)($row['provider'] ?? 'unknown');
+            $meta = $providerMeta[$providerKey] ?? [
+                'label' => ucfirst(str_replace('_', ' ', $providerKey)),
+                'tag' => strtoupper($providerKey),
+                'accent' => 'bg-gray-100 text-gray-700',
+            ];
+
+            $total = (int)($row['total'] ?? 0);
+            $success = $hasStatus ? (int)($row['completed'] ?? 0) : 0;
+            $failed = $hasStatus ? (int)($row['failed'] ?? 0) : 0;
+            $last24h = $hasCreatedAt ? (int)($row['last_24h'] ?? 0) : 0;
+            $sumTokensInput = $hasTokensInput ? (float)($row['sum_tokens_input'] ?? 0) : 0.0;
+            $sumTokensOutput = $hasTokensOutput ? (float)($row['sum_tokens_output'] ?? 0) : 0.0;
+            $sumCost = $hasCost ? (float)($row['sum_cost'] ?? 0) : 0.0;
+
+            $providerData = [
+                'key' => $providerKey,
+                'label' => $meta['label'],
+                'tag' => $meta['tag'],
+                'accent' => $meta['accent'],
+                'total' => $total,
+                'success' => $success,
+                'failed' => $failed,
+                'last_24h' => $last24h,
+                'avg_latency' => $hasLatency && $row['avg_latency'] !== null ? (float)$row['avg_latency'] : null,
+                'avg_tokens_input' => $hasTokensInput && $row['avg_tokens_input'] !== null ? (float)$row['avg_tokens_input'] : null,
+                'avg_tokens_output' => $hasTokensOutput && $row['avg_tokens_output'] !== null ? (float)$row['avg_tokens_output'] : null,
+                'avg_tokens_total' => $this->calculateAverageTokens($row, $hasTokensInput, $hasTokensOutput),
+                'avg_cost' => $hasCost && $row['avg_cost'] !== null ? (float)$row['avg_cost'] : null,
+                'total_tokens_input' => $hasTokensInput ? $sumTokensInput : null,
+                'total_tokens_output' => $hasTokensOutput ? $sumTokensOutput : null,
+                'total_tokens' => $hasTokenTotals ? $this->sumTokenValues($sumTokensInput, $sumTokensOutput) : null,
+                'total_cost' => $hasCost ? $sumCost : null,
+            ];
+
+            $result['providers'][] = $providerData;
+
+            $result['totals']['total'] += $total;
+            $result['totals']['success'] += $success;
+            $result['totals']['failed'] += $failed;
+            $result['totals']['last_24h'] += $last24h;
+            if ($hasTokensInput) {
+                $result['totals']['tokens_input'] += $sumTokensInput;
+            }
+            if ($hasTokensOutput) {
+                $result['totals']['tokens_output'] += $sumTokensOutput;
+            }
+            if ($hasCost) {
+                $result['totals']['cost'] += $sumCost;
+            }
+        }
+
+        return $result;
+    }
+
+    private function calculateAverageTokens(array $row, bool $hasTokensInput, bool $hasTokensOutput): ?float {
+        $input = $hasTokensInput && $row['avg_tokens_input'] !== null ? (float)$row['avg_tokens_input'] : null;
+        $output = $hasTokensOutput && $row['avg_tokens_output'] !== null ? (float)$row['avg_tokens_output'] : null;
+
+        if ($input === null && $output === null) {
+            return null;
+        }
+
+        $sum = 0.0;
+        $count = 0;
+
+        if ($input !== null) {
+            $sum += $input;
+            $count++;
+        }
+
+        if ($output !== null) {
+            $sum += $output;
+            $count++;
+        }
+
+        if ($count === 0) {
+            return null;
+        }
+
+        return $sum / $count;
+    }
+
+    private function sumTokenValues(float $input, float $output): float {
+        return $input + $output;
     }
 
     private function buildAiModerationData(array $input): array {
@@ -887,7 +1147,7 @@ class AdminController {
         $providerCounts = [];
         if ($hasProviderColumn) {
             foreach ($this->db->fetchAll("SELECT provider, COUNT(*) AS total FROM ai_generations GROUP BY provider ORDER BY total DESC") as $row) {
-                $provider = $row['provider'] ?? 'openai';
+                $provider = $row['provider'] ?? 'openrouter';
                 $providerCounts[$provider] = (int)($row['total'] ?? 0);
             }
         } elseif ($summary['total_generations'] > 0) {
@@ -1005,7 +1265,7 @@ class AdminController {
                     'badge_class' => 'bg-gray-100 text-gray-700',
                 ],
                 'mode' => $hasModeColumn ? ($row['mode'] ?? 'text') : 'text',
-                'provider' => $hasProviderColumn ? ($row['provider'] ?? 'openai') : 'openai',
+                'provider' => $hasProviderColumn ? ($row['provider'] ?? 'openrouter') : 'openrouter',
                 'model_used' => $row['model_used'] ?? '',
                 'prompt_excerpt' => $promptExcerpt,
                 'prompt_length' => mb_strlen($prompt),

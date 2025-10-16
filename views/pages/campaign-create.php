@@ -21,6 +21,7 @@ $existing_attachments_media = $draft_media['attachments'] ?? [];
 
 $page_title = $page_title ?? 'Crear nueva campaña';
 $current_page = $current_page ?? 'create-campaign';
+$ai_improve_endpoint = parse_url(Router::url('api/ai/improve-text'), PHP_URL_PATH) ?: '/api/ai/improve-text';
 
 $goalAmountRaw = $old['goal_amount_input'] ?? '';
 if ($goalAmountRaw === '' && !empty($old['goal_amount'])) {
@@ -729,6 +730,155 @@ document.addEventListener('DOMContentLoaded', () => {
     const summary = document.querySelector('[data-wizard-summary]');
     const indicator = document.querySelector('[data-wizard-indicator]');
     const anchor = document.querySelector('[data-wizard-anchor]');
+    const aiEndpoint = form.dataset.aiEndpoint || '';
+    const aiEndpointUrl = aiEndpoint ? new URL(aiEndpoint, window.location.origin).toString() : '';
+    const aiButton = form.querySelector('[data-ai-enhance]');
+    const aiStatus = form.querySelector('[data-ai-status]');
+    const aiFlagInput = form.querySelector('[data-ai-flag]');
+    const aiFields = {
+        title: form.querySelector('input[name="title"]'),
+        short_description: form.querySelector('textarea[name="short_description"]'),
+        description: form.querySelector('textarea[name="description"]'),
+    };
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const csrfFieldName = form.dataset.csrfName || 'csrf_token';
+    let aiButtonOriginalHtml = '';
+
+    function setAiStatus(message, type = 'info') {
+        if (!aiStatus) {
+            return;
+        }
+
+        if (!message) {
+            aiStatus.textContent = '';
+            aiStatus.classList.add('hidden');
+            aiStatus.classList.remove('text-green-600', 'text-red-600', 'text-amber-600', 'text-gray-600');
+            return;
+        }
+
+        aiStatus.textContent = message;
+        aiStatus.classList.remove('hidden');
+        aiStatus.classList.remove('text-green-600', 'text-red-600', 'text-amber-600', 'text-gray-600');
+
+        const typeClassMap = {
+            success: 'text-green-600',
+            error: 'text-red-600',
+            warning: 'text-amber-600',
+            info: 'text-gray-600',
+        };
+
+        const className = typeClassMap[type] || typeClassMap.info;
+        aiStatus.classList.add(className);
+    }
+
+    function setAiLoading(isLoading) {
+        if (!aiButton) {
+            return;
+        }
+
+        if (!aiButtonOriginalHtml) {
+            aiButtonOriginalHtml = aiButton.innerHTML;
+        }
+
+        aiButton.disabled = isLoading;
+        aiButton.classList.toggle('opacity-60', isLoading);
+        aiButton.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+
+        if (isLoading) {
+            aiButton.innerHTML = '<span class="inline-flex items-center gap-2"><svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M4 12a8 8 0 018-8" stroke-linecap="round" stroke-opacity="0.75"></path></svg><span>Mejorando…</span></span>';
+        } else {
+            aiButton.innerHTML = aiButtonOriginalHtml;
+        }
+    }
+
+    async function handleImproveContent() {
+        if (!aiEndpointUrl) {
+            setAiStatus('No hay proveedor configurado para mejorar el contenido.', 'error');
+            return;
+        }
+
+        const payload = {
+            title: aiFields.title?.value.trim() || '',
+            short_description: aiFields.short_description?.value.trim() || '',
+            description: aiFields.description?.value.trim() || '',
+        };
+
+        if (!payload.title && !payload.short_description && !payload.description) {
+            setAiStatus('Escribe contenido en el título, descripción breve o historia antes de pedir ayuda a la IA.', 'error');
+            return;
+        }
+
+        setAiLoading(true);
+        setAiStatus('Estamos analizando tus textos…', 'info');
+
+        try {
+            const requestPayload = {
+                ...payload,
+                ...(csrfToken ? { [csrfFieldName]: csrfToken } : {}),
+            };
+
+            const response = await fetch(aiEndpointUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                body: JSON.stringify(requestPayload),
+                credentials: 'same-origin',
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok || !data) {
+                const errorMessage = data?.error || 'No pudimos conectar con la IA en este momento. Intenta nuevamente.';
+                setAiStatus(errorMessage, 'error');
+                return;
+            }
+
+            if (!data.success || !data.fields) {
+                const fallbackMessage = data.error || 'No recibimos sugerencias en esta ocasión.';
+                setAiStatus(fallbackMessage, 'warning');
+                return;
+            }
+
+            const updates = data.fields;
+
+            if (typeof updates.title === 'string' && aiFields.title) {
+                aiFields.title.value = updates.title.trim();
+                aiFields.title.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            if (typeof updates.short_description === 'string' && aiFields.short_description) {
+                aiFields.short_description.value = updates.short_description.trim();
+                aiFields.short_description.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            if (typeof updates.description === 'string' && aiFields.description) {
+                aiFields.description.value = updates.description.trim();
+                aiFields.description.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            if (aiFlagInput) {
+                aiFlagInput.checked = true;
+                aiFlagInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            setAiStatus('Revisa y ajusta los textos sugeridos antes de enviar tu campaña.', 'success');
+        } catch (error) {
+            setAiStatus('No pudimos conectar con la IA en este momento. Intenta nuevamente.', 'error');
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
+    if (aiButton) {
+        aiButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            handleImproveContent();
+        });
+    }
 
     let current = parseInt(currentInput?.value || '1', 10) || 1;
 
@@ -2116,7 +2266,7 @@ HTML;
     </section>
 
     <section class="relative z-10 mx-auto mt-10 max-w-5xl px-4 sm:px-6 lg:px-8" data-animate="fade-up" data-animate-delay="300">
-        <form method="POST" action="<?= Router::url('campana/crear') ?>" class="space-y-10" data-wizard-form enctype="multipart/form-data">
+        <form method="POST" action="<?= Router::url('campana/crear') ?>" class="space-y-10" data-wizard-form data-ai-endpoint="<?= htmlspecialchars($ai_improve_endpoint) ?>" data-csrf-name="<?= CSRF_TOKEN_NAME ?>" enctype="multipart/form-data">
             <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
             <input type="hidden" name="campaign_step" value="1" data-wizard-current>
 
@@ -2126,11 +2276,24 @@ HTML;
                      data-step="1"
                      data-step-summary="<?= htmlspecialchars($wizard_steps[1]['summary']) ?>">
                 <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                    <div class="flex-1">
                         <h2 class="text-xl font-semibold text-gray-900">Fundamentos de la campaña</h2>
                         <p class="mt-1 text-sm text-gray-600">Explica el problema, la causa y el impacto que buscas.</p>
                     </div>
-                    <span class="inline-flex items-center rounded-full bg-[rgba(238,99,82,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--wizard-accent)]">Paso 1</span>
+                    <div class="flex flex-col items-start gap-2 sm:items-end">
+                        <span class="inline-flex items-center rounded-full bg-[rgba(238,99,82,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--wizard-accent)]">Paso 1</span>
+                        <button type="button"
+                                class="inline-flex items-center gap-2 rounded-full border border-[rgba(16,60,93,0.12)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--wizard-primary)] shadow-sm transition hover:border-[var(--wizard-accent)] hover:text-[var(--wizard-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--wizard-accent)]"
+                                data-ai-enhance
+                                aria-describedby="ai-helper-status">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 3v3m6.364-2.364-2.122 2.122M21 12h-3m2.364 6.364-2.122-2.122M12 21v-3m-6.364 2.364 2.122-2.122M3 12h3M4.636 5.636l2.122 2.122" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            <span>Mejorar con IA</span>
+                        </button>
+                        <p id="ai-helper-status" data-ai-status class="hidden text-xs font-medium text-gray-600"></p>
+                    </div>
                 </header>
                 <div class="mt-6 grid gap-6 lg:grid-cols-2">
                     <div class="lg:col-span-2">
@@ -2421,7 +2584,7 @@ HTML;
                     </div>
                 </div>
                 <label class="mt-5 inline-flex items-center gap-3 rounded-2xl border border-dashed border-[var(--wizard-primary)] bg-[rgba(16,60,93,0.05)] px-4 py-3 text-sm text-[var(--wizard-primary)]">
-                    <input type="checkbox" name="ai_generated" value="1" <?= !empty($old['ai_generated']) ? 'checked' : '' ?> class="rounded border-[var(--wizard-primary)] text-[var(--wizard-accent)] focus:ring-[var(--wizard-accent)]">
+                    <input type="checkbox" name="ai_generated" value="1" <?= !empty($old['ai_generated']) ? 'checked' : '' ?> class="rounded border-[var(--wizard-primary)] text-[var(--wizard-accent)] focus:ring-[var(--wizard-accent)]" data-ai-flag>
                     <span>Parte del contenido fue asistido por IA y está documentado en actualizaciones.</span>
                 </label>
 

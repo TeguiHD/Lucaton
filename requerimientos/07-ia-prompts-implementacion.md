@@ -59,31 +59,31 @@ class GeminiImageService {
 }
 ```
 
-### Servicio: OpenAI (texto)
+### Servicio: OpenRouter + Google AI (texto)
 ```php
-class OpenAITextService {
-  private string $apiKey,$baseUrl,$model;
-  public function __construct(string $apiKey,string $baseUrl,string $model){ $this->apiKey=$apiKey; $this->baseUrl=rtrim($baseUrl,'/'); $this->model=$model; }
-  public function generateCampaignText(array $input): string {
-    $system="Actúa como el 'Estratega de Impacto Social' de Chile. Sé empático y transparente. Evita manipulación o exageraciones. Incluye una sección de Transparencia con uso de fondos, plazos, evidencias y contacto.";
-    $user=sprintf("[TÍTULO]: %s\n[HISTORIA]: %s\n[OBJETIVO]: %s\n[META]: %s\n[PROTAGONISTA]: %s",
-      $input['titulo']??'', $input['historia']??'', $input['objetivo']??'', $input['meta']??'', $input['protagonista']??''
-    );
-    $payload=json_encode(['model'=>$this->model,'messages'=>[
-      ['role'=>'system','content'=>$system], ['role'=>'user','content'=>$user]
-    ],'temperature'=>0.7]);
-    $ch=curl_init($this->baseUrl.'/chat/completions');
-    curl_setopt_array($ch,[CURLOPT_POST=>true, CURLOPT_HTTPHEADER=>['Content-Type: application/json','Authorization: Bearer '.$this->apiKey], CURLOPT_POSTFIELDS=>$payload, CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>60]);
-    $resp=curl_exec($ch); if($resp===false) throw new RuntimeException('cURL error: '.curl_error($ch));
-    $code=curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
-    if ($code<200 || $code>=300) throw new RuntimeException('HTTP '.$code.': '.$resp);
-    $data=json_decode($resp,true); return $data['choices'][0]['message']['content'] ?? '';
+class AITextService {
+  public function generateCampaignDraft(array $input): array {
+    $prompt = $this->buildPrompt($input); // Normaliza título, historia, meta, protagonista
+
+    try {
+      return $this->callOpenRouter($prompt); // usa modelo DeepSeek Chimera vía OpenRouter
+    } catch (Throwable $err) {
+      // fallback a Google AI Studio (listas de llaves rotadas)
+      foreach ($this->googleApiKeys as $key) {
+        try {
+          return $this->callGoogleAi($prompt, $key);
+        } catch (Throwable $fallbackErr) {
+          Logger::warning('Google AI fallback failed', ['error' => $fallbackErr->getMessage()]);
+        }
+      }
+      throw new RuntimeException('Ningún proveedor pudo generar el borrador.');
+    }
   }
 }
 ```
 
 ### Endpoints IA (PHP)
-- `POST /generate_text.php` → OpenAITextService (valida input; rate‑limit por sesión; JSON de salida)
+- `POST /generate_text.php` → AITextService (valida input; rate‑limit por sesión; JSON de salida)
 - `POST /generate_image.php` → GeminiImageService (valida prompt; guarda archivo en UPLOAD_DIR; JSON con path/url)
 
 Ver también `requerimientos/12-endpoints.md`.

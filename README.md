@@ -75,7 +75,7 @@ Plataforma de crowdfunding social con asistencia de inteligencia artificial para
 ### Stack Principal
 - **Backend**: PHP 8.2+ con Apache, MariaDB 10.6+
 - **Frontend**: HTML5/JS vanilla, Tailwind CSS
-- **IA**: OpenAI (texto) + Gemini (imagen) server-side
+- **IA**: OpenRouter (DeepSeek Chimera) para texto + Google Gemini para imágenes server-side
 - **Seguridad**: CSP, CSRF, Argon2id, headers seguros
 
 ### Estructura de Carpetas
@@ -206,7 +206,9 @@ DB_USER=tu_usuario
 DB_PASS=tu_password
 
 # IA (requeridas para funcionalidad completa)
-OPENAI_API_KEY=tu_openai_key
+OPENROUTER_API_KEY=tu_api_key_openrouter
+OPENROUTER_MODEL=tngtech/deepseek-r1t2-chimera:free
+GOOGLE_AI_API_KEYS=clave_google_1,clave_google_2,clave_google_3
 GEMINI_API_KEY=tu_gemini_key
 
 # Seguridad
@@ -267,7 +269,7 @@ SESSION_LIFETIME=7200
 - ✅ **Gestión de notificaciones** masivas
 
 ### 🤖 Inteligencia Artificial
-- ✅ **Generación de texto** con OpenAI GPT-4
+- ✅ **Generación de texto** con OpenRouter (DeepSeek Chimera)
 - ✅ **Análisis de imágenes** con Google Gemini
 - ✅ **Moderación automática** de contenido
 - ✅ **Sugerencias inteligentes** para campañas
@@ -304,7 +306,7 @@ El proyecto **Lucaton** ha alcanzado un estado muy avanzado de desarrollo con pr
 - Estructura modular y escalable
 
 #### 🤖 **Integración IA Completa**
-- **OpenAI GPT-4**: Generación de contenido ético y persuasivo
+- **OpenRouter (DeepSeek Chimera)**: Generación de contenido ético y persuasivo
 - **Google Gemini**: Análisis inteligente de imágenes
 - **Moderación automática**: Detección de contenido inapropiado
 - **Rate limiting**: Prevención de abuso de APIs
@@ -450,7 +452,7 @@ php tests/run.php
 - ✅ Sistema de archivos y uploads
 
 ### ✅ Semana 5-6: Integraciones IA (COMPLETADO)
-- ✅ Integración con OpenAI para texto
+- ✅ Integración con OpenRouter para texto
 - ✅ Integración con Gemini para imágenes
 - ✅ Sistema de moderación automática
 - ✅ Políticas de uso ético de IA

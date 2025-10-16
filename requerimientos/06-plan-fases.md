@@ -9,7 +9,7 @@ Fase 1 (Semanas 1–2): Fundaciones
 Fase 2 (Semanas 3–4): Flujo del Creador
 - Perfil.
 - Formulario de campañas + subida segura.
-- IA: texto (OpenAI) e imagen (Gemini) vía servicios PHP (cURL).
+- IA: texto (OpenRouter/DeepSeek) e imagen (Gemini) vía servicios PHP (cURL).
 - Panel "Mis Campañas".
 - Entregable: Crear campaña punta a punta (queda "pendiente").
 

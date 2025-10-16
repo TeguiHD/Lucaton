@@ -171,6 +171,7 @@ require_once ROOT_PATH . '/app/Services/CampaignLifecycleMailer.php';
 require_once ROOT_PATH . '/app/Services/CampaignMilestoneNotifier.php';
 require_once ROOT_PATH . '/app/Services/AuditLogReader.php';
 require_once ROOT_PATH . '/app/Services/SupportTicketStore.php';
+require_once ROOT_PATH . '/app/Services/AITextService.php';
 
 // Incluir controladores
 require_once ROOT_PATH . '/app/Controllers/HomeController.php';
@@ -193,9 +194,13 @@ define('STORAGE_PRIVATE_PATH', env('STORAGE_PRIVATE_PATH', 'storage/private'));
 define('STORAGE_AI_PATH', env('STORAGE_AI_PATH', 'storage/ai_files'));
 
 // Configurar IA
-define('OPENAI_API_KEY', env('OPENAI_API_KEY', ''));
-define('OPENAI_MODEL', env('OPENAI_MODEL', 'gpt-4o-mini'));
-define('OPENAI_MAX_TOKENS', (int)env('OPENAI_MAX_TOKENS', 500));
+define('OPENROUTER_API_KEY', env('OPENROUTER_API_KEY', ''));
+define('OPENROUTER_MODEL', env('OPENROUTER_MODEL', 'tngtech/deepseek-r1t2-chimera:free'));
+define('OPENROUTER_BASE_URL', env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'));
+define('OPENROUTER_MAX_TOKENS', (int)env('OPENROUTER_MAX_TOKENS', 640));
+define('GOOGLE_AI_API_KEYS', env('GOOGLE_AI_API_KEYS', ''));
+define('GOOGLE_AI_TEXT_MODEL', env('GOOGLE_AI_TEXT_MODEL', 'gemini-1.5-flash'));
+define('GOOGLE_AI_API_BASE_URL', env('GOOGLE_AI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'));
 define('GEMINI_API_KEY', env('GEMINI_API_KEY', ''));
 define('GEMINI_MODEL', env('GEMINI_MODEL', 'gemini-1.5-flash'));
 

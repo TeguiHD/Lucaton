@@ -75,7 +75,7 @@ Checklist completo basado en el análisis de 22 archivos de requerimientos para 
 
 ## 🎯 FASE 4: INTELIGENCIA ARTIFICIAL
 
-### ✅ Integración OpenAI (Texto)
+### ✅ Integración OpenRouter (Texto)
 - [x] **Configuración API** con claves y endpoints
 - [x] **Generación de texto** para descripciones de campañas
 - [x] **Análisis de contenido** para moderación automática
@@ -223,7 +223,7 @@ Checklist completo basado en el análisis de 22 archivos de requerimientos para 
 - [ ] **POST /admin/usuario/{id}/estado**: Cambiar estado usuario
 
 ### ✅ Endpoints IA (6)
-- [ ] **POST /api/ai/generate-text**: Generar texto OpenAI
+- [ ] **POST /api/ai/generate-text**: Generar texto OpenRouter
 - [ ] **POST /api/ai/generate-image**: Generar imagen Gemini
 - [ ] **POST /api/ai/moderate**: Moderar contenido
 - [ ] **POST /api/ai/alt-text**: Generar alt-text automático
@@ -407,7 +407,7 @@ Checklist completo basado en el análisis de 22 archivos de requerimientos para 
 - **22 Páginas** (5 públicas + 3 auth + 4 usuario + 3 admin + 7 IA/API)
 - **25+ Endpoints** REST organizados por funcionalidad
 - **10 Tablas** base de datos con relaciones apropiadas
-- **2 APIs IA** (OpenAI + Gemini) con políticas éticas
+- **2 APIs IA** (OpenRouter + Google Gemini) con políticas éticas
 
 ### Seguridad y Calidad
 - **10 Controles OWASP** implementados completamente

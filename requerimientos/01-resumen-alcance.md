@@ -9,7 +9,7 @@
 - Acompañamiento: chatbot/ayudante para resolver dudas de creación, proceso, pagos (explicativo) y políticas de transparencia.
 
 ### Cambios clave (v1.8)
-- IA segura desde servidor (OpenAI texto, Gemini imagen) con PHP cURL.
+- IA segura desde servidor (OpenRouter/DeepSeek para texto, Gemini imagen) con PHP cURL.
 - Tailwind con build local (pnpm) en producción para control de diseño y CSP sólida; CDN opcional sólo en desarrollo.
 - Mobile‑First obligatorio; componentes reutilizables (partials PHP).
 - Seguridad reforzada: CSP, headers, .htaccess, CSRF, sesiones seguras, rate limiting.

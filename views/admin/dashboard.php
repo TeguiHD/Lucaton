@@ -7,6 +7,20 @@ $metrics = $metrics ?? [];
 $reviewQueue = $reviewQueue ?? [];
 $recentUsers = $recentUsers ?? [];
 $recentNotifications = $recentNotifications ?? [];
+$apiUsage = $metrics['api_usage'] ?? ['supported' => false];
+$apiColumns = $apiUsage['columns'] ?? [];
+$apiTotals = $apiUsage['totals'] ?? [];
+$formatNumber = static function ($value, int $decimals = 0): string {
+    if ($value === null) {
+        return '—';
+    }
+
+    if ($decimals > 0) {
+        return number_format((float)$value, $decimals, ',', '.');
+    }
+
+    return number_format((float)$value, 0, ',', '.');
+};
 
 $cards = [
     [
@@ -96,6 +110,98 @@ $secondaryCards = [
             </article>
         <?php endforeach; ?>
     </section>
+
+    <?php if (!empty($apiUsage['supported'])): ?>
+        <section class="bg-white shadow-soft rounded-3xl p-6 border border-gray-100">
+            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900">Uso de APIs de IA</h2>
+                    <p class="text-sm text-gray-500">Supervisa el consumo de Gemini, OpenRouter y otros conectores.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm text-gray-600 md:text-right">
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-gray-500">Total histórico</p>
+                        <p class="text-base font-semibold text-gray-900"><?= $formatNumber($apiTotals['total'] ?? 0) ?></p>
+                    </div>
+                    <?php if (!empty($apiColumns['has_last_24h'])): ?>
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Últimas 24h</p>
+                            <p class="text-base font-semibold text-gray-900"><?= $formatNumber($apiTotals['last_24h'] ?? 0) ?></p>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($apiColumns['has_status'])): ?>
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Éxitos</p>
+                            <p class="text-base font-semibold text-emerald-700"><?= $formatNumber($apiTotals['success'] ?? 0) ?></p>
+                        </div>
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Errores</p>
+                            <p class="text-base font-semibold text-rose-600"><?= $formatNumber($apiTotals['failed'] ?? 0) ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </header>
+
+            <?php if (!empty($apiUsage['providers'])): ?>
+                <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <?php foreach ($apiUsage['providers'] as $provider): ?>
+                        <article class="rounded-2xl border border-gray-100 p-5 shadow-soft">
+                            <header class="flex items-center justify-between">
+                                <h3 class="text-sm font-semibold text-gray-900">
+                                    <?= htmlspecialchars($provider['label']) ?>
+                                </h3>
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium <?= htmlspecialchars($provider['accent'] ?? 'bg-gray-100 text-gray-700') ?>">
+                                    <?= htmlspecialchars($provider['tag'] ?? strtoupper($provider['key'] ?? 'API')) ?>
+                                </span>
+                            </header>
+                            <dl class="mt-4 grid grid-cols-2 gap-4 text-sm text-gray-600">
+                                <div>
+                                    <dt class="text-xs uppercase tracking-wide text-gray-500">Total</dt>
+                                    <dd class="text-base font-semibold text-gray-900"><?= $formatNumber($provider['total'] ?? 0) ?></dd>
+                                </div>
+                                <?php if (!empty($apiColumns['has_last_24h'])): ?>
+                                    <div>
+                                        <dt class="text-xs uppercase tracking-wide text-gray-500">Últimas 24h</dt>
+                                        <dd class="text-base font-semibold text-gray-900"><?= $formatNumber($provider['last_24h'] ?? 0) ?></dd>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($apiColumns['has_status'])): ?>
+                                    <div>
+                                        <dt class="text-xs uppercase tracking-wide text-gray-500">Éxitos</dt>
+                                        <dd class="text-base font-semibold text-emerald-700"><?= $formatNumber($provider['success'] ?? 0) ?></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs uppercase tracking-wide text-gray-500">Errores</dt>
+                                        <dd class="text-base font-semibold text-rose-600"><?= $formatNumber($provider['failed'] ?? 0) ?></dd>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($apiColumns['has_latency']) && $provider['avg_latency'] !== null): ?>
+                                    <div>
+                                        <dt class="text-xs uppercase tracking-wide text-gray-500">Latencia prom. (ms)</dt>
+                                        <dd class="text-base font-semibold text-gray-900"><?= $formatNumber($provider['avg_latency'], 1) ?></dd>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ((!empty($apiColumns['has_tokens_input']) || !empty($apiColumns['has_tokens_output'])) && $provider['avg_tokens_total'] !== null): ?>
+                                    <div>
+                                        <dt class="text-xs uppercase tracking-wide text-gray-500">Tokens prom.</dt>
+                                        <dd class="text-base font-semibold text-gray-900"><?= $formatNumber($provider['avg_tokens_total'], 0) ?></dd>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($apiColumns['has_cost']) && $provider['avg_cost'] !== null): ?>
+                                    <div>
+                                        <dt class="text-xs uppercase tracking-wide text-gray-500">Costo prom. (USD)</dt>
+                                        <dd class="text-base font-semibold text-gray-900">$<?= $formatNumber($provider['avg_cost'], 4) ?></dd>
+                                    </div>
+                                <?php endif; ?>
+                            </dl>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <p class="mt-4 text-sm text-gray-600">Todavía no registramos llamadas a las APIs de IA.</p>
+            <?php endif; ?>
+        </section>
+    <?php endif; ?>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section class="bg-white shadow-soft rounded-3xl p-6 border border-gray-100">

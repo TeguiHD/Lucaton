@@ -131,6 +131,11 @@ class Router {
     private function csrfMiddleware() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $token = $_POST[CSRF_TOKEN_NAME] ?? '';
+
+            if ($token === '' && isset($_SERVER['HTTP_X_CSRF_TOKEN'])) {
+                $token = (string)$_SERVER['HTTP_X_CSRF_TOKEN'];
+            }
+
             if (!hash_equals($_SESSION[CSRF_TOKEN_NAME] ?? '', $token)) {
                 http_response_code(403);
                 if (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json')) {

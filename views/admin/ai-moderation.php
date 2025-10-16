@@ -13,6 +13,11 @@ $aiGenerations = $aiGenerations ?? [];
 $aiPolicyEvents = $aiPolicyEvents ?? [];
 $aiStatusMeta = $aiStatusMeta ?? [];
 $aiPolicyMeta = $aiPolicyMeta ?? [];
+$aiUsageMetrics = $aiUsageMetrics ?? [];
+$aiUsageSupported = $aiUsageMetrics['supported'] ?? false;
+$aiUsageProviders = $aiUsageMetrics['providers'] ?? [];
+$aiUsageTotals = $aiUsageMetrics['totals'] ?? [];
+$aiUsageColumns = $aiUsageMetrics['columns'] ?? [];
 
 $totalGenerations = (int)($aiSummary['total_generations'] ?? 0);
 $needsAttention = (int)($aiSummary['needs_attention_total'] ?? 0);
@@ -20,14 +25,59 @@ $flaggedCount = (int)($aiSummary['flagged_events'] ?? 0);
 $avgLatency = $aiSummary['avg_latency'] ?? null;
 $avgCost = $aiSummary['avg_cost'] ?? null;
 $last24h = (int)($aiSummary['last_24h'] ?? 0);
+
+$formatUsageNumber = static function (?float $value, int $decimals = 0): string {
+    if ($value === null) {
+        return '—';
+    }
+
+    if ($decimals > 0) {
+        return number_format($value, $decimals, ',', '.');
+    }
+
+    return number_format((float)$value, 0, ',', '.');
+};
+
+$formatPercentage = static function (int $part, int $total, int $decimals = 1): string {
+    if ($total <= 0) {
+        return '—';
+    }
+
+    return number_format(($part / $total) * 100, $decimals, ',', '.') . '%';
+};
 ?>
 
 <?php ob_start(); ?>
 <div class="space-y-6">
     <?php include_flash_messages(); ?>
 
+    <section class="bg-white shadow-soft rounded-3xl border border-gray-100 p-4 md:p-6">
+        <nav class="flex flex-wrap gap-2 md:gap-3 text-sm font-medium text-gray-600">
+            <a href="#ai-overview" class="inline-flex items-center gap-2 rounded-full border border-copihue-200 px-3 py-1.5 text-copihue-600 hover:bg-copihue-50 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-1 transition">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M2 11a7 7 0 1014 0 7 7 0 00-14 0zm8-3a1 1 0 00-2 0v3a1 1 0 00.553.894l2 1a1 1 0 10.894-1.788L10 10.382V8z" />
+                </svg>
+                Resumen
+            </a>
+            <?php if ($aiUsageSupported): ?>
+                <a href="#ai-usage" class="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1 transition">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v3h2V5h3V3H4zm6 0h3v2h-3V3zm5 0a2 2 0 012 2v3h-2V5h-3V3h3zm-5 6h3v2h-3V9zm5 0h3v2h-3V9zm-5 4h3v2h-3v-2zm5 0h3v2h-3v-2zM2 9h3v2H2V9zm0 4h3v2H2v-2zm8 4h3v2h-3v-2zm-5 0h3v2H5v-2z" clip-rule="evenodd" />
+                    </svg>
+                    Uso de APIs
+                </a>
+            <?php endif; ?>
+            <a href="#ai-alertas" class="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1 transition">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.366-.756 1.42-.756 1.786 0l6.518 13.492c.33.685-.173 1.409-.893 1.409H2.632c-.72 0-1.223-.724-.893-1.409L8.257 3.1zM9 13h2v2H9v-2zm0-5h2v4H9V8z" clip-rule="evenodd" />
+                </svg>
+                Alertas y Moderación
+            </a>
+        </nav>
+    </section>
+
     <?php if (!$aiSupported): ?>
-        <section class="bg-white shadow-soft rounded-3xl border border-dashed border-amber-300 p-8 text-center">
+        <section id="ai-overview" class="bg-white shadow-soft rounded-3xl border border-dashed border-amber-300 p-8 text-center">
             <h2 class="text-lg font-semibold text-gray-900">Moderación asistida por IA no configurada</h2>
             <p class="mt-2 text-sm text-gray-600">
                 Aún no se detectan las tablas <code>ai_generations</code> ni <code>ai_policy_logs</code>.
@@ -39,7 +89,7 @@ $last24h = (int)($aiSummary['last_24h'] ?? 0);
             </p>
         </section>
     <?php else: ?>
-        <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section id="ai-overview" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <article class="bg-white shadow-soft rounded-2xl p-6 border border-gray-100">
                 <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Solicitudes IA totales</h3>
                 <p class="mt-4 text-3xl font-semibold text-gray-900">
@@ -74,6 +124,171 @@ $last24h = (int)($aiSummary['last_24h'] ?? 0);
                 <p class="mt-2 text-sm text-gray-500">Actividad más reciente para detectar anomalías o picos.</p>
             </article>
         </section>
+
+        <?php if ($aiUsageSupported): ?>
+            <?php
+                $usageTotal = (int)($aiUsageTotals['total'] ?? 0);
+                $usageSuccess = (int)($aiUsageTotals['success'] ?? 0);
+                $usageFailed = (int)($aiUsageTotals['failed'] ?? 0);
+                $usageLast24h = (int)($aiUsageTotals['last_24h'] ?? 0);
+                $usageTokensInput = (float)($aiUsageTotals['tokens_input'] ?? 0);
+                $usageTokensOutput = (float)($aiUsageTotals['tokens_output'] ?? 0);
+                $usageTokensTotal = $usageTokensInput + $usageTokensOutput;
+                $usageCostTotal = (float)($aiUsageTotals['cost'] ?? 0);
+                $usageSuccessRate = $usageTotal > 0 ? ($usageSuccess / max(1, $usageTotal)) * 100 : null;
+            ?>
+            <section id="ai-usage" class="bg-white shadow-soft rounded-3xl border border-gray-100 p-6 space-y-6">
+                <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-900">Uso consolidado de los proveedores</h2>
+                        <p class="text-sm text-gray-500">Monitorea actividad, rendimiento y consumo para cada API configurada.</p>
+                    </div>
+                    <?php if ($usageSuccessRate !== null): ?>
+                        <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8.5 12.086l-3.293-3.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l7.5-7.5a1 1 0 000-1.414z" clip-rule="evenodd" />
+                            </svg>
+                            Tasa de éxito global: <?= $formatPercentage($usageSuccess, $usageTotal) ?>
+                        </div>
+                    <?php endif; ?>
+                </header>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <article class="rounded-2xl border border-gray-100 bg-gray-50/40 p-5">
+                        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Total de solicitudes</h3>
+                        <p class="mt-2 text-3xl font-semibold text-gray-900"><?= number_format($usageTotal, 0, ',', '.') ?></p>
+                        <p class="mt-2 text-xs text-gray-500">Histórico de llamadas registradas.</p>
+                    </article>
+                    <article class="rounded-2xl border border-gray-100 bg-gray-50/40 p-5">
+                        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Balance de resultados</h3>
+                        <p class="mt-2 text-lg font-semibold text-emerald-700">Éxitos: <?= number_format($usageSuccess, 0, ',', '.') ?></p>
+                        <p class="text-sm font-semibold text-rose-600">Errores: <?= number_format($usageFailed, 0, ',', '.') ?></p>
+                        <p class="mt-2 text-xs text-gray-500">Investiga si la tasa de fallos supera el 10%.</p>
+                    </article>
+                    <article class="rounded-2xl border border-gray-100 bg-gray-50/40 p-5">
+                        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Actividad en 24 horas</h3>
+                        <p class="mt-2 text-3xl font-semibold text-gray-900"><?= number_format($usageLast24h, 0, ',', '.') ?></p>
+                        <p class="mt-2 text-xs text-gray-500">Ayuda a detectar picos o abusos recientes.</p>
+                    </article>
+                    <?php if (!empty($aiUsageColumns['has_token_totals']) || !empty($aiUsageColumns['has_cost'])): ?>
+                        <article class="rounded-2xl border border-gray-100 bg-gray-50/40 p-5">
+                            <?php if (!empty($aiUsageColumns['has_token_totals'])): ?>
+                                <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Tokens consumidos</h3>
+                                <p class="mt-2 text-2xl font-semibold text-gray-900"><?= number_format($usageTokensTotal, 0, ',', '.') ?></p>
+                                <p class="mt-1 text-xs text-gray-500">Entrada: <?= number_format($usageTokensInput, 0, ',', '.') ?> · Salida: <?= number_format($usageTokensOutput, 0, ',', '.') ?></p>
+                            <?php endif; ?>
+                            <?php if (!empty($aiUsageColumns['has_cost'])): ?>
+                                <div class="mt-3 border-t border-gray-200 pt-3">
+                                    <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Costo estimado</h3>
+                                    <p class="mt-1 text-lg font-semibold text-gray-900">$<?= number_format($usageCostTotal, 4, ',', '.') ?> USD</p>
+                                </div>
+                            <?php endif; ?>
+                        </article>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!empty($aiUsageProviders)): ?>
+                    <div class="mt-6 space-y-4">
+                        <?php foreach ($aiUsageProviders as $provider): ?>
+                            <?php
+                                $providerTotal = (int)($provider['total'] ?? 0);
+                                $providerSuccess = (int)($provider['success'] ?? 0);
+                                $providerFailed = (int)($provider['failed'] ?? 0);
+                                $providerSuccessRate = $providerTotal > 0 ? ($providerSuccess / max(1, $providerTotal)) * 100 : null;
+                                $providerTokensTotal = $provider['total_tokens'] ?? null;
+                                $providerCostTotal = $provider['total_cost'] ?? null;
+                            ?>
+                            <article class="rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow bg-white">
+                                <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold <?= htmlspecialchars($provider['accent'] ?? 'bg-gray-100 text-gray-700') ?>">
+                                            <?= htmlspecialchars($provider['tag'] ?? strtoupper($provider['key'] ?? 'API')) ?>
+                                        </span>
+                                        <div>
+                                            <h3 class="text-lg font-semibold text-gray-900"><?= htmlspecialchars($provider['label'] ?? 'Proveedor') ?></h3>
+                                            <p class="text-xs text-gray-500 uppercase tracking-wide">Total solicitudes: <?= number_format($providerTotal, 0, ',', '.') ?></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3 text-xs">
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                                            <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                            </svg>
+                                            <?= number_format($providerSuccess, 0, ',', '.') ?> éxitos
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-600">
+                                            <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-.25-7.75a.75.75 0 00-1.5 0v3.5a.75.75 0 001.5 0v-3.5z" clip-rule="evenodd" />
+                                            </svg>
+                                            <?= number_format($providerFailed, 0, ',', '.') ?> fallos
+                                        </span>
+                                    </div>
+                                </header>
+
+                                <?php if ($providerSuccessRate !== null): ?>
+                                    <div class="mt-4">
+                                        <div class="flex items-center justify-between text-xs uppercase tracking-wide text-gray-500">
+                                            <span>Tasa de éxito</span>
+                                            <span class="font-semibold text-gray-900"><?= number_format($providerSuccessRate, 1, ',', '.') ?>%</span>
+                                        </div>
+                                        <div class="mt-2 h-2 rounded-full bg-gray-100">
+                                            <div
+                                                class="h-2 rounded-full bg-emerald-400 transition-all"
+                                                style="width: <?= min(100, max(0, $providerSuccessRate)) ?>%"
+                                                aria-hidden="true"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+
+                                <dl class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3 text-sm text-gray-600">
+                                    <?php if (!empty($aiUsageColumns['has_last_24h'])): ?>
+                                        <div>
+                                            <dt class="text-xs uppercase tracking-wide text-gray-500">Últimas 24h</dt>
+                                            <dd class="mt-1 text-base font-semibold text-gray-900"><?= number_format((int)($provider['last_24h'] ?? 0), 0, ',', '.') ?></dd>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($aiUsageColumns['has_latency']) && $provider['avg_latency'] !== null): ?>
+                                        <div>
+                                            <dt class="text-xs uppercase tracking-wide text-gray-500">Latencia promedio (ms)</dt>
+                                            <dd class="mt-1 text-base font-semibold text-gray-900"><?= $formatUsageNumber($provider['avg_latency'], 1) ?></dd>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($aiUsageColumns['has_tokens_input']) || !empty($aiUsageColumns['has_tokens_output'])): ?>
+                                        <div>
+                                            <dt class="text-xs uppercase tracking-wide text-gray-500">Tokens promedio</dt>
+                                            <dd class="mt-1 text-base font-semibold text-gray-900"><?= $formatUsageNumber($provider['avg_tokens_total'] ?? null, 0) ?></dd>
+                                            <p class="text-xs text-gray-500">IN: <?= $formatUsageNumber($provider['avg_tokens_input'] ?? null, 0) ?> · OUT: <?= $formatUsageNumber($provider['avg_tokens_output'] ?? null, 0) ?></p>
+                                        </div>
+                                    <?php endif; ?>
+                                </dl>
+
+                                <?php if (!empty($aiUsageColumns['has_token_totals']) || !empty($aiUsageColumns['has_cost'])): ?>
+                                    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        <?php if (!empty($aiUsageColumns['has_token_totals']) && $providerTokensTotal !== null): ?>
+                                            <div class="rounded-2xl border border-dashed border-gray-200 p-4 bg-gray-50">
+                                                <h4 class="text-xs uppercase tracking-wide text-gray-500">Tokens totales</h4>
+                                                <p class="mt-1 text-lg font-semibold text-gray-900"><?= $formatUsageNumber($providerTokensTotal, 0) ?></p>
+                                                <p class="mt-1 text-xs text-gray-500">IN: <?= $formatUsageNumber($provider['total_tokens_input'] ?? null, 0) ?> · OUT: <?= $formatUsageNumber($provider['total_tokens_output'] ?? null, 0) ?></p>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($aiUsageColumns['has_cost']) && $providerCostTotal !== null): ?>
+                                            <div class="rounded-2xl border border-dashed border-gray-200 p-4 bg-gray-50">
+                                                <h4 class="text-xs uppercase tracking-wide text-gray-500">Costo estimado</h4>
+                                                <p class="mt-1 text-lg font-semibold text-gray-900">$<?= $formatUsageNumber($providerCostTotal, 4) ?> USD</p>
+                                                <p class="mt-1 text-xs text-gray-500">Promedio por solicitud: $<?= $formatUsageNumber($provider['avg_cost'] ?? null, 4) ?></p>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="text-sm text-gray-600">Todavía no hay registros de llamadas a las APIs de IA.</p>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
 
         <section class="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <article class="bg-white shadow-soft rounded-3xl p-6 border border-gray-100">
@@ -312,7 +527,7 @@ $last24h = (int)($aiSummary['last_24h'] ?? 0);
 
         <section class="bg-white shadow-soft rounded-3xl border border-gray-100 p-6">
             <header class="flex flex-col gap-2 mb-6">
-                <h2 class="text-lg font-semibold text-gray-900">Alertas de políticas y seguridad</h2>
+                <h2 id="ai-alertas" class="text-lg font-semibold text-gray-900">Alertas de políticas y seguridad</h2>
                 <p class="text-sm text-gray-500">
                     Revisa los casos marcados por la moderación automática para decidir si se aprueban, bloquean o escalan.
                 </p>

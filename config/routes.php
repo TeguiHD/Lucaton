@@ -62,6 +62,7 @@ $router->group(['middleware' => 'auth'], function($router) {
         $router->post('/api/notifications/mark-read', 'NotificationController@markRead');
         $router->post('/api/notifications/delete', 'NotificationController@delete');
         $router->post('/api/ai/generate-text', 'AIController@generateText');
+        $router->post('/api/ai/improve-text', 'AIController@improveText');
         $router->post('/api/ai/generate-image', 'AIController@generateImage');
         $router->post('/api/ai/moderate', 'AIController@moderate');
         $router->post('/api/feedback', 'FeedbackController@store');
