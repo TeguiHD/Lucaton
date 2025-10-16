@@ -25,6 +25,7 @@ class AITextService {
     private string $googleRotationStatePath;
     private int $googleRotationIndex = 0;
     private ?string $lastGoogleModelUsed = null;
+    private ?array $lastGoogleCall = null;
 
     private ?string $lastPrompt = null;
     /** @var array<int, array<string, mixed>> */
@@ -169,6 +170,10 @@ class AITextService {
         return $this->lastGoogleModelUsed;
     }
 
+    public function getLastGoogleCallMeta(): ?array {
+        return $this->lastGoogleCall;
+    }
+
     /**
      * @param array<string, string> $input
      */
@@ -190,6 +195,7 @@ class AITextService {
     }
 
     private function callOpenRouter(string $prompt, ?string $systemPrompt = null, ?array $options = null): array {
+        $this->lastGoogleCall = null;
         $systemPrompt = $systemPrompt ?: "Actúa como el 'Estratega de Impacto Social' de Chile. Sé empático, transparente y digno. Evita manipulaciones. Incluye una sección de Transparencia con uso de fondos, plazos, evidencias y contacto.";
         $payload = json_encode([
             'model' => $this->openRouterModel,
@@ -275,6 +281,7 @@ class AITextService {
     }
 
     private function callGoogleAi(string $prompt, string $apiKey, ?string $systemPrompt = null, ?array $options = null): array {
+        $this->lastGoogleCall = null;
         $systemPrompt = $systemPrompt ?: "Actúa como el 'Estratega de Impacto Social' de Chile. Tono empático, responsable y transparente. Estructura la respuesta en Markdown con: 1) Tres títulos sugeridos; 2) Historia en tres párrafos (≤300 palabras); 3) Tres llamados a la acción; 4) Dos textos breves para redes; 5) Sección de Transparencia con uso de fondos, plazos, evidencias y contacto responsable.";
         $options = $options ?? [];
 
@@ -300,6 +307,7 @@ class AITextService {
 
             try {
                 $result = $this->dispatchGoogleRequest($prompt, $systemPrompt, $apiKey, $options, $attempt);
+                $this->lastGoogleCall = $result;
                 $this->attemptLog[] = [
                     'provider' => 'google_ai',
                     'model' => $result['model'],
@@ -818,6 +826,85 @@ class AITextService {
     }
 
     /**
+     * @param array<string, string> $textos
+     * @return array<string, string>
+     */
+    public function mejorarTextosCampana(array $textos): array {
+        $titulo = trim((string)($textos['titulo'] ?? ''));
+        $descripcion = trim((string)($textos['descripcion'] ?? ''));
+        $notas = trim((string)($textos['notas'] ?? ''));
+
+        if ($titulo === '' && $descripcion === '' && $notas === '') {
+            throw new InvalidArgumentException('Debes proporcionar al menos un campo para mejorar.');
+        }
+
+        if (empty($this->googleApiKeys)) {
+            throw new RuntimeException('No hay claves de Google configuradas para mejorar textos.');
+        }
+
+        $systemPrompt = "Eres una copywriter senior especializada en campañas sociales latinoamericanas. Mantén la voz original, refuerza empatía responsable y evita exageraciones. Debes devolver únicamente un JSON con tres claves: titulo_mejorado, descripcion_mejorada y notas_mejoradas.";
+
+        $prompt = <<<PROMPT
+Mejora los textos de una campaña social chilena siguiendo estas reglas:
+- Mantén datos, nombres, montos y hechos sin inventar información nueva.
+- Optimiza claridad, cercanía y llamado a la acción ético.
+- Usa español neutro, frases cortas y evita lenguaje técnico excesivo.
+- Devuelve exclusivamente un JSON sin comentarios, sin texto adicional y con las claves exactas solicitadas.
+
+Datos originales:
+- Título actual: {$titulo}
+- Descripción extensa: {$descripcion}
+- Notas breves: {$notas}
+PROMPT;
+
+        $this->lastPrompt = $prompt;
+        $sequence = $this->resolveGoogleKeySequence();
+        if (empty($sequence)) {
+            throw new RuntimeException('No hay claves de Google disponibles para la rotación.');
+        }
+
+        $selected = $sequence[0];
+        $keySuffix = $this->maskApiKey($selected['key']);
+
+        try {
+            $response = $this->callGoogleAi($prompt, $selected['key'], $systemPrompt, [
+                'generationConfig' => [
+                    'temperature' => $this->temperature,
+                    'responseMimeType' => 'application/json',
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            throw new RuntimeException(
+                'No fue posible mejorar los textos con Google AI: ' . $exception->getMessage(),
+                (int)$exception->getCode()
+            );
+        }
+
+        $rawContent = trim((string)($response['text'] ?? ''));
+        $decoded = $this->decodeJsonContent($rawContent);
+        if ($decoded === null) {
+            $this->markLastGoogleAttemptAsFailed('La respuesta de Google AI no incluía JSON válido.', $keySuffix);
+            Logger::warning('Google AI devolvió contenido sin JSON válido para mejora de campaña', [
+                'key_suffix' => $keySuffix,
+            ]);
+            throw new RuntimeException('La respuesta de Google AI no incluyó JSON válido.');
+        }
+
+        foreach (['titulo_mejorado', 'descripcion_mejorada', 'notas_mejoradas'] as $clave) {
+            if (!array_key_exists($clave, $decoded)) {
+                $this->markLastGoogleAttemptAsFailed('Faltan claves esperadas en la respuesta de Google AI.', $keySuffix);
+                throw new RuntimeException('La respuesta de Google AI omitió una clave obligatoria: ' . $clave . '.');
+            }
+        }
+
+        return [
+            'titulo_mejorado' => $this->fallbackIfEmpty((string)$decoded['titulo_mejorado'], $titulo),
+            'descripcion_mejorada' => $this->fallbackIfEmpty((string)$decoded['descripcion_mejorada'], $descripcion),
+            'notas_mejoradas' => $this->fallbackIfEmpty((string)$decoded['notas_mejoradas'], $notas),
+        ];
+    }
+
+    /**
      * @param array<string, string> $input
      * @return array<string, mixed>
      */
@@ -864,65 +951,33 @@ PROMPT;
         }
 
         if ($googleAllowed) {
-            $sequence = $this->resolveGoogleKeySequence();
-            $lastAttemptIndex = null;
+            try {
+                $improved = $this->mejorarTextosCampana([
+                    'titulo' => $title,
+                    'descripcion' => $story,
+                    'notas' => $short,
+                ]);
 
-            foreach ($sequence as $entry) {
-                $apiKey = $entry['key'];
-                $keyIndex = $entry['index'];
-                $lastAttemptIndex = $keyIndex;
+                $googleMeta = $this->getLastGoogleCallMeta() ?? [];
+                $content = [
+                    'title' => $this->fallbackIfEmpty($improved['titulo_mejorado'] ?? null, $title),
+                    'short_description' => $this->fallbackIfEmpty($improved['notas_mejoradas'] ?? null, $short),
+                    'description' => $this->fallbackIfEmpty($improved['descripcion_mejorada'] ?? null, $story),
+                ];
 
-                try {
-                    $response = $this->callGoogleAi($userPrompt, $apiKey, $systemPrompt, [
-                        'generationConfig' => [
-                            'temperature' => $this->temperature,
-                            'responseMimeType' => 'application/json',
-                        ],
-                    ]);
-                    $this->setGoogleRotationIndex($keyIndex + 1);
-
-                    $parsed = $this->decodeJsonContent($response['text']);
-                    if ($parsed === null) {
-                        throw new RuntimeException('La respuesta no incluye JSON válido.');
-                    }
-
-                    $improved = [
-                        'title' => $this->fallbackIfEmpty($parsed['title'] ?? null, $title),
-                        'short_description' => $this->fallbackIfEmpty($parsed['short_description'] ?? null, $short),
-                        'description' => $this->fallbackIfEmpty($parsed['description'] ?? null, $story),
-                    ];
-
-                    return [
-                        'provider' => $response['provider'],
-                        'model' => $response['model'],
-                        'content' => $improved,
-                        'raw_response' => $response['raw_response'] ?? null,
-                        'tokens_input' => $response['tokens_input'] ?? null,
-                        'tokens_output' => $response['tokens_output'] ?? null,
-                        'latency_ms' => $response['latency_ms'] ?? null,
-                    ];
-                } catch (Throwable $exception) {
-                    if (!($exception instanceof RuntimeException)) {
-                        $this->attemptLog[] = [
-                            'provider' => 'google_ai',
-                            'model' => $this->getLastGoogleModel() ?? $this->googleModel,
-                            'status' => 'failed',
-                            'error' => $exception->getMessage(),
-                            'api_key_suffix' => $this->maskApiKey($apiKey),
-                        ];
-                    }
-                    Logger::warning('Google AI improvement attempt failed', [
-                        'error' => $exception->getMessage(),
-                        'key_suffix' => $this->maskApiKey($apiKey),
-                    ]);
-                    if (!$this->shouldRetryGoogleProvider($exception)) {
-                        break;
-                    }
-                }
-            }
-
-            if ($lastAttemptIndex !== null) {
-                $this->setGoogleRotationIndex($lastAttemptIndex + 1);
+                return [
+                    'provider' => $googleMeta['provider'] ?? 'google_ai',
+                    'model' => $googleMeta['model'] ?? $this->getLastGoogleModel() ?? $this->googleModel,
+                    'content' => $content,
+                    'raw_response' => $googleMeta['raw_response'] ?? null,
+                    'tokens_input' => $googleMeta['tokens_input'] ?? null,
+                    'tokens_output' => $googleMeta['tokens_output'] ?? null,
+                    'latency_ms' => $googleMeta['latency_ms'] ?? null,
+                ];
+            } catch (Throwable $exception) {
+                Logger::warning('Google AI unified improvement attempt failed', [
+                    'error' => $exception->getMessage(),
+                ]);
             }
         }
 
@@ -989,6 +1044,32 @@ PROMPT;
             return $decoded;
         }
 
+        $length = strlen($trimmed);
+        if ($length >= 2) {
+            $firstChar = $trimmed[0];
+            $lastChar = $trimmed[$length - 1];
+            if (($firstChar === '"' && $lastChar === '"') || ($firstChar === "'" && $lastChar === "'")) {
+                $unwrapped = json_decode($trimmed, true);
+                if (is_string($unwrapped)) {
+                    $candidate = trim($unwrapped);
+                    if ($candidate !== '') {
+                        $decodedWrapped = json_decode($candidate, true);
+                        if (is_array($decodedWrapped)) {
+                            return $decodedWrapped;
+                        }
+
+                        $fallbackWrapped = $this->extractFirstJsonObject($candidate);
+                        if ($fallbackWrapped !== null) {
+                            $decodedWrapped = json_decode($fallbackWrapped, true);
+                            if (is_array($decodedWrapped)) {
+                                return $decodedWrapped;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $fallback = $this->extractFirstJsonObject($trimmed);
         if ($fallback !== null) {
             $decoded = json_decode($fallback, true);
@@ -1044,6 +1125,31 @@ PROMPT;
         }
 
         return null;
+    }
+
+    private function markLastGoogleAttemptAsFailed(string $message, ?string $keySuffix = null): void {
+        $lastIndex = array_key_last($this->attemptLog);
+        if ($lastIndex !== null
+            && isset($this->attemptLog[$lastIndex]['provider'])
+            && $this->attemptLog[$lastIndex]['provider'] === 'google_ai'
+            && isset($this->attemptLog[$lastIndex]['status'])
+            && $this->attemptLog[$lastIndex]['status'] === 'completed'
+        ) {
+            $this->attemptLog[$lastIndex]['status'] = 'failed';
+            $this->attemptLog[$lastIndex]['error'] = $message;
+            if ($keySuffix !== null) {
+                $this->attemptLog[$lastIndex]['api_key_suffix'] = $keySuffix;
+            }
+            return;
+        }
+
+        $this->attemptLog[] = [
+            'provider' => 'google_ai',
+            'model' => $this->getLastGoogleModel() ?? $this->googleModel,
+            'status' => 'failed',
+            'error' => $message,
+            'api_key_suffix' => $keySuffix,
+        ];
     }
 
     private function fallbackIfEmpty(?string $value, string $fallback): string {

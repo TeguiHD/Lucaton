@@ -34,7 +34,7 @@ class GeminiImageService {
   private string $apiKey;
   public function __construct(string $apiKey){ $this->apiKey=$apiKey; }
   public function generateImage(string $prompt,string $outputDir,?string $model=null): string {
-    $model = $model ?: ($_ENV['GEMINI_IMAGE_MODEL'] ?? 'models/gemini-2.5-flash-image-preview');
+    $model = $model ?: 'models/gemini-2.5-flash-image-preview';
     $url = 'https://generativelanguage.googleapis.com/v1beta/'.rawurlencode($model).':generateContent?key='.urlencode($this->apiKey);
     $payload = json_encode([ 'contents' => [[ 'role'=>'user', 'parts'=>[['text'=>$prompt]] ]], 'generationConfig'=>[] ]);
     $ch = curl_init($url);

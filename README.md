@@ -209,7 +209,6 @@ DB_PASS=tu_password
 OPENROUTER_API_KEY=tu_api_key_openrouter
 OPENROUTER_MODEL=tngtech/deepseek-r1t2-chimera:free
 GOOGLE_AI_API_KEYS=clave_google_1,clave_google_2,clave_google_3
-GEMINI_API_KEY=tu_gemini_key
 
 # Seguridad
 RATE_LIMIT_LOGIN=5

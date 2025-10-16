@@ -64,7 +64,6 @@ APP_TIMEZONE=America/Santiago
 OPENROUTER_API_KEY=tu_api_key_openrouter_real    # API key real de OpenRouter
 OPENROUTER_MODEL=tngtech/deepseek-r1t2-chimera:free
 GOOGLE_AI_API_KEYS=clave_google_1,clave_google_2,clave_google_3
-GEMINI_API_KEY=tu_gemini_key_real    # API key real de Google Gemini (imágenes)
 ```
 
 Si necesitas otorgar rol `superadmin` a cuentas iniciales sin exponer correos en el repositorio, configura las variables:

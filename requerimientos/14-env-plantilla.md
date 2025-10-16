@@ -21,8 +21,6 @@ GOOGLE_AI_TEXT_MODEL=gemini-1.5-flash
 GOOGLE_AI_API_BASE_URL=https://generativelanguage.googleapis.com/v1
 GOOGLE_AI_USE_THINKING=false
 GOOGLE_AI_THINKING_BUDGET=0
-GEMINI_API_KEY=tu_api_key_gemini
-GEMINI_IMAGE_MODEL=models/gemini-2.5-flash-image-preview
 
 # Límites y seguridad
 AI_MAX_REQ_PER_HOUR=10

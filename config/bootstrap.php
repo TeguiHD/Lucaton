@@ -200,9 +200,7 @@ define('OPENROUTER_BASE_URL', env('OPENROUTER_BASE_URL', 'https://openrouter.ai/
 define('OPENROUTER_MAX_TOKENS', (int)env('OPENROUTER_MAX_TOKENS', 640));
 define('GOOGLE_AI_API_KEYS', env('GOOGLE_AI_API_KEYS', ''));
 define('GOOGLE_AI_TEXT_MODEL', env('GOOGLE_AI_TEXT_MODEL', 'gemini-1.5-flash'));
-define('GOOGLE_AI_API_BASE_URL', env('GOOGLE_AI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'));
-define('GEMINI_API_KEY', env('GEMINI_API_KEY', ''));
-define('GEMINI_MODEL', env('GEMINI_MODEL', 'gemini-1.5-flash'));
+define('GOOGLE_AI_API_BASE_URL', env('GOOGLE_AI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1'));
 
 // Configurar límites de seguridad
 define('RATE_LIMIT_LOGIN', (int)env('RATE_LIMIT_LOGIN', 5));
