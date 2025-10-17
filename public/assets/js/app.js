@@ -1300,7 +1300,8 @@ var shareModalState = {
   lastFocus: null,
   copyTimeout: null,
   currentUrl: '',
-  currentTitle: ''
+  currentTitle: '',
+  currentIdentifier: ''
 };
 
 var FAVORITES_STORAGE_KEY = 'lucaton_favs';
@@ -1353,7 +1354,21 @@ function initShareModal() {
   shareModalState.copyTimeout = null;
   shareModalState.currentUrl = '';
   shareModalState.currentTitle = document.title;
+  shareModalState.currentIdentifier = '';
   shareModalState.lastFocus = null;
+
+  if (shareModalState.networkLinks && shareModalState.networkLinks.forEach) {
+    shareModalState.networkLinks.forEach(function (link) {
+      if (!link || link.dataset.shareBound === '1') {
+        return;
+      }
+      link.addEventListener('click', function () {
+        var network = link.getAttribute('data-share-network') || 'network';
+        registerShareMetric('network:' + network);
+      });
+      link.dataset.shareBound = '1';
+    });
+  }
 
   modal.dataset.bound = '1';
 
@@ -1386,8 +1401,9 @@ function openShareModal(payload) {
 
   var modal = shareModalState.modal;
   shareModalState.lastFocus = document.activeElement;
-  shareModalState.currentUrl = payload.url;
+  shareModalState.currentUrl = payload.url || '';
   shareModalState.currentTitle = payload.title || document.title;
+  shareModalState.currentIdentifier = payload.identifier || '';
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -1407,8 +1423,8 @@ function openShareModal(payload) {
   }
 
   if (shareModalState.input) {
-    shareModalState.input.value = payload.url;
-    shareModalState.input.setAttribute('value', payload.url);
+    shareModalState.input.value = shareModalState.currentUrl;
+    shareModalState.input.setAttribute('value', shareModalState.currentUrl);
     try {
       shareModalState.input.focus({ preventScroll: true });
       shareModalState.input.select();
@@ -1426,7 +1442,7 @@ function openShareModal(payload) {
     shareModalState.nameLabel.textContent = payload.title || 'esta campaña';
   }
 
-  updateShareNetworks(payload.url, shareModalState.currentTitle);
+  updateShareNetworks(shareModalState.currentUrl, shareModalState.currentTitle);
 }
 
 function closeShareModal() {
@@ -1460,6 +1476,8 @@ function closeShareModal() {
       shareModalState.lastFocus.focus();
     }
   }
+
+  shareModalState.currentIdentifier = '';
 }
 
 function handleShareCopy(event) {
@@ -1474,6 +1492,7 @@ function handleShareCopy(event) {
   }
 
   var showFeedback = function () {
+    registerShareMetric('copy');
     if (!shareModalState.feedback) {
       return;
     }
@@ -1574,6 +1593,50 @@ function updateShareNetworks(url, title) {
 
     link.setAttribute('href', href);
   });
+}
+
+function getCsrfToken() {
+  if (typeof getCsrfToken.cachedToken !== 'undefined') {
+    return getCsrfToken.cachedToken;
+  }
+
+  var meta = document.querySelector('meta[name="csrf-token"]');
+  getCsrfToken.cachedToken = meta ? meta.getAttribute('content') || '' : '';
+  return getCsrfToken.cachedToken;
+}
+
+function registerShareMetric(source) {
+  var identifier = shareModalState.currentIdentifier;
+  if (!identifier || typeof window.fetch !== 'function') {
+    return;
+  }
+
+  var token = getCsrfToken();
+  if (!token) {
+    return;
+  }
+
+  var base = window.location.origin + (window.APP_BASE_PATH || '');
+  var endpoint = base + '/api/campanas/' + encodeURIComponent(identifier) + '/compartir';
+  var payload = {};
+  if (source) {
+    payload.source = source;
+  }
+
+  try {
+    fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(function () {});
+  } catch (err) {
+    // Ignorar errores de red silenciosamente
+  }
 }
 
 function initCampaignGalleryLightbox() {
@@ -2001,14 +2064,25 @@ function initCreatorProfileModal() {
 
 function normalizeSharePayload(target) {
   var payload = {
+    id: null,
     slug: '',
     url: '',
     title: ''
   };
 
   if (typeof target === 'string' || typeof target === 'number') {
-    payload.slug = String(target);
+    var normalized = String(target);
+    if (/^\d+$/.test(normalized)) {
+      payload.id = normalized;
+    } else {
+      payload.slug = normalized;
+    }
   } else if (target && typeof target === 'object') {
+    if (target.id !== undefined && target.id !== null && target.id !== '') {
+      payload.id = String(target.id);
+    } else if (target.identifier !== undefined && target.identifier !== null && target.identifier !== '') {
+      payload.id = String(target.identifier);
+    }
     if (target.slug !== undefined && target.slug !== null && target.slug !== '') {
       payload.slug = String(target.slug);
     }
@@ -2020,8 +2094,15 @@ function normalizeSharePayload(target) {
     }
   }
 
+  var identifier = '';
+  if (payload.id !== null && payload.id !== '') {
+    identifier = String(payload.id);
+  } else if (payload.slug !== '') {
+    identifier = payload.slug;
+  }
+
   if (!payload.url) {
-    payload.url = buildCampaignUrl(payload.slug);
+    payload.url = buildCampaignUrl(identifier || payload.slug);
   }
 
   if (!payload.title) {
@@ -2030,7 +2111,10 @@ function normalizeSharePayload(target) {
 
   return {
     url: payload.url,
-    title: payload.title
+    title: payload.title,
+    identifier: identifier,
+    slug: payload.slug,
+    id: payload.id
   };
 }
 

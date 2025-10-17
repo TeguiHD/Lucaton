@@ -581,6 +581,7 @@ ob_start();
                                     <?php
                                         $share_target = $campaign['slug'] ?? ($campaign['id'] ?? '');
                                     $share_payload = [
+                                        'id' => $campaign['id'] ?? null,
                                         'slug' => $share_target,
                                         'title' => $campaign['title'] ?? 'Campaña Lucatón',
                                         'url' => lucaton_campaign_url($campaign)

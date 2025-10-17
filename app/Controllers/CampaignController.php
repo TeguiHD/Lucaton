@@ -79,6 +79,7 @@ class CampaignController {
         $isCampaignOwner = $currentUserId !== null
             && $ownerId !== null
             && (int)$ownerId === (int)$currentUserId;
+        $this->recordCampaignView($campaign, $preview_mode, $isCampaignOwner);
         $stats = $this->buildCampaignStats($campaign);
         $campaignGoalReached = ($stats['goal_amount'] ?? 0) > 0
             && ($stats['raised_amount'] ?? 0) >= ($stats['goal_amount'] ?? 0);
@@ -1165,6 +1166,9 @@ class CampaignController {
             'progress' => (float)($campaign['progress'] ?? 0),
             'days_left' => $campaign['days_left'] ?? null,
             'donors' => (int)($campaign['donor_count'] ?? 0),
+            'views' => (int)($campaign['view_count'] ?? 0),
+            'conversion_rate' => isset($campaign['conversion_rate']) ? (float)$campaign['conversion_rate'] : null,
+            'views_per_donor' => isset($campaign['views_per_donor']) ? (float)$campaign['views_per_donor'] : null,
             'funded_at' => $campaign['funded_at'] ?? null,
         ];
     }
@@ -2283,6 +2287,253 @@ class CampaignController {
     private function hasCampaignColumn(string $column): bool
     {
         return in_array($column, $this->campaignColumns, true);
+    }
+
+    private function hasMetricsColumn(string $column): bool
+    {
+        return in_array($column, $this->metricsColumns, true);
+    }
+
+    private function incrementCampaignCounters(int $campaignId, array $columns, int $amount = 1): bool
+    {
+        if ($campaignId <= 0) {
+            return false;
+        }
+
+        $columns = array_values(array_unique(array_filter(array_map(static function ($column) {
+            return is_string($column) ? trim($column) : '';
+        }, $columns), static fn ($column) => $column !== '')));
+
+        if (empty($columns)) {
+            return false;
+        }
+
+        $setParts = [];
+        $params = [];
+
+        foreach ($columns as $column) {
+            if (!$this->hasCampaignColumn($column)) {
+                continue;
+            }
+
+            $sanitized = preg_replace('/[^a-z0-9_]+/i', '_', $column);
+            $param = ':inc_' . $sanitized;
+            $quoted = '`' . str_replace('`', '', $column) . '`';
+            $setParts[] = "{$quoted} = COALESCE({$quoted}, 0) + {$param}";
+            $params[$param] = $amount;
+        }
+
+        if (empty($setParts)) {
+            return false;
+        }
+
+        if ($this->hasCampaignColumn('updated_at')) {
+            $setParts[] = '`updated_at` = NOW()';
+        }
+
+        $sql = 'UPDATE campaigns SET ' . implode(', ', $setParts) . ' WHERE id = :campaign_id';
+        $params[':campaign_id'] = $campaignId;
+
+        try {
+            $this->db->execute($sql, $params);
+            return true;
+        } catch (Throwable $exception) {
+            Logger::debug('No se pudieron incrementar contadores en campaigns', [
+                'campaign_id' => $campaignId,
+                'columns' => $columns,
+                'error' => $exception->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    private function recordCampaignView(array &$campaign, bool $previewMode, bool $isCampaignOwner): void
+    {
+        $campaignId = (int)($campaign['id'] ?? 0);
+        if ($campaignId <= 0 || $previewMode) {
+            return;
+        }
+
+        if (!isset($_SESSION['campaign_page_views']) || !is_array($_SESSION['campaign_page_views'])) {
+            $_SESSION['campaign_page_views'] = [];
+        }
+
+        $sessionKey = 'campaign_' . $campaignId;
+        $lastViewTimestamp = (int)($_SESSION['campaign_page_views'][$sessionKey] ?? 0);
+        if ($lastViewTimestamp > 0 && (time() - $lastViewTimestamp) < 1800) {
+            return;
+        }
+
+        $_SESSION['campaign_page_views'][$sessionKey] = time();
+
+        $incremented = false;
+
+        if ($this->hasModularSchema && $this->hasMetricsColumn('view_count')) {
+            try {
+                $this->db->execute(
+                    "INSERT INTO campaign_metrics (campaign_id, view_count)
+                     VALUES (:campaign_id, 1)
+                     ON DUPLICATE KEY UPDATE view_count = view_count + 1, updated_at = NOW()",
+                    [':campaign_id' => $campaignId]
+                );
+                $incremented = true;
+            } catch (Throwable $exception) {
+                Logger::debug('No se pudo registrar la visita de campaña (modular)', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $incrementedCampaign = $this->incrementCampaignCounters($campaignId, ['view_count', 'views_count']);
+        if ($incrementedCampaign) {
+            $incremented = true;
+        }
+
+        if (!$incremented) {
+            return;
+        }
+
+        $currentViewCount = (int)($campaign['view_count'] ?? 0);
+        $campaign['view_count'] = $currentViewCount + 1;
+        if (isset($campaign['views_count'])) {
+            $campaign['views_count'] = (int)$campaign['views_count'] + 1;
+        }
+
+        $donorCount = (int)($campaign['donor_count'] ?? 0);
+        $campaign['conversion_rate'] = $this->computeConversionRate($donorCount, (int)$campaign['view_count']);
+        $campaign['views_per_donor'] = $this->computeViewsPerDonor($donorCount, (int)$campaign['view_count']);
+    }
+
+    public function registerShare($identifier): void
+    {
+        header('Content-Type: application/json');
+
+        $resolved = is_string($identifier) ? trim($identifier) : '';
+        if ($resolved === '') {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Identificador inválido']);
+            return;
+        }
+
+        $payloadRaw = file_get_contents('php://input') ?: '';
+        $payload = json_decode($payloadRaw, true);
+        $source = is_array($payload) && isset($payload['source'])
+            ? (string)$payload['source']
+            : null;
+
+        $campaignId = $this->resolveCampaignId($resolved);
+        if ($campaignId === null) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Campaña no encontrada']);
+            return;
+        }
+
+        $incremented = $this->incrementCampaignShareCount($campaignId);
+
+        if (!$incremented) {
+            echo json_encode([
+                'success' => false,
+                'campaign_id' => $campaignId,
+                'source' => $source
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'campaign_id' => $campaignId,
+            'source' => $source
+        ]);
+    }
+
+    private function computeConversionRate(int $donors, int $views): ?float
+    {
+        if ($views <= 0 || $donors <= 0) {
+            return null;
+        }
+
+        return round(($donors / $views) * 100, 2);
+    }
+
+    private function computeViewsPerDonor(int $donors, int $views): ?float
+    {
+        if ($donors <= 0 || $views <= 0) {
+            return null;
+        }
+
+        return round($views / max(1, $donors), 1);
+    }
+
+    private function resolveCampaignId(string $identifier): ?int
+    {
+        if ($identifier === '') {
+            return null;
+        }
+
+        $campaignModel = new Campaign();
+
+        if (ctype_digit($identifier)) {
+            $numericId = (int)$identifier;
+            try {
+                $row = $campaignModel->findById($numericId);
+                if ($row && isset($row['id'])) {
+                    return (int)$row['id'];
+                }
+            } catch (Throwable $exception) {
+                Logger::debug('No se pudo resolver campaña por id', [
+                    'identifier' => $identifier,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        try {
+            $row = $campaignModel->findBySlug($identifier);
+            if ($row && isset($row['id'])) {
+                return (int)$row['id'];
+            }
+        } catch (Throwable $exception) {
+            Logger::debug('No se pudo resolver campaña por slug', [
+                'identifier' => $identifier,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        return null;
+    }
+
+    private function incrementCampaignShareCount(int $campaignId): bool
+    {
+        if ($campaignId <= 0) {
+            return false;
+        }
+
+        $incremented = false;
+
+        if ($this->hasModularSchema && $this->hasMetricsColumn('share_count')) {
+            try {
+                $this->db->execute(
+                    "INSERT INTO campaign_metrics (campaign_id, share_count)
+                     VALUES (:campaign_id, 1)
+                     ON DUPLICATE KEY UPDATE share_count = share_count + 1, updated_at = NOW()",
+                    [':campaign_id' => $campaignId]
+                );
+                $incremented = true;
+            } catch (Throwable $exception) {
+                Logger::debug('No se pudo registrar el share (modular)', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $incrementedCampaign = $this->incrementCampaignCounters($campaignId, ['share_count', 'shares_count']);
+        if ($incrementedCampaign) {
+            $incremented = true;
+        }
+
+        return $incremented;
     }
 
     private function fetchCampaignLegacy($identifier, bool $includeDraft = false, ?string $ownerUsername = null): ?array {

@@ -2003,8 +2003,16 @@ class AdminController {
         $engagementStats = [
             'total_visitantes' => 0,
             'total_donantes' => 0,
+            'total_compartidos' => 0,
             'visitas_30_dias' => 0,
+            'compartidos_30_dias' => 0,
         ];
+
+        $statusBreakdown = [];
+        $topCampaigns = [];
+        $donationSeries = [];
+
+        $hasCampaignMetricsTable = $this->db->tableExists('campaign_metrics');
 
         $categoryLeaders = [];
         $aiByCategory = [];
@@ -2025,6 +2033,15 @@ class AdminController {
         if ($this->campaignHasStatus) {
             $campaignStats['publicadas'] = $this->countCampaignsByStatus(['published', 'active']);
             $campaignStats['en_revision'] = $this->countCampaignsByStatus(['under_review']);
+
+            $statusRows = $this->db->fetchAll("SELECT status, COUNT(*) AS total FROM campaigns GROUP BY status");
+            foreach ($statusRows as $row) {
+                $status = (string)($row['status'] ?? '');
+                if ($status === '') {
+                    continue;
+                }
+                $statusBreakdown[$status] = (int)($row['total'] ?? 0);
+            }
         }
 
         if ($this->campaignHasAiAssisted) {
@@ -2048,13 +2065,29 @@ class AdminController {
         }
 
         if ($this->db->columnExists('campaigns', 'goal_amount')) {
-            $row = $this->db->fetch("SELECT AVG(goal_amount) AS promedio FROM campaigns WHERE goal_amount > 0");
+            $goalWhere = ['goal_amount > 0'];
+            $params = [];
+
+            if ($this->campaignHasStatus) {
+                $goalWhere[] = "status IN ('published', 'active', 'under_review', 'paused')";
+            }
+
+            if ($this->campaignHasVisibility) {
+                $goalWhere[] = "visibility <> 'archived'";
+            }
+
+            $goalSql = 'SELECT AVG(goal_amount) AS promedio FROM campaigns';
+            if (!empty($goalWhere)) {
+                $goalSql .= ' WHERE ' . implode(' AND ', $goalWhere);
+            }
+
+            $row = $this->db->fetch($goalSql, $params);
             if ($row && $row['promedio'] !== null) {
                 $campaignStats['meta_promedio'] = round((float)$row['promedio'], 2);
             }
         }
 
-        if ($this->db->tableExists('campaign_metrics')) {
+        if ($hasCampaignMetricsTable) {
             $metricsRow = $this->db->fetch(
                 "SELECT
                     SUM(view_count) AS views,
@@ -2067,6 +2100,7 @@ class AdminController {
             if ($metricsRow) {
                 $engagementStats['total_visitantes'] = (int)($metricsRow['views'] ?? 0);
                 $engagementStats['total_donantes'] = (int)($metricsRow['donors'] ?? 0);
+                $engagementStats['total_compartidos'] = (int)($metricsRow['shares'] ?? 0);
                 $donationStats['monto_total'] = (float)($metricsRow['raised'] ?? 0);
             }
 
@@ -2074,7 +2108,8 @@ class AdminController {
                 "SELECT
                     SUM(view_count) AS views,
                     SUM(donor_count) AS donors,
-                    SUM(raised_amount) AS raised
+                    SUM(raised_amount) AS raised,
+                    SUM(share_count) AS shares
                  FROM campaign_metrics
                  WHERE updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
             );
@@ -2083,6 +2118,58 @@ class AdminController {
                 $engagementStats['visitas_30_dias'] = (int)($recentMetricsRow['views'] ?? 0);
                 $donationStats['donaciones_30_dias'] = (int)($recentMetricsRow['donors'] ?? 0);
                 $donationStats['monto_30_dias'] = (float)($recentMetricsRow['raised'] ?? 0);
+                $engagementStats['compartidos_30_dias'] = (int)($recentMetricsRow['shares'] ?? 0);
+            }
+        }
+
+        if (($engagementStats['total_visitantes'] === 0 || $engagementStats['total_compartidos'] === 0) && !empty($this->campaignColumns)) {
+            $viewCols = array_intersect(['view_count', 'views_count'], $this->campaignColumns);
+            $shareCols = array_intersect(['share_count', 'shares_count'], $this->campaignColumns);
+
+            if ($engagementStats['total_visitantes'] === 0 && !empty($viewCols)) {
+                $sumParts = array_map(static fn ($col) => "COALESCE(c.{$col},0)", $viewCols);
+                $sql = 'SELECT SUM(' . implode(' + ', $sumParts) . ') AS total_views FROM campaigns c';
+                $row = $this->db->fetch($sql);
+                $engagementStats['total_visitantes'] = (int)($row['total_views'] ?? 0);
+            }
+
+            if ($engagementStats['total_compartidos'] === 0 && !empty($shareCols)) {
+                $sumParts = array_map(static fn ($col) => "COALESCE(c.{$col},0)", $shareCols);
+                $sql = 'SELECT SUM(' . implode(' + ', $sumParts) . ') AS total_shares FROM campaigns c';
+                $row = $this->db->fetch($sql);
+                $engagementStats['total_compartidos'] = (int)($row['total_shares'] ?? 0);
+            }
+        }
+
+        if ($engagementStats['visitas_30_dias'] === 0) {
+            $viewsWhere = [];
+            if (in_array('view_count', $this->campaignColumns, true)) {
+                $sumCols = ['COALESCE(c.view_count,0)'];
+                if (in_array('views_count', $this->campaignColumns, true)) {
+                    $sumCols[] = 'COALESCE(c.views_count,0)';
+                }
+                $sql = 'SELECT SUM(' . implode(' + ', $sumCols) . ') AS views FROM campaigns c';
+                if ($this->campaignHasCreatedAt && in_array('updated_at', $this->campaignColumns, true)) {
+                    $viewsWhere[] = 'c.updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                }
+                if (!empty($viewsWhere)) {
+                    $sql .= ' WHERE ' . implode(' AND ', $viewsWhere);
+                }
+                $row = $this->db->fetch($sql);
+                $engagementStats['visitas_30_dias'] = (int)($row['views'] ?? 0);
+            }
+        }
+
+        if ($engagementStats['compartidos_30_dias'] === 0) {
+            $shareCols = array_intersect(['share_count', 'shares_count'], $this->campaignColumns);
+            if (!empty($shareCols)) {
+                $sumCols = array_map(static fn ($col) => "COALESCE(c.{$col},0)", $shareCols);
+                $sql = 'SELECT SUM(' . implode(' + ', $sumCols) . ') AS shares FROM campaigns c';
+                if (in_array('updated_at', $this->campaignColumns, true)) {
+                    $sql .= ' WHERE c.updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                }
+                $row = $this->db->fetch($sql);
+                $engagementStats['compartidos_30_dias'] = (int)($row['shares'] ?? 0);
             }
         }
 
@@ -2125,7 +2212,7 @@ class AdminController {
             $donationStats['ratio_visitantes_donantes'] = round($engagementStats['total_visitantes'] / max(1, $engagementStats['total_donantes']), 2);
         }
 
-        if ($this->db->tableExists('campaign_categories') && $this->db->tableExists('campaign_metrics')) {
+        if ($this->db->tableExists('campaign_categories') && $hasCampaignMetricsTable) {
             $categoryRows = $this->db->fetchAll(
                 "SELECT cat.name, cat.slug,
                         SUM(cm.raised_amount) AS raised,
@@ -2172,6 +2259,123 @@ class AdminController {
             }
         }
 
+        if ($this->db->tableExists('donations') && $this->db->columnExists('donations', 'created_at')) {
+            $where = [];
+            $params = [];
+
+            if ($this->db->columnExists('donations', 'status')) {
+                $where[] = "status = 'completed'";
+            }
+
+            $where[] = 'created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)';
+            $sql = 'SELECT DATE(created_at) AS day, SUM(amount) AS total, COUNT(*) AS donations FROM donations';
+            if (!empty($where)) {
+                $sql .= ' WHERE ' . implode(' AND ', $where);
+            }
+            $sql .= ' GROUP BY DATE(created_at) ORDER BY day ASC';
+
+            $seriesRows = $this->db->fetchAll($sql, $params);
+            foreach ($seriesRows as $row) {
+                $label = $row['day'] ?? null;
+                if (!$label) {
+                    continue;
+                }
+                $date = DateTime::createFromFormat('Y-m-d', (string)$label);
+                $donationSeries[] = [
+                    'label' => $date ? $date->format('d/m') : (string)$label,
+                    'value' => (float)($row['total'] ?? 0),
+                    'donations' => (int)($row['donations'] ?? 0),
+                ];
+            }
+        }
+
+        $topCampaignSqlSelect = [
+            'c.id',
+            'c.title',
+        ];
+
+        if (in_array('slug', $this->campaignColumns, true)) {
+            $topCampaignSqlSelect[] = 'c.slug';
+        }
+
+        $viewExpr = [];
+        if (in_array('view_count', $this->campaignColumns, true)) {
+            $viewExpr[] = 'COALESCE(c.view_count, 0)';
+        }
+        if (in_array('views_count', $this->campaignColumns, true)) {
+            $viewExpr[] = 'COALESCE(c.views_count, 0)';
+        }
+        if ($hasCampaignMetricsTable) {
+            $viewExpr[] = 'COALESCE(cm.view_count, 0)';
+        }
+        if (empty($viewExpr)) {
+            $viewExpr[] = '0';
+        }
+        $viewSql = implode(' + ', $viewExpr);
+
+        $shareExpr = [];
+        if (in_array('share_count', $this->campaignColumns, true)) {
+            $shareExpr[] = 'COALESCE(c.share_count, 0)';
+        }
+        if (in_array('shares_count', $this->campaignColumns, true)) {
+            $shareExpr[] = 'COALESCE(c.shares_count, 0)';
+        }
+        if ($hasCampaignMetricsTable) {
+            $shareExpr[] = 'COALESCE(cm.share_count, 0)';
+        }
+        if (empty($shareExpr)) {
+            $shareExpr[] = '0';
+        }
+        $shareSql = implode(' + ', $shareExpr);
+
+        $donorExpr = [];
+        if (in_array('donor_count', $this->campaignColumns, true)) {
+            $donorExpr[] = 'COALESCE(c.donor_count, 0)';
+        }
+        if (in_array('donors_count', $this->campaignColumns, true)) {
+            $donorExpr[] = 'COALESCE(c.donors_count, 0)';
+        }
+        if ($hasCampaignMetricsTable) {
+            $donorExpr[] = 'COALESCE(cm.donor_count, 0)';
+        }
+        if (empty($donorExpr)) {
+            $donorExpr[] = '0';
+        }
+        $donorSql = implode(' + ', $donorExpr);
+
+        $topSelect = implode(', ', $topCampaignSqlSelect);
+        $topCampaignSql = "SELECT {$topSelect}, ({$viewSql}) AS views, ({$shareSql}) AS shares, ({$donorSql}) AS donors
+            FROM campaigns c";
+
+        if ($hasCampaignMetricsTable) {
+            $topCampaignSql .= ' LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id';
+        }
+
+        $topConditions = [];
+        if ($this->campaignHasStatus) {
+            $topConditions[] = "c.status IN ('published','active','under_review','paused')";
+        }
+        if ($this->campaignHasVisibility) {
+            $topConditions[] = "c.visibility <> 'archived'";
+        }
+        if (!empty($topConditions)) {
+            $topCampaignSql .= ' WHERE ' . implode(' AND ', $topConditions);
+        }
+        $topCampaignSql .= ' ORDER BY views DESC LIMIT 5';
+
+        if ($this->db->tableExists('campaigns')) {
+            $topCampaigns = array_map(static function (array $row): array {
+                return [
+                    'id' => (int)($row['id'] ?? 0),
+                    'title' => $row['title'] ?? 'Campaña',
+                    'slug' => $row['slug'] ?? null,
+                    'views' => (int)($row['views'] ?? 0),
+                    'shares' => (int)($row['shares'] ?? 0),
+                    'donors' => (int)($row['donors'] ?? 0),
+                ];
+            }, $this->db->fetchAll($topCampaignSql) ?: []);
+        }
+
         return [
             'supported' => true,
             'campaign' => $campaignStats,
@@ -2179,6 +2383,9 @@ class AdminController {
             'engagement' => $engagementStats,
             'category_leaders' => $categoryLeaders,
             'ai_by_category' => $aiByCategory,
+            'status_breakdown' => $statusBreakdown,
+            'donation_series' => $donationSeries,
+            'top_campaigns' => $topCampaigns,
         ];
     }
 

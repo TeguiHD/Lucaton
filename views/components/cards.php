@@ -130,11 +130,22 @@ function render_campaign_card($campaign, $options = []) {
         $html .= '</span>';
         $html .= '</div>';
 
-        if (!empty($options['show_category']) && !empty($category_label)) {
-            $html .= '<div class="absolute top-2 left-2">';
-            $html .= '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium glass-subtle text-gray-800">';
-            $html .= htmlspecialchars($category_label);
-            $html .= '</span>';
+        $showCategory = !empty($options['show_category']) && !empty($category_label);
+        $showFeatured = !empty($campaign['featured']);
+
+        if ($showCategory || $showFeatured) {
+            $html .= '<div class="absolute top-2 left-2 flex flex-col gap-1">';
+            if ($showFeatured) {
+                $html .= '<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">';
+                $html .= '<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M9.049 2.927a1 1 0 011.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.802 2.037a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.802-2.037a1 1 0 00-1.176 0l-2.802 2.037c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.293z"/></svg>';
+                $html .= 'Destacada';
+                $html .= '</span>';
+            }
+            if ($showCategory) {
+                $html .= '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium glass-subtle text-gray-800">';
+                $html .= htmlspecialchars($category_label);
+                $html .= '</span>';
+            }
             $html .= '</div>';
         }
 
@@ -212,6 +223,7 @@ function render_campaign_card($campaign, $options = []) {
 
         $share_target = $slug ?? ($campaign['id'] ?? '');
         $share_payload = [
+            'id' => $campaign['id'] ?? null,
             'slug' => $share_target,
             'title' => $campaign['title'] ?? 'Campaña Lucatón',
             'url' => $detail_url

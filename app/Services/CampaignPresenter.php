@@ -115,6 +115,12 @@ class CampaignPresenter {
         $shareCount = (int)($row['share_count'] ?? 0);
         $viewCount = (int)($row['view_count'] ?? 0);
         $averageDonation = (float)($row['average_donation'] ?? 0);
+        $conversionRate = ($viewCount > 0 && $donorCount > 0)
+            ? round(($donorCount / $viewCount) * 100, 2)
+            : null;
+        $viewsPerDonor = ($viewCount > 0 && $donorCount > 0)
+            ? round($viewCount / max(1, $donorCount), 1)
+            : null;
 
         $summary = $row['summary'] ?? $row['short_description'] ?? ($row['description'] ?? '');
         $story = $row['story'] ?? $row['full_story'] ?? ($row['description'] ?? $summary);
@@ -169,6 +175,8 @@ class CampaignPresenter {
             'share_count' => $shareCount,
             'view_count' => $viewCount,
             'average_donation' => $averageDonation,
+            'conversion_rate' => $conversionRate,
+            'views_per_donor' => $viewsPerDonor,
             'last_donation_at' => $row['last_donation_at'] ?? null,
             'funded_at' => $row['funded_at'] ?? null,
             'funding_notified_at' => $row['funding_notified_at'] ?? null,

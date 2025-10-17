@@ -117,6 +117,7 @@ $router->group(['middleware' => 'admin'], function($router) {
 // === RUTAS DE API PÚBLICAS ===
 $router->group(['middleware' => 'csrf'], function($router) {
     $router->post('/api/upload', 'UploadController@handle');
+    $router->post('/api/campanas/{identifier}/compartir', 'CampaignController@registerShare');
     $router->post('/api/donate/{id}', 'DonationController@simulate');
 });
 

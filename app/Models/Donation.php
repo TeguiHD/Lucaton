@@ -745,8 +745,12 @@ class Donation {
 
         $campaignId = (int)$donation['campaign_id'];
 
-        if (!$this->hasCampaignMetrics()) {
-            $totals = $this->calculateCampaignDonationTotals($campaignId);
+        $totals = $this->calculateCampaignDonationTotals($campaignId);
+        if (empty($totals['last_donation_at']) && !$isRefund) {
+            $totals['last_donation_at'] = date('Y-m-d H:i:s');
+        }
+
+        if (!$this->hasCampaignMetrics() || !$this->ensureCampaignMetricsRowExists($campaignId)) {
             $this->updateCampaignAggregateFields($campaignId, $totals);
             if (!$isRefund) {
                 $this->finalizeCampaignIfEligible($campaignId, $totals['total_amount']);
@@ -754,51 +758,10 @@ class Donation {
             return;
         }
 
-        if (!$this->ensureCampaignMetricsRowExists($campaignId)) {
-            $totals = $this->calculateCampaignDonationTotals($campaignId);
-            $this->updateCampaignAggregateFields($campaignId, $totals);
-            if (!$isRefund) {
-                $this->finalizeCampaignIfEligible($campaignId, $totals['total_amount']);
-            }
-            return;
-        }
+        $this->persistCampaignMetricsSnapshot($campaignId, $totals);
 
-        $amount = (float)$donation['amount'];
-        $operator = $isRefund ? -1 : 1;
-
-        try {
-            $affectedRows = $this->db->execute(
-                "UPDATE campaign_metrics
-                 SET raised_amount = GREATEST(0, raised_amount + (? * ?)),
-                     donor_count = GREATEST(0, donor_count + ?),
-                     average_donation = CASE
-                         WHEN (donor_count + ?) > 0 THEN
-                            ROUND(GREATEST(0, (raised_amount + (? * ?))) / (donor_count + ?), 2)
-                         ELSE 0
-                     END,
-                     last_donation_at = CASE WHEN ? > 0 THEN NOW() ELSE last_donation_at END,
-                     updated_at = NOW()
-                 WHERE campaign_id = ?",
-                [
-                    $operator, $amount,
-                    $operator,
-                    $operator,
-                    $operator, $amount,
-                    $operator,
-                    $operator > 0 ? 1 : 0,
-                    $campaignId
-                ]
-            );
-
-            if ($affectedRows === 0) {
-                $this->recalculateCampaignMetrics($campaignId, $isRefund);
-            }
-        } catch (Throwable $exception) {
-            Logger::warning('No se pudo actualizar campaign_metrics tras una donación', [
-                'campaign_id' => $campaignId,
-                'error' => $exception->getMessage()
-            ]);
-            $this->recalculateCampaignMetrics($campaignId, $isRefund);
+        if (!$isRefund) {
+            $this->finalizeCampaignIfEligible($campaignId, $totals['total_amount']);
         }
 
         $this->syncCampaignProgress($campaignId, $isRefund);
@@ -843,30 +806,74 @@ class Donation {
         }
 
         $totals = $this->calculateCampaignDonationTotals($campaignId);
-        $average = $totals['donation_count'] > 0
-            ? round($totals['total_amount'] / $totals['donation_count'], 2)
+        if (empty($totals['last_donation_at']) && !$isRefund) {
+            $totals['last_donation_at'] = date('Y-m-d H:i:s');
+        }
+        $this->persistCampaignMetricsSnapshot($campaignId, $totals);
+    }
+
+    private function persistCampaignMetricsSnapshot(int $campaignId, array $totals): void
+    {
+        if ($campaignId <= 0 || !$this->hasCampaignMetrics()) {
+            return;
+        }
+
+        $uniqueDonors = max(0, (int)($totals['unique_donors'] ?? 0));
+        $donationCount = max(0, (int)($totals['donation_count'] ?? 0));
+        $average = $donationCount > 0
+            ? round($totals['total_amount'] / $donationCount, 2)
             : 0.0;
 
         $updatePayload = [
             'raised_amount' => $totals['total_amount'],
-            'donor_count' => max(0, $totals['donation_count']),
+            'donor_count' => $uniqueDonors,
             'average_donation' => $average,
             'updated_at' => date('Y-m-d H:i:s'),
         ];
 
-        if (!empty($totals['last_donation_at'])) {
+        if (array_key_exists('last_donation_at', $totals)) {
             $updatePayload['last_donation_at'] = $totals['last_donation_at'];
-        } elseif (!$isRefund) {
-            $updatePayload['last_donation_at'] = date('Y-m-d H:i:s');
         }
 
         try {
             $this->db->update('campaign_metrics', $updatePayload, 'campaign_id = ?', [$campaignId]);
         } catch (Throwable $exception) {
-            Logger::warning('No se pudo recalcular campaign_metrics tras una donación', [
+            Logger::warning('No se pudo persistir campaign_metrics', [
                 'campaign_id' => $campaignId,
                 'error' => $exception->getMessage()
             ]);
+        }
+
+        $campaignUpdate = [];
+        if ($this->campaignSupports('donor_count')) {
+            $campaignUpdate['donor_count'] = $uniqueDonors;
+        }
+        if ($this->campaignSupports('donors_count')) {
+            $campaignUpdate['donors_count'] = $uniqueDonors;
+        }
+        if ($this->campaignSupports('supporters_count')) {
+            $campaignUpdate['supporters_count'] = $uniqueDonors;
+        }
+        if ($this->campaignSupports('supporter_count')) {
+            $campaignUpdate['supporter_count'] = $uniqueDonors;
+        }
+        if ($this->campaignSupports('donation_count')) {
+            $campaignUpdate['donation_count'] = $donationCount;
+        }
+
+        if (!empty($campaignUpdate)) {
+            if ($this->campaignSupports('updated_at')) {
+                $campaignUpdate['updated_at'] = date('Y-m-d H:i:s');
+            }
+
+            try {
+                $this->db->update('campaigns', $campaignUpdate, 'id = ?', [$campaignId]);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo sincronizar contadores en campaigns', [
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
         }
     }
 
@@ -887,13 +894,14 @@ class Donation {
 
         $totals = $this->calculateCampaignDonationTotals($campaignId);
         $amountForProgress = (float)($totals['total_amount'] ?? 0.0);
-        $donorTotal = (int)($totals['donation_count'] ?? 0);
+        $uniqueDonors = (int)($totals['unique_donors'] ?? 0);
+        $donationTotal = (int)($totals['donation_count'] ?? 0);
 
         $metricsRaised = (float)($snapshot['metrics_raised'] ?? 0.0);
         $metricsDonors = (int)($snapshot['metrics_donors'] ?? 0);
 
         if ($this->hasCampaignMetrics()
-            && (abs($metricsRaised - $amountForProgress) > 0.01 || $metricsDonors !== $donorTotal)
+            && (abs($metricsRaised - $amountForProgress) > 0.01 || $metricsDonors !== $uniqueDonors)
         ) {
             $this->recalculateCampaignMetrics($campaignId, $isRefund);
             $snapshot = $this->fetchCampaignSnapshot($campaignId) ?? $snapshot;
@@ -906,7 +914,7 @@ class Donation {
             $raised = $metricsRaised;
         }
 
-        $donors = $donorTotal;
+        $donors = $uniqueDonors;
         if ($donors <= 0 && $metricsDonors > 0) {
             $donors = $metricsDonors;
         }
@@ -928,11 +936,17 @@ class Donation {
         if ($this->campaignSupports('donor_count')) {
             $updatePayload['donor_count'] = max(0, $donors);
         }
+        if ($this->campaignSupports('donors_count')) {
+            $updatePayload['donors_count'] = max(0, $donors);
+        }
         if ($this->campaignSupports('supporters_count')) {
             $updatePayload['supporters_count'] = max(0, $donors);
         }
+        if ($this->campaignSupports('supporter_count')) {
+            $updatePayload['supporter_count'] = max(0, $donors);
+        }
         if ($this->campaignSupports('donation_count')) {
-            $updatePayload['donation_count'] = max(0, $donorTotal);
+            $updatePayload['donation_count'] = max(0, $donationTotal);
         }
 
         $progress = 0.0;
@@ -1308,13 +1322,17 @@ class Donation {
             return [
                 'total_amount' => 0.0,
                 'donation_count' => 0,
+                'unique_donors' => 0,
                 'last_donation_at' => null,
             ];
         }
 
+        $uniqueDonors = $this->calculateUniqueDonors($campaignId);
+
         return [
             'total_amount' => (float)($row['total_amount'] ?? 0),
             'donation_count' => (int)($row['donation_count'] ?? 0),
+            'unique_donors' => $uniqueDonors,
             'last_donation_at' => $this->supportsColumn('created_at')
                 ? ($row['last_donation_at'] ?? null)
                 : null,
@@ -1333,12 +1351,22 @@ class Donation {
             $updatePayload['current_amount'] = $totals['total_amount'];
         }
 
+        $uniqueDonors = max(0, (int)($totals['unique_donors'] ?? 0));
+
         if ($this->campaignSupports('donor_count')) {
-            $updatePayload['donor_count'] = max(0, $totals['donation_count']);
+            $updatePayload['donor_count'] = $uniqueDonors;
+        }
+
+        if ($this->campaignSupports('donors_count')) {
+            $updatePayload['donors_count'] = $uniqueDonors;
         }
 
         if ($this->campaignSupports('supporters_count')) {
-            $updatePayload['supporters_count'] = max(0, $totals['donation_count']);
+            $updatePayload['supporters_count'] = $uniqueDonors;
+        }
+
+        if ($this->campaignSupports('supporter_count')) {
+            $updatePayload['supporter_count'] = $uniqueDonors;
         }
 
         if ($this->campaignSupports('donation_count')) {
@@ -1566,6 +1594,53 @@ class Donation {
         }
 
         return array_values(array_unique(array_filter($columns, static fn ($value) => $value !== '')));
+    }
+
+    private function calculateUniqueDonors(int $campaignId): int
+    {
+        if ($campaignId <= 0) {
+            return 0;
+        }
+
+        $caseParts = [];
+        if ($this->supportsColumn('supporter_id')) {
+            $caseParts[] = "WHEN supporter_id IS NOT NULL THEN CONCAT('id:', supporter_id)";
+        }
+
+        if ($this->supportsColumn('supporter_email')) {
+            $caseParts[] = "WHEN supporter_id IS NULL AND supporter_email IS NOT NULL AND supporter_email <> '' THEN CONCAT('email:', LOWER(supporter_email))";
+        }
+
+        $fallback = "CONCAT('anon:', id)";
+        $caseSql = $fallback;
+        if (!empty($caseParts)) {
+            $caseSql = 'CASE ' . implode(' ', $caseParts) . ' ELSE ' . $fallback . ' END';
+        }
+
+        $condition = 'campaign_id = ?';
+        $params = [$campaignId];
+        if ($this->supportsColumn('status')) {
+            $condition .= " AND status = 'completed'";
+        }
+
+        $sql = "SELECT COUNT(*) AS donors FROM (
+                    SELECT {$caseSql} AS donor_key
+                    FROM donations
+                    WHERE {$condition}
+                    GROUP BY donor_key
+                ) AS donor_keys";
+
+        try {
+            $row = $this->db->fetch($sql, $params);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo calcular el total de donantes únicos', [
+                'campaign_id' => $campaignId,
+                'error' => $exception->getMessage()
+            ]);
+            return 0;
+        }
+
+        return (int)($row['donors'] ?? 0);
     }
 
     private function buildUserMatchCondition(int $userId, string $alias = '', ?string $email = null): ?array
