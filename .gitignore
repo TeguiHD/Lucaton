@@ -22,6 +22,7 @@ composer-setup.php
 /public/storage/avatars/*
 /public/storage/campaigns/*
 /storage/ai_files/*
+/storage/donations/*
 
 # IDE and editor files
 .vscode/
@@ -78,6 +79,8 @@ clover.xml
 !public/storage/campaigns/.gitkeep
 /storage/logs/mail-previews/*
 !storage/logs/mail-previews/.gitkeep
+!storage/donations/.gitkeep
+!storage/donations/receipts/.gitkeep
 
 # Pendientes and task files (local development only)
 /Pendientes/

@@ -5,9 +5,11 @@ class CampaignMediaUploadService
     private const COVER_MAX_FILE_SIZE = 5_242_880; // 5 MB
     private const GALLERY_MAX_FILE_SIZE = 6_291_456; // 6 MB
     private const ATTACHMENT_MAX_FILE_SIZE = 8_388_608; // 8 MB
+    private const UPDATE_MAX_FILE_SIZE = 6_291_456; // 6 MB
 
     private const GALLERY_MAX_FILES = 5;
     private const ATTACHMENT_MAX_FILES = 5;
+    private const UPDATE_MAX_FILES = 3;
 
     public const PUBLIC_BASE_DIR = '/public/storage/campaigns';
     public const PRIVATE_BASE_DIR = '/storage/private/campaigns';
@@ -77,6 +79,46 @@ class CampaignMediaUploadService
 
             $stored[] = [
                 'url' => self::PUBLIC_BASE_DIR . '/' . $campaignId . '/gallery/' . $uniqueName,
+                'filename' => $file['name'],
+                'mime' => $file['mime'],
+                'size' => $file['size']
+            ];
+        }
+
+        return $stored;
+    }
+
+    /**
+     * @return array<int, array{url:string, filename:string, mime:string, size:int}>
+     */
+    public function storeUpdateImages(array $files, int $campaignId, int $userId, int $existingCount = 0): array
+    {
+        $normalizedFiles = $this->normalizeMultipleFiles($files);
+        if (empty($normalizedFiles)) {
+            return [];
+        }
+
+        if ($existingCount + count($normalizedFiles) > self::UPDATE_MAX_FILES) {
+            throw new RuntimeException('Puedes adjuntar hasta 3 imágenes por actualización.');
+        }
+
+        $updatesDir = $this->ensureDirectory(self::PUBLIC_BASE_DIR . '/' . $campaignId . '/updates');
+        $stored = [];
+
+        foreach ($normalizedFiles as $file) {
+            $this->assertValidUpload($file, self::UPDATE_MAX_FILE_SIZE, self::IMAGE_MIME_TYPES, true);
+
+            $extension = self::IMAGE_MIME_TYPES[$file['mime']];
+            $uniqueName = $this->generateFilename('update-' . $campaignId, $userId, $extension);
+            $destination = $updatesDir . '/' . $uniqueName;
+
+            if (!move_uploaded_file($file['tmp_name'], $destination)) {
+                throw new RuntimeException('No pudimos guardar una de las imágenes de la actualización.');
+            }
+            @chmod($destination, 0644);
+
+            $stored[] = [
+                'url' => self::PUBLIC_BASE_DIR . '/' . $campaignId . '/updates/' . $uniqueName,
                 'filename' => $file['name'],
                 'mime' => $file['mime'],
                 'size' => $file['size']

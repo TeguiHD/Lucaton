@@ -366,15 +366,15 @@ $page_description = 'Descubre y apoya campañas de crowdfunding en Chile. Proyec
                                         $timeLabel = 'Sin fecha límite';
                                     }
                                 ?>
-                                <div class="mt-4">
-                                    <div class="flex items-center justify-between text-sm text-gray-500 mb-2">
-                                        <span>$<?php echo $raisedDisplay; ?> recaudados</span>
+                                <div class="mt-4 space-y-2">
+                                    <div class="flex items-center justify-between text-sm text-gray-500">
+                                        <span class="font-medium text-gray-900">$<?php echo $raisedDisplay; ?> recaudados</span>
                                         <span><?php echo $progressDisplay; ?>% completado</span>
                                     </div>
-                                    <div class="w-full bg-gray-200 rounded-full h-2">
-                                        <div class="bg-copihue-600 h-2 rounded-full" style="width: <?php echo $progressPercent; ?>%"></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden" aria-hidden="true">
+                                        <div class="h-2 bg-gradient-to-r from-copihue-500 to-copihue-600 transition-all duration-500 ease-out" style="width: <?php echo $progressPercent; ?>%"></div>
                                     </div>
-                                    <div class="mt-2 flex items-center justify-between text-sm text-gray-500">
+                                    <div class="flex items-center justify-between text-xs text-gray-500">
                                         <span><?php echo $donorCount; ?> colaboradores</span>
                                         <span><?php echo htmlspecialchars($timeLabel); ?></span>
                                     </div>

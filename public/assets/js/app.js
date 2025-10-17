@@ -1307,6 +1307,7 @@ var FAVORITES_STORAGE_KEY = 'lucaton_favs';
 var galleryLightboxState = {
   items: [],
   modal: null,
+  containerEl: null,
   imageEl: null,
   captionEl: null,
   counterEl: null,
@@ -1324,7 +1325,9 @@ var creatorProfileModalState = {
   data: null,
   avatarEl: null,
   nameEl: null,
-  usernameEl: null
+  usernameEl: null,
+  socialWrapper: null,
+  socialListEl: null
 };
 
 function initShareModal() {
@@ -1574,23 +1577,63 @@ function updateShareNetworks(url, title) {
 }
 
 function initCampaignGalleryLightbox() {
-  if (!Array.isArray(window.__campaignGallery) || window.__campaignGallery.length === 0) {
-    return;
-  }
-
   var modal = document.querySelector('[data-gallery-lightbox]');
   var triggers = document.querySelectorAll('[data-gallery-trigger]');
   if (!modal || !triggers.length) {
     return;
   }
 
-  galleryLightboxState.items = window.__campaignGallery;
+  var triggerItems = [];
+  triggers.forEach(function (trigger) {
+    var url = trigger.getAttribute('data-gallery-url') || '';
+    if (!url) {
+      var imgEl = trigger.querySelector('img');
+      if (imgEl) {
+        url = imgEl.getAttribute('src') || '';
+      }
+    }
+    if (!url) {
+      return;
+    }
+    trigger.setAttribute('data-gallery-index', String(triggerItems.length));
+    triggerItems.push({
+      url: url,
+      caption: trigger.getAttribute('data-gallery-caption') || ''
+    });
+  });
+
+  if (!triggerItems.length && Array.isArray(window.__campaignGallery)) {
+    triggerItems = window.__campaignGallery;
+  }
+
+  if (!Array.isArray(triggerItems) || triggerItems.length === 0) {
+    return;
+  }
+
+  galleryLightboxState.items = triggerItems;
   galleryLightboxState.modal = modal;
+  galleryLightboxState.containerEl = modal.querySelector('[data-gallery-modal-container]');
   galleryLightboxState.imageEl = modal.querySelector('[data-gallery-current-image]');
   galleryLightboxState.captionEl = modal.querySelector('[data-gallery-current-caption]');
   galleryLightboxState.counterEl = modal.querySelector('[data-gallery-counter]');
   galleryLightboxState.prevButton = modal.querySelector('[data-gallery-prev]');
   galleryLightboxState.nextButton = modal.querySelector('[data-gallery-next]');
+
+  function adjustGalleryLayout() {
+    var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 768;
+
+    if (galleryLightboxState.containerEl) {
+      var targetWidth = Math.min(Math.max(360, viewportWidth * 0.9), 1100);
+      galleryLightboxState.containerEl.style.width = targetWidth + 'px';
+    }
+
+    if (galleryLightboxState.imageEl) {
+      var maxHeight = Math.min(Math.max(240, viewportHeight * 0.78), viewportHeight - 160);
+      galleryLightboxState.imageEl.style.maxHeight = maxHeight + 'px';
+      galleryLightboxState.imageEl.style.maxWidth = Math.min(Math.max(320, viewportWidth * 0.88), 1400) + 'px';
+    }
+  }
 
   function updateLightbox() {
     var index = galleryLightboxState.currentIndex;
@@ -1625,6 +1668,8 @@ function initCampaignGalleryLightbox() {
       galleryLightboxState.nextButton.disabled = hideControls;
       galleryLightboxState.nextButton.style.display = hideControls ? 'none' : '';
     }
+
+    adjustGalleryLayout();
   }
 
   function openGallery(index) {
@@ -1640,6 +1685,7 @@ function initCampaignGalleryLightbox() {
       modal.focus();
     }
     document.body.classList.add('overflow-hidden');
+    adjustGalleryLayout();
   }
 
   function closeGallery() {
@@ -1710,6 +1756,12 @@ function initCampaignGalleryLightbox() {
       changeSlide(1);
     } else if (event.key === 'ArrowLeft') {
       changeSlide(-1);
+    }
+  });
+
+  window.addEventListener('resize', function () {
+    if (galleryLightboxState.isOpen) {
+      adjustGalleryLayout();
     }
   });
 }
@@ -1837,6 +1889,8 @@ function initCreatorProfileModal() {
   creatorProfileModalState.avatarEl = modal.querySelector('[data-creator-profile-avatar]');
   creatorProfileModalState.nameEl = modal.querySelector('[data-creator-profile-name]');
   creatorProfileModalState.usernameEl = modal.querySelector('[data-creator-profile-username]');
+  creatorProfileModalState.socialWrapper = modal.querySelector('[data-creator-profile-socials-wrapper]');
+  creatorProfileModalState.socialListEl = modal.querySelector('[data-creator-profile-socials]');
 
   function renderCreatorProfile() {
     var data = creatorProfileModalState.data || {};
@@ -1858,6 +1912,35 @@ function initCreatorProfileModal() {
 
     if (creatorProfileModalState.usernameEl) {
       creatorProfileModalState.usernameEl.textContent = data.username ? '@' + data.username : '';
+    }
+
+    if (creatorProfileModalState.socialWrapper && creatorProfileModalState.socialListEl) {
+      creatorProfileModalState.socialListEl.innerHTML = '';
+      var socials = Array.isArray(data.social) ? data.social : [];
+      if (socials.length) {
+        creatorProfileModalState.socialWrapper.classList.remove('hidden');
+        socials.forEach(function (item) {
+          if (!item || !item.url) {
+            return;
+          }
+
+          var link = document.createElement('a');
+          link.href = item.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.className = 'inline-flex items-center gap-2 rounded-full border border-copihue-200 bg-white px-3 py-1 text-xs font-semibold text-copihue-700 transition hover:bg-copihue-50 focus:outline-none focus:ring-2 focus:ring-copihue-500';
+
+          var badgeInitial = (item.initial || '').toString().toUpperCase().slice(0, 2) || 'EN';
+          var badgeLabel = item.label || 'Enlace';
+
+          link.innerHTML = '<span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-copihue-100 text-copihue-600 text-[11px] font-bold">'
+            + badgeInitial + '</span><span>' + badgeLabel + '</span>';
+
+          creatorProfileModalState.socialListEl.appendChild(link);
+        });
+      } else {
+        creatorProfileModalState.socialWrapper.classList.add('hidden');
+      }
     }
 
   }

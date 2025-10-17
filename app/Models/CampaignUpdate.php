@@ -113,8 +113,9 @@ class CampaignUpdate
         if (is_array($value)) {
             $normalized = array_values(array_filter(array_map(function ($item) {
                 if (is_string($item)) {
-                    return ['url' => trim($item)];
+                    $item = ['url' => trim($item)];
                 }
+
                 if (!is_array($item)) {
                     return null;
                 }
@@ -124,18 +125,49 @@ class CampaignUpdate
                     return null;
                 }
 
-                $caption = trim((string)($item['caption'] ?? ''));
-                return [
+                $type = strtolower((string)($item['type'] ?? 'image'));
+                if (!in_array($type, ['image', 'link'], true)) {
+                    $type = 'image';
+                }
+
+                $payload = [
                     'url' => $url,
-                    'caption' => $caption !== '' ? $caption : null
+                    'type' => $type,
                 ];
+
+                $caption = trim((string)($item['caption'] ?? ''));
+                if ($caption !== '') {
+                    $payload['caption'] = $caption;
+                }
+
+                if ($type === 'link') {
+                    $platform = strtolower(trim((string)($item['platform'] ?? '')));
+                    if ($platform !== '') {
+                        $payload['platform'] = $platform;
+                    }
+                    $label = trim((string)($item['label'] ?? ''));
+                    if ($label !== '') {
+                        $payload['label'] = $label;
+                    }
+                    $initial = strtoupper(trim((string)($item['initial'] ?? '')));
+                    if ($initial !== '') {
+                        $payload['initial'] = mb_substr($initial, 0, 4);
+                    }
+                } else {
+                    $mime = trim((string)($item['mime'] ?? ''));
+                    if ($mime !== '') {
+                        $payload['mime'] = $mime;
+                    }
+                }
+
+                return $payload;
             }, $value)));
 
             if (empty($normalized)) {
                 return null;
             }
 
-            return json_encode($normalized, JSON_UNESCAPED_UNICODE);
+            return json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
         return null;
@@ -150,7 +182,43 @@ class CampaignUpdate
 
         if (!empty($row['media'])) {
             $decoded = json_decode($row['media'], true);
-            $row['media'] = is_array($decoded) ? $decoded : [];
+            if (is_array($decoded)) {
+                $row['media'] = array_values(array_filter(array_map(static function ($item) {
+                    if (!is_array($item) || empty($item['url'])) {
+                        return null;
+                    }
+
+                    $type = strtolower((string)($item['type'] ?? 'image'));
+                    if (!in_array($type, ['image', 'link'], true)) {
+                        $type = 'image';
+                    }
+
+                    $url = (string)$item['url'];
+                    if ($type === 'image') {
+                        $normalized = CampaignMediaUploadService::normalizePublicUrl($url);
+                        if ($normalized === null) {
+                            return null;
+                        }
+                        $url = $normalized;
+                    }
+
+                    $caption = isset($item['caption']) && $item['caption'] !== '' ? (string)$item['caption'] : null;
+                    $platform = isset($item['platform']) && $item['platform'] !== '' ? strtolower((string)$item['platform']) : null;
+                    $label = isset($item['label']) && $item['label'] !== '' ? (string)$item['label'] : null;
+                    $initial = isset($item['initial']) && $item['initial'] !== '' ? (string)$item['initial'] : null;
+
+                    return [
+                        'url' => $url,
+                        'type' => $type,
+                        'caption' => $caption,
+                        'platform' => $platform,
+                        'label' => $label,
+                        'initial' => $initial,
+                    ];
+                }, $decoded)));
+            } else {
+                $row['media'] = [];
+            }
         } else {
             $row['media'] = [];
         }

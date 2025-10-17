@@ -5,6 +5,10 @@
  */
 
 class User {
+    public const PASSWORD_RESET_THROTTLED = 'reset_throttled';
+    private const PASSWORD_RESET_MIN_INTERVAL = 600; // 10 minutos
+    private const PASSWORD_RESET_TOKEN_BYTES = 32;
+
     private $db;
     private static $schemaCapabilities = null;
     private static $roleCacheBySlug = null;
@@ -543,14 +547,35 @@ class User {
         if (!$user) {
             throw new Exception('Email no encontrado');
         }
+
+        if ($this->supportsColumn('password_reset_at')) {
+            $lastResetAt = $user['password_reset_at'] ?? null;
+            if ($lastResetAt !== null) {
+                $lastResetTimestamp = strtotime((string)$lastResetAt);
+                if ($lastResetTimestamp !== false && (time() - $lastResetTimestamp) < self::PASSWORD_RESET_MIN_INTERVAL) {
+                    Logger::notice('password_reset_throttled', [
+                        'user_id' => $user['id'],
+                        'email' => $user['email'] ?? null,
+                    ]);
+                    throw new RuntimeException(self::PASSWORD_RESET_THROTTLED);
+                }
+            }
+        }
         
-        $token = bin2hex(random_bytes(32));
+        $token = bin2hex(random_bytes(self::PASSWORD_RESET_TOKEN_BYTES));
+        $tokenHash = hash('sha256', $token);
         $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
-        
-        $this->db->update('users', [
-            'password_reset_token' => $token,
+
+        $updateFields = [
+            'password_reset_token' => $tokenHash,
             'password_reset_expires_at' => $expires
-        ], 'id = ?', [$user['id']]);
+        ];
+
+        if ($this->supportsColumn('password_reset_at')) {
+            $updateFields['password_reset_at'] = date('Y-m-d H:i:s');
+        }
+        
+        $this->db->update('users', $updateFields, 'id = ?', [$user['id']]);
         
         Logger::audit('password_reset_requested', $user['id']);
         
@@ -561,19 +586,26 @@ class User {
      * Buscar usuario válido por token de recuperación
      */
     public function findByValidResetToken($token) {
+        $tokenHash = hash('sha256', $token);
+        $tokenCandidates = [$tokenHash];
+        if ($tokenHash !== $token) {
+            $tokenCandidates[] = $token;
+        }
+        $placeholders = implode(', ', array_fill(0, count($tokenCandidates), '?'));
+
         if ($this->supportsColumn('role_id')) {
             $user = $this->db->fetch(
                 "SELECT u.*, r.slug AS role, r.name AS role_name
                  FROM users u
                  INNER JOIN roles r ON r.id = u.role_id
-                 WHERE u.password_reset_token = ?
+                 WHERE u.password_reset_token IN ($placeholders)
                    AND u.password_reset_expires_at > NOW()",
-                [$token]
+                $tokenCandidates
             );
         } else {
             $user = $this->db->fetch(
-                "SELECT * FROM users WHERE password_reset_token = ? AND password_reset_expires_at > NOW()",
-                [$token]
+                "SELECT * FROM users WHERE password_reset_token IN ($placeholders) AND password_reset_expires_at > NOW()",
+                $tokenCandidates
             );
         }
 
@@ -584,20 +616,37 @@ class User {
      * Resetear contraseña con token
      */
     public function resetPassword($token, $newPassword) {
+        $tokenHash = hash('sha256', $token);
+        $tokenCandidates = [$tokenHash];
+        if ($tokenHash !== $token) {
+            $tokenCandidates[] = $token;
+        }
+        $placeholders = implode(', ', array_fill(0, count($tokenCandidates), '?'));
+
         $user = $this->db->fetch(
-            "SELECT id FROM users WHERE password_reset_token = ? AND password_reset_expires_at > NOW()",
-            [$token]
+            "SELECT id FROM users WHERE password_reset_token IN ($placeholders) AND password_reset_expires_at > NOW()",
+            $tokenCandidates
         );
         
         if (!$user) {
             throw new Exception('Token de recuperación inválido o expirado');
         }
-        
-        $this->db->update('users', [
+
+        $updateData = [
             'password_hash' => password_hash($newPassword, PASSWORD_ARGON2ID),
             'password_reset_token' => null,
             'password_reset_expires_at' => null
-        ], 'id = ?', [$user['id']]);
+        ];
+
+        if ($this->supportsColumn('password_reset_at')) {
+            $updateData['password_reset_at'] = date('Y-m-d H:i:s');
+        }
+
+        if ($this->supportsColumn('password_updated_at')) {
+            $updateData['password_updated_at'] = date('Y-m-d H:i:s');
+        }
+        
+        $this->db->update('users', $updateData, 'id = ?', [$user['id']]);
         
         Logger::audit('password_reset_completed', $user['id']);
         

@@ -171,6 +171,8 @@ require_once ROOT_PATH . '/app/Services/CampaignLifecycleMailer.php';
 require_once ROOT_PATH . '/app/Services/CampaignMilestoneNotifier.php';
 require_once ROOT_PATH . '/app/Services/AuditLogReader.php';
 require_once ROOT_PATH . '/app/Services/SupportTicketStore.php';
+require_once ROOT_PATH . '/app/Services/CampaignAppealUploadService.php';
+require_once ROOT_PATH . '/app/Services/DonationReceiptStorage.php';
 require_once ROOT_PATH . '/app/Services/AITextService.php';
 
 // Incluir controladores

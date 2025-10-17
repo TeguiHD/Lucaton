@@ -56,7 +56,8 @@ class CampaignController {
             return;
         }
 
-        $status = $campaign['status'] ?? 'draft';
+        $statusRaw = $campaign['status'] ?? 'draft';
+        $status = strtolower(trim((string)$statusRaw));
         $visibility = strtolower((string)($campaign['visibility'] ?? 'public'));
         $publicStatuses = $this->getPublicStatuses();
         $isPublicStatus = in_array($status, $publicStatuses, true);
@@ -96,13 +97,17 @@ class CampaignController {
             }
         }
         $campaignTimeOver = $campaignEndTimestamp !== null && $campaignEndTimestamp < time();
-        $campaignFinalized = ($campaign['status'] ?? '') === 'completed'
+        $campaignFinalized = $status === 'completed'
             || $campaignGoalReached
             || $campaignTimeOver;
         $finalUpdateAlreadyPosted = !empty($campaign['funding_celebrated_at']);
         $allowFinalUpdate = $isCampaignOwner && $campaignFinalized && !$finalUpdateAlreadyPosted;
 
-        $canManageUpdates = $isCampaignOwner && (!$campaignFinalized || $allowFinalUpdate);
+        $approvedStatuses = ['published', 'paused', 'completed'];
+        $campaignStatusApproved = in_array($status, $approvedStatuses, true);
+        $updatesEnabledByStatus = $campaignStatusApproved && ($status !== 'completed' || $allowFinalUpdate);
+        $canManageUpdates = $isCampaignOwner && $updatesEnabledByStatus && (!$campaignFinalized || $allowFinalUpdate);
+        $updatesLockedByStatus = $isCampaignOwner && !$campaignStatusApproved;
         $finalUpdateAllowed = $allowFinalUpdate;
         $campaignFinalLocked = $isCampaignOwner && $campaignFinalized && !$allowFinalUpdate;
 
@@ -842,6 +847,16 @@ class CampaignController {
             $errors['general'] = 'Ya tienes una apelación en curso para esta campaña. Espera la respuesta del equipo.';
         }
 
+        $uploadService = new CampaignAppealUploadService();
+        $evidenceFiles = [];
+        if (!empty($_FILES['evidence_files'])) {
+            try {
+                $evidenceFiles = $uploadService->normalizeFiles($_FILES['evidence_files']);
+            } catch (RuntimeException $exception) {
+                $errors['evidence_files'] = $exception->getMessage();
+            }
+        }
+
         $old = [
             'reason' => $reason,
             'additional_evidence' => $additionalEvidence,
@@ -851,19 +866,45 @@ class CampaignController {
             return $this->campaignAppealError($campaignId, $errors, $old);
         }
 
+        $storedFiles = [];
+
         try {
-            $appealModel->create([
+            $this->db->beginTransaction();
+
+            $appealId = $appealModel->create([
                 'campaign_id' => $campaignId,
                 'user_id' => $userId,
                 'reason' => $reason,
                 'additional_evidence' => $additionalEvidence !== '' ? $additionalEvidence : null,
             ]);
 
+            if (!empty($evidenceFiles)) {
+                $storedFiles = $uploadService->storeFiles($evidenceFiles, $campaignId, $appealId, $userId);
+                $appealModel->attachEvidenceFiles($appealId, $storedFiles);
+            }
+
+            $this->db->commit();
+
             SessionHelper::setFlash('success', 'Recibimos tu apelación. El equipo académico la revisará a la brevedad.');
             Logger::audit('campaign_appeal_created', $userId, [
                 'campaign_id' => $campaignId,
+                'appeal_id' => $appealId,
+                'attachments' => array_map(static function (array $file) {
+                    return [
+                        'name' => $file['filename'],
+                        'path' => $file['path'],
+                        'mime' => $file['mime'] ?? null,
+                        'size' => $file['size'] ?? 0,
+                    ];
+                }, $storedFiles),
             ]);
         } catch (Exception $exception) {
+            $this->db->rollback();
+
+            if (!empty($storedFiles ?? [])) {
+                $uploadService->cleanupStoredFiles($storedFiles);
+            }
+
             Logger::error('Failed to create campaign appeal', [
                 'campaign_id' => $campaignId,
                 'error' => $exception->getMessage(),
@@ -1236,15 +1277,112 @@ class CampaignController {
     private function buildCreatorProfile(array $campaign): array
     {
         $avatarCandidate = $campaign['owner_avatar'] ?? ($campaign['creator_avatar'] ?? null);
+        $socialLinks = [];
+        $ownerId = $campaign['owner_id'] ?? $campaign['user_id'] ?? null;
+        $displayName = $campaign['creator_name'] ?? $campaign['owner_name'] ?? 'Campañista';
+        $displayName = trim((string)$displayName);
+        if ($displayName !== '') {
+            $displayName = trim(preg_replace('/\s+/', ' ', strip_tags($displayName)));
+        }
+        if ($displayName === '') {
+            $displayName = 'Campañista';
+        }
+        $username = $campaign['username'] ?? null;
+        if (is_string($username)) {
+            $username = trim($username);
+            if ($username === '') {
+                $username = null;
+            }
+        } else {
+            $username = null;
+        }
+
+        if ($ownerId !== null) {
+            try {
+                $userModel = new User();
+                $ownerRecord = $userModel->findById((int)$ownerId);
+                if (is_array($ownerRecord)) {
+                    $rawLinks = $ownerRecord['social_links'] ?? [];
+                    if (is_string($rawLinks)) {
+                        $decoded = json_decode($rawLinks, true);
+                    } else {
+                        $decoded = $rawLinks;
+                    }
+
+                    if (is_array($decoded)) {
+                        $socialLinks = $this->normalizeCreatorSocialLinks($decoded);
+                    }
+                }
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudieron cargar las redes sociales del creador', [
+                    'campaign_id' => $campaign['id'] ?? null,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
 
         return [
-            'name' => $campaign['creator_name'] ?? $campaign['owner_name'] ?? 'Campañista',
-            'username' => $campaign['username'] ?? null,
+            'name' => $displayName,
+            'username' => $username,
             'avatar' => CampaignMediaUploadService::normalizePublicUrl($avatarCandidate),
             'verified' => true,
-            'campaign_verified' => in_array($campaign['status'] ?? 'draft', ['published', 'completed'], true),
+            'campaign_verified' => in_array(strtolower((string)($campaign['status'] ?? 'draft')), ['published', 'completed'], true),
             'joined_at' => $campaign['owner_joined_at'] ?? null,
+            'social' => $socialLinks,
         ];
+    }
+
+    private function normalizeCreatorSocialLinks(array $links): array
+    {
+        if (empty($links)) {
+            return [];
+        }
+
+        $socialCatalog = [
+            'linkedin' => ['label' => 'LinkedIn', 'initial' => 'LI'],
+            'instagram' => ['label' => 'Instagram', 'initial' => 'IG'],
+            'x' => ['label' => 'X (Twitter)', 'initial' => 'X'],
+            'facebook' => ['label' => 'Facebook', 'initial' => 'FB'],
+            'youtube' => ['label' => 'YouTube', 'initial' => 'YT'],
+            'tiktok' => ['label' => 'TikTok', 'initial' => 'TT'],
+            'website' => ['label' => 'Sitio web', 'initial' => 'WEB'],
+        ];
+
+        $normalized = [];
+        foreach ($socialCatalog as $key => $meta) {
+            $url = trim((string)($links[$key] ?? ''));
+            if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $normalized[] = [
+                'platform' => $key,
+                'label' => $meta['label'],
+                'initial' => $meta['initial'],
+                'url' => $url,
+            ];
+        }
+
+        foreach ($links as $key => $url) {
+            if (isset($socialCatalog[$key])) {
+                continue;
+            }
+            $url = trim((string)$url);
+            if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $label = ucfirst(str_replace(['_', '-'], ' ', (string)$key));
+            $initial = strtoupper(mb_substr($label, 0, 2));
+            $normalized[] = [
+                'platform' => (string)$key,
+                'label' => $label,
+                'initial' => $initial !== '' ? $initial : 'EN',
+                'url' => $url,
+            ];
+        }
+
+        return $normalized;
     }
 
     private function getPublicStatuses(): array {

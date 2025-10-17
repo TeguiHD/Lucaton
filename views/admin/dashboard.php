@@ -56,6 +56,11 @@ $secondaryCards = [
         'description' => 'Visibilidad restringida',
     ],
     [
+        'label' => 'Apelaciones activas',
+        'value' => number_format($metrics['pending_appeals'] ?? 0, 0, ',', '.'),
+        'description' => 'Pendientes o en revisión',
+    ],
+    [
         'label' => 'Revisión entre pares',
         'value' => number_format($metrics['awaiting_peer_review'] ?? 0, 0, ',', '.'),
         'description' => 'Requiere segundo administrador',

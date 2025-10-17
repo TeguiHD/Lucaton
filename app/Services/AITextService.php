@@ -229,7 +229,7 @@ class AITextService {
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_POSTFIELDS => $payload,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 45,
+            CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
         ]);
 
@@ -299,7 +299,12 @@ class AITextService {
 
         while (!empty($queue)) {
             $attempt = array_shift($queue);
-            $signature = $attempt['base_url'] . '|' . $attempt['model'] . '|' . $attempt['payload_style'];
+            $signature = implode('|', [
+                $attempt['base_url'],
+                $attempt['model'],
+                $attempt['payload_style'],
+                $attempt['allow_thinking'] ? 'thinking' : 'no-thinking',
+            ]);
             if (isset($attempted[$signature])) {
                 continue;
             }
@@ -592,6 +597,19 @@ class AITextService {
             }
         }
 
+        $normalizedMessage = strtolower($message);
+
+        if ($attempt['allow_thinking'] && $code === 400) {
+            if (str_contains($normalizedMessage, 'thinkingconfig') || str_contains($normalizedMessage, 'does not support thinking')) {
+                $fallbacks[] = [
+                    'base_url' => $attempt['base_url'],
+                    'model' => $attempt['model'],
+                    'payload_style' => $attempt['payload_style'],
+                    'allow_thinking' => false,
+                ];
+            }
+        }
+
         if ($code === 400 && $attempt['payload_style'] === 'modern') {
             if (str_contains($message, 'Unknown name "responseMimeType"') || str_contains($message, 'Unknown name "systemInstruction"')) {
                 $legacyBase = $this->convertBaseToVersion($attempt['base_url'], 'v1beta');
@@ -707,7 +725,7 @@ class AITextService {
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 45,
+            CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
         ]);
 
@@ -863,45 +881,75 @@ PROMPT;
             throw new RuntimeException('No hay claves de Google disponibles para la rotación.');
         }
 
-        $selected = $sequence[0];
-        $keySuffix = $this->maskApiKey($selected['key']);
+        $lastException = null;
+        $lastAttemptIndex = null;
 
-        try {
-            $response = $this->callGoogleAi($prompt, $selected['key'], $systemPrompt, [
-                'generationConfig' => [
-                    'temperature' => $this->temperature,
-                    'responseMimeType' => 'application/json',
-                ],
-            ]);
-        } catch (Throwable $exception) {
+        foreach ($sequence as $entry) {
+            $lastAttemptIndex = $entry['index'];
+            $apiKey = $entry['key'];
+            $keySuffix = $this->maskApiKey($apiKey);
+
+            try {
+                $response = $this->callGoogleAi($prompt, $apiKey, $systemPrompt, [
+                    'generationConfig' => [
+                        'temperature' => $this->temperature,
+                    ],
+                ]);
+            } catch (Throwable $exception) {
+                $lastException = $exception;
+                Logger::warning('Google AI devolvió error al mejorar campaña', [
+                    'stage' => 'request',
+                    'error' => $exception->getMessage(),
+                    'key_suffix' => $keySuffix,
+                ]);
+                continue;
+            }
+
+            $rawContent = trim((string)($response['text'] ?? ''));
+
+            try {
+                $decoded = $this->decodeJsonContent($rawContent);
+                if ($decoded === null) {
+                    throw new RuntimeException('La respuesta de Google AI no incluyó JSON válido.');
+                }
+
+                foreach (['titulo_mejorado', 'descripcion_mejorada', 'notas_mejoradas'] as $clave) {
+                    if (!array_key_exists($clave, $decoded)) {
+                        throw new RuntimeException('La respuesta de Google AI omitió una clave obligatoria: ' . $clave . '.');
+                    }
+                }
+            } catch (Throwable $exception) {
+                $lastException = $exception;
+                $this->markLastGoogleAttemptAsFailed($exception->getMessage(), $keySuffix);
+                Logger::warning('Google AI devolvió contenido inválido para mejora de campaña', [
+                    'stage' => 'response',
+                    'error' => $exception->getMessage(),
+                    'key_suffix' => $keySuffix,
+                ]);
+                continue;
+            }
+
+            $this->setGoogleRotationIndex($entry['index'] + 1);
+
+            return [
+                'titulo_mejorado' => $this->fallbackIfEmpty((string)$decoded['titulo_mejorado'], $titulo),
+                'descripcion_mejorada' => $this->fallbackIfEmpty((string)$decoded['descripcion_mejorada'], $descripcion),
+                'notas_mejoradas' => $this->fallbackIfEmpty((string)$decoded['notas_mejoradas'], $notas),
+            ];
+        }
+
+        if ($lastAttemptIndex !== null) {
+            $this->setGoogleRotationIndex($lastAttemptIndex + 1);
+        }
+
+        if ($lastException !== null) {
             throw new RuntimeException(
-                'No fue posible mejorar los textos con Google AI: ' . $exception->getMessage(),
-                (int)$exception->getCode()
+                'No fue posible mejorar los textos con Google AI: ' . $lastException->getMessage(),
+                (int)$lastException->getCode()
             );
         }
 
-        $rawContent = trim((string)($response['text'] ?? ''));
-        $decoded = $this->decodeJsonContent($rawContent);
-        if ($decoded === null) {
-            $this->markLastGoogleAttemptAsFailed('La respuesta de Google AI no incluía JSON válido.', $keySuffix);
-            Logger::warning('Google AI devolvió contenido sin JSON válido para mejora de campaña', [
-                'key_suffix' => $keySuffix,
-            ]);
-            throw new RuntimeException('La respuesta de Google AI no incluyó JSON válido.');
-        }
-
-        foreach (['titulo_mejorado', 'descripcion_mejorada', 'notas_mejoradas'] as $clave) {
-            if (!array_key_exists($clave, $decoded)) {
-                $this->markLastGoogleAttemptAsFailed('Faltan claves esperadas en la respuesta de Google AI.', $keySuffix);
-                throw new RuntimeException('La respuesta de Google AI omitió una clave obligatoria: ' . $clave . '.');
-            }
-        }
-
-        return [
-            'titulo_mejorado' => $this->fallbackIfEmpty((string)$decoded['titulo_mejorado'], $titulo),
-            'descripcion_mejorada' => $this->fallbackIfEmpty((string)$decoded['descripcion_mejorada'], $descripcion),
-            'notas_mejoradas' => $this->fallbackIfEmpty((string)$decoded['notas_mejoradas'], $notas),
-        ];
+        throw new RuntimeException('No fue posible mejorar los textos con Google AI.');
     }
 
     /**

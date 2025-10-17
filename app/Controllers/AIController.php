@@ -1,5 +1,12 @@
 <?php
 class AIController {
+    /**
+     * Cache de valores permitidos en el ENUM provider de ai_generations.
+     *
+     * @var array<int, string>|null
+     */
+    private static ?array $aiProviderCache = null;
+
     public function generateText() {
         $this->ensurePostJson();
 
@@ -348,6 +355,8 @@ class AIController {
             $outputContent = $encoded === false ? '' : $encoded;
         }
 
+        $sanitisedProvider = $this->normaliseAiProviderForStorage($database, (string)($result['provider'] ?? 'openrouter'));
+
         $data = [
             'user_id' => $userId,
             'context_entity_type' => 'standalone',
@@ -356,7 +365,7 @@ class AIController {
             'prompt' => $prompt ?? '',
             'input_parameters' => $inputJson,
             'model_used' => (string)($result['model'] ?? ''),
-            'provider' => (string)($result['provider'] ?? 'openrouter'),
+            'provider' => $sanitisedProvider,
             'output_text' => $outputContent,
             'tokens_input' => $result['tokens_input'] ?? null,
             'tokens_output' => $result['tokens_output'] ?? null,
@@ -397,6 +406,87 @@ class AIController {
         }
 
         return 'openrouter';
+    }
+
+    /**
+     * Normaliza el proveedor a un valor permitido por el ENUM de la tabla ai_generations.
+     */
+    private function normaliseAiProviderForStorage(Database $database, string $provider): string {
+        $provider = strtolower(trim($provider));
+        if ($provider === '') {
+            $provider = 'openrouter';
+        }
+
+        $allowed = $this->getAllowedAiProviders($database);
+        if (empty($allowed)) {
+            return $provider;
+        }
+
+        if (in_array($provider, $allowed, true)) {
+            return $provider;
+        }
+
+        $aliases = [
+            'google_ai' => ['gemini'],
+            'gemini' => ['google_ai'],
+            'google' => ['google_ai', 'gemini'],
+            'openrouter' => ['openai'],
+            'deepseek' => ['openrouter', 'openai'],
+            'openai' => ['openrouter'],
+            'stability' => ['openrouter', 'openai'],
+            'anthropic' => ['openrouter', 'openai'],
+        ];
+
+        if (isset($aliases[$provider])) {
+            foreach ($aliases[$provider] as $candidate) {
+                if (in_array($candidate, $allowed, true)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        $fallback = $allowed[0] ?? 'openrouter';
+        return $fallback;
+    }
+
+    /**
+     * Obtiene los valores disponibles en el ENUM provider de ai_generations.
+     *
+     * @return array<int, string>
+     */
+    private function getAllowedAiProviders(Database $database): array {
+        if (self::$aiProviderCache !== null) {
+            return self::$aiProviderCache;
+        }
+
+        try {
+            $column = $database->fetch("SHOW COLUMNS FROM ai_generations LIKE 'provider'");
+            if (!$column || empty($column['Type'])) {
+                self::$aiProviderCache = [];
+                return self::$aiProviderCache;
+            }
+
+            $type = (string)$column['Type'];
+            if (!preg_match('/^enum\((.+)\)$/i', $type, $matches)) {
+                self::$aiProviderCache = [];
+                return self::$aiProviderCache;
+            }
+
+            $values = array_map(static function ($value) {
+                return strtolower(trim(stripslashes(trim($value, "'\""))));
+            }, explode(',', $matches[1]));
+
+            self::$aiProviderCache = array_values(array_filter($values, static function ($value) {
+                return $value !== '';
+            }));
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo resolver el ENUM provider de ai_generations', [
+                'error' => $exception->getMessage(),
+            ]);
+            self::$aiProviderCache = [];
+        }
+
+        return self::$aiProviderCache;
     }
 }
 ?>

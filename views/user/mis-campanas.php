@@ -278,6 +278,21 @@ $statusGuidance = [
                                             <?php if (in_array($appealStatus, ['pending', 'under_review'], true)): ?>
                                                 <p class="mt-2">Tu apelación está en revisión. Te notificaremos cuando el equipo académico responda.</p>
                                                 <p class="mt-1 text-xs text-amber-700">Enviada el <?= !empty($appealRecord['created_at']) ? date('d/m/Y H:i', strtotime($appealRecord['created_at'])) : '—' ?>.</p>
+                                                <?php if (!empty($appealRecord['files'])): ?>
+                                                    <div class="mt-2 rounded-md border border-amber-200 bg-white/60 p-3">
+                                                        <p class="text-xs font-medium text-amber-900">Documentos adjuntos:</p>
+                                                        <ul class="mt-1 space-y-1 text-xs text-amber-800">
+                                                            <?php foreach ($appealRecord['files'] as $file): ?>
+                                                                <li class="flex items-center justify-between gap-2">
+                                                                    <span class="truncate" title="<?= htmlspecialchars($file['original_name'] ?? '') ?>"><?= htmlspecialchars($file['original_name'] ?? 'Documento') ?></span>
+                                                                    <?php if (!empty($file['size_bytes'])): ?>
+                                                                        <span class="text-[11px] text-amber-600"><?= number_format(($file['size_bytes'] / 1024), 1) ?> KB</span>
+                                                                    <?php endif; ?>
+                                                                </li>
+                                                            <?php endforeach; ?>
+                                                        </ul>
+                                                    </div>
+                                                <?php endif; ?>
                                             <?php elseif ($appealStatus === 'approved'): ?>
                                                 <p class="mt-2 text-emerald-700">Tu apelación fue aprobada. Revisa tu bandeja para seguir los próximos pasos.</p>
                                             <?php else: ?>
@@ -286,7 +301,7 @@ $statusGuidance = [
                                                         <?= htmlspecialchars($appealErrors['general']) ?>
                                                     </div>
                                                 <?php endif; ?>
-                                                <form method="POST" action="<?= Router::url('campana/' . $campaignId . '/apelar') ?>" class="mt-2 space-y-3" novalidate>
+                                                <form method="POST" action="<?= Router::url('campana/' . $campaignId . '/apelar') ?>" class="mt-2 space-y-3" novalidate enctype="multipart/form-data">
                                                     <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
                                                     <div>
                                                         <label for="appeal-reason-<?= $campaignId ?>" class="block text-xs font-medium text-amber-900">Cuéntanos por qué debemos revisar el caso</label>
@@ -296,8 +311,16 @@ $statusGuidance = [
                                                         <?php endif; ?>
                                                     </div>
                                                     <div>
-                                                        <label for="appeal-evidence-<?= $campaignId ?>" class="block text-xs font-medium text-amber-900">Evidencia adicional (opcional)</label>
-                                                        <textarea id="appeal-evidence-<?= $campaignId ?>" name="additional_evidence" rows="2" class="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:ring-amber-400" placeholder="Enlaces, referencias o datos de contacto actualizados."><?= htmlspecialchars($appealOldData['additional_evidence'] ?? '') ?></textarea>
+                                                        <label for="appeal-notes-<?= $campaignId ?>" class="block text-xs font-medium text-amber-900">Notas adicionales (opcional)</label>
+                                                        <textarea id="appeal-notes-<?= $campaignId ?>" name="additional_evidence" rows="2" class="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:ring-amber-400" placeholder="Enlaces o contexto adicional para el equipo revisor."><?= htmlspecialchars($appealOldData['additional_evidence'] ?? '') ?></textarea>
+                                                    </div>
+                                                    <div>
+                                                        <label for="appeal-files-<?= $campaignId ?>" class="block text-xs font-medium text-amber-900">Documentos de respaldo (PDF o imágenes, máx. 5)</label>
+                                                        <input id="appeal-files-<?= $campaignId ?>" name="evidence_files[]" type="file" multiple accept=".pdf,image/jpeg,image/png,image/webp" class="mt-1 block w-full text-xs text-amber-900 file:mr-3 file:rounded-md file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-amber-800 hover:file:bg-amber-200" />
+                                                        <p class="mt-1 text-xs text-amber-700">Adjunta recibos, certificados u otros documentos para respaldar tu apelación (máx. 8&nbsp;MB c/u).</p>
+                                                        <?php if (isset($appealErrors['evidence_files'])): ?>
+                                                            <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($appealErrors['evidence_files']) ?></p>
+                                                        <?php endif; ?>
                                                     </div>
                                                     <div class="flex items-center justify-between">
                                                         <span class="text-xs text-amber-700">El equipo responderá dentro de 48 horas hábiles.</span>

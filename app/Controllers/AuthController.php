@@ -1,5 +1,6 @@
 <?php
 class AuthController {
+    private const PASSWORD_RESET_THROTTLE_SECONDS = 600;
     private User $users;
 
     public function __construct() {
@@ -133,10 +134,20 @@ class AuthController {
             Router::redirect('/recuperar');
         }
 
+        if (!SessionHelper::checkRateLimit('password_reset_request', 3, self::PASSWORD_RESET_THROTTLE_SECONDS)) {
+            $limitMessage = 'Has realizado varias solicitudes seguidas. Revisa tu correo o espera unos minutos antes de pedir un nuevo enlace.';
+            if ($this->isJsonRequest()) {
+                $this->respondError($limitMessage, 429, ['rate_limit' => 'password_reset']);
+                return;
+            }
+
+            SessionHelper::setFlash('error', $limitMessage);
+            Router::redirect('/recuperar');
+        }
+
         $resetUrl = null;
         $tokenGenerated = false;
-
-        $message = 'Si el correo existe en nuestra plataforma, recibirás un enlace para restablecer tu contraseña.';
+        $message = 'Si el correo existe en nuestra plataforma, recibirás un enlace para restablecer tu contraseña. Si ya solicitaste asistencia hace unos minutos, revisa tu bandeja de entrada antes de intentarlo nuevamente.';
 
         if (APP_ENV === 'development' || APP_ENV === 'local') {
             $message .= ' (Demo: revisa la consola del servidor para ver el enlace simulado).';
@@ -154,6 +165,13 @@ class AuthController {
                 ]);
             } else {
                 $this->logPasswordResetLink($email, $resetUrl);
+            }
+        } catch (RuntimeException $e) {
+            if ($e->getMessage() !== User::PASSWORD_RESET_THROTTLED) {
+                Logger::warning('Password reset token generation failed', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
             }
         } catch (Exception $e) {
             Logger::notice('Password reset requested for non-existent email', ['email' => $email]);

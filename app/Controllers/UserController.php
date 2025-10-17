@@ -30,7 +30,8 @@ class UserController {
         $campaignsHaveCreatedAt = $hasCampaignsTable && $database->columnExists('campaigns', 'created_at');
         $hasCampaignMetricsTable = $database->tableExists('campaign_metrics');
         $hasDonationsTable = $database->tableExists('donations');
-        $donationsHaveSupporter = $hasDonationsTable && $database->columnExists('donations', 'supporter_id');
+        $supporterColumn = $hasDonationsTable ? $donationModel->getSupporterColumn() : null;
+        $donationsHaveSupporter = $hasDonationsTable && $supporterColumn !== null;
         $donationsHaveStatus = $hasDonationsTable && $database->columnExists('donations', 'status');
         $donationsHaveCreatedAt = $hasDonationsTable && $database->columnExists('donations', 'created_at');
         $hasNotificationsTable = $database->tableExists('notifications')
@@ -42,6 +43,22 @@ class UserController {
             SessionHelper::setFlash('error', 'Tu cuenta ya no está disponible. Inicia sesión nuevamente.');
             Router::redirect('login');
             return;
+        }
+
+        $userEmail = null;
+        if (!empty($userRecord['email'])) {
+            $emailCandidate = strtolower(trim((string)$userRecord['email']));
+            if ($emailCandidate !== '') {
+                $userEmail = $emailCandidate;
+            }
+        } else {
+            $sessionUser = SessionHelper::getUser();
+            if (is_array($sessionUser)) {
+                $emailCandidate = strtolower(trim((string)($sessionUser['email'] ?? '')));
+                if ($emailCandidate !== '') {
+                    $userEmail = $emailCandidate;
+                }
+            }
         }
 
         if ($hasCampaignsTable && $campaignsHaveOwner) {
@@ -75,7 +92,7 @@ class UserController {
                     "SELECT COUNT(*) AS donations_count,
                             COALESCE(SUM(amount), 0) AS total_donated
                      FROM donations
-                     WHERE supporter_id = ? AND status = 'completed'",
+                     WHERE {$supporterColumn} = ? AND status = 'completed'",
                     [$userId]
                 ) ?: $donationStats;
             } else {
@@ -83,7 +100,7 @@ class UserController {
                     "SELECT COUNT(*) AS donations_count,
                             COALESCE(SUM(amount), 0) AS total_donated
                      FROM donations
-                     WHERE supporter_id = ?",
+                     WHERE {$supporterColumn} = ?",
                     [$userId]
                 ) ?: $donationStats;
             }
@@ -99,7 +116,7 @@ class UserController {
             $donationsHaveCreatedAt
         ) {
             $recentCampaignDonations = $database->fetchAll(
-                "SELECT d.amount, d.created_at, d.supporter_name, d.is_anonymous, d.supporter_id,
+                "SELECT d.amount, d.created_at, d.supporter_name, d.is_anonymous,
                         c.title AS campaign_title
                  FROM donations d
                  INNER JOIN campaigns c ON c.id = d.campaign_id
@@ -116,7 +133,7 @@ class UserController {
             $hasCampaignsTable &&
             $donationsHaveCreatedAt
         )
-            ? $donationModel->findByUserId($userId, 5, 0)
+            ? $donationModel->findByUserId($userId, 5, 0, [], $userEmail)
             : [];
 
         $recentActivity = [];
@@ -192,6 +209,219 @@ class UserController {
         $campaignMetricsEndpoint = Router::url('api/mis-campanas/resumen');
 
         include VIEWS_PATH . '/user/dashboard.php';
+    }
+
+    public function donations() {
+        $current_page = 'donations';
+
+        $userId = SessionHelper::getUserId();
+        if (!$userId) {
+            Router::redirect('login');
+            return;
+        }
+
+        $donationModel = new Donation();
+
+        $statusOptions = [
+            'all' => 'Todos',
+            'pending' => 'Pendientes',
+            'processing' => 'En proceso',
+            'completed' => 'Completadas',
+            'failed' => 'Fallidas',
+            'refunded' => 'Reembolsadas',
+        ];
+
+        $orderOptions = [
+            'recent' => 'Más recientes',
+            'amount_desc' => 'Monto: de mayor a menor',
+            'amount_asc' => 'Monto: de menor a mayor',
+        ];
+
+        $statusFilter = strtolower((string)($_GET['estado'] ?? 'all'));
+        if ($statusFilter === 'todos') {
+            $statusFilter = 'all';
+        }
+        if (!array_key_exists($statusFilter, $statusOptions)) {
+            $statusFilter = 'all';
+        }
+
+        $searchTerm = trim((string)($_GET['q'] ?? ''));
+
+        $order = strtolower((string)($_GET['orden'] ?? 'recent'));
+        if (!array_key_exists($order, $orderOptions)) {
+            $order = 'recent';
+        }
+
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = 10;
+
+        $filters = [
+            'status' => $statusFilter === 'all' ? '' : $statusFilter,
+            'search' => $searchTerm,
+            'order' => $order,
+        ];
+
+        $currentUser = SessionHelper::getUser();
+        $userEmail = null;
+        if (is_array($currentUser)) {
+            $emailCandidate = strtolower(trim((string)($currentUser['email'] ?? '')));
+            if ($emailCandidate !== '') {
+                $userEmail = $emailCandidate;
+            }
+        }
+
+        $summary = $donationModel->getUserDonationSummary($userId, $userEmail);
+        $lastDonationHuman = $this->diffForHumans($summary['last_donation_at'] ?? null);
+        $statusCounts = $donationModel->getStatusCountsForUser($userId, $userEmail);
+        if (empty($statusCounts)) {
+            $statusCounts = ['all' => $summary['total_donations']];
+        } elseif (!isset($statusCounts['all'])) {
+            $statusCounts['all'] = array_sum($statusCounts);
+        }
+
+        $totalDonations = $donationModel->countByUserId($userId, $filters, $userEmail);
+        $totalPages = max(1, (int)ceil($totalDonations / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = ($page - 1) * $perPage;
+        $donations = $donationModel->findByUserId($userId, $perPage, $offset, $filters, $userEmail);
+
+        $pagination = [
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => $totalPages,
+            'total_items' => $totalDonations,
+        ];
+
+        include VIEWS_PATH . '/user/donations.php';
+    }
+
+    public function statistics() {
+        $current_page = 'statistics';
+
+        $userId = SessionHelper::getUserId();
+        if (!$userId) {
+            Router::redirect('login');
+            return;
+        }
+
+        $database = Database::getInstance();
+        $donationModel = new Donation();
+        $campaignModel = new Campaign();
+
+        $currentUser = SessionHelper::getUser();
+        $userEmail = null;
+        if (is_array($currentUser)) {
+            $emailCandidate = strtolower(trim((string)($currentUser['email'] ?? '')));
+            if ($emailCandidate !== '') {
+                $userEmail = $emailCandidate;
+            }
+        }
+
+        $hasCampaignsTable = $database->tableExists('campaigns');
+        $campaignOwnerColumn = null;
+        if ($hasCampaignsTable) {
+            if ($database->columnExists('campaigns', 'owner_id')) {
+                $campaignOwnerColumn = 'owner_id';
+            } elseif ($database->columnExists('campaigns', 'user_id')) {
+                $campaignOwnerColumn = 'user_id';
+            }
+        }
+
+        $campaignsHaveOwner = $campaignOwnerColumn !== null;
+        $campaignsHaveStatus = $hasCampaignsTable && $database->columnExists('campaigns', 'status');
+        $hasCampaignMetricsTable = $database->tableExists('campaign_metrics');
+
+        $hasDonationsTable = $database->tableExists('donations');
+        $supporterColumn = $hasDonationsTable ? $donationModel->getSupporterColumn() : null;
+        $donationsHaveSupporter = $hasDonationsTable && $supporterColumn !== null;
+        $donationsHaveStatus = $hasDonationsTable && $database->columnExists('donations', 'status');
+        $donationsHaveCreatedAt = $hasDonationsTable && $database->columnExists('donations', 'created_at');
+
+        $campaignStats = $this->resolveCampaignStats(
+            $database,
+            $hasCampaignsTable,
+            $campaignsHaveOwner,
+            $campaignsHaveStatus,
+            $hasCampaignMetricsTable,
+            $campaignOwnerColumn,
+            $userId
+        );
+
+        $donationSummary = $donationModel->getUserDonationSummary($userId, $userEmail);
+        $donationStatusCounts = $donationModel->getStatusCountsForUser($userId, $userEmail);
+        if (!isset($donationStatusCounts['all'])) {
+            $donationStatusCounts['all'] = array_sum($donationStatusCounts);
+        }
+
+        $topCampaigns = [];
+        if ($hasCampaignsTable && $campaignsHaveOwner) {
+            try {
+                $rawCampaigns = $campaignModel->findByUserId($userId, 50, 0);
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudieron cargar las campañas para estadísticas', [
+                    'user_id' => $userId,
+                    'error' => $exception->getMessage(),
+                ]);
+                $rawCampaigns = [];
+            }
+
+            $topCampaigns = array_map(static function (array $row) {
+                return CampaignPresenter::present($row);
+            }, $rawCampaigns);
+
+            usort($topCampaigns, static function (array $a, array $b) {
+                return ($b['raised_amount'] ?? 0) <=> ($a['raised_amount'] ?? 0);
+            });
+
+            $topCampaigns = array_slice($topCampaigns, 0, 5);
+        }
+
+        $recentCampaignDonations = [];
+        if (
+            $hasDonationsTable &&
+            $donationsHaveSupporter &&
+            $donationsHaveStatus &&
+            $donationsHaveCreatedAt &&
+            $campaignsHaveOwner &&
+            $campaignOwnerColumn !== null
+        ) {
+            $recentCampaignDonations = $database->fetchAll(
+                "SELECT d.amount, d.created_at, d.supporter_name, d.is_anonymous, d.status,
+                        c.title AS campaign_title
+                 FROM donations d
+                 INNER JOIN campaigns c ON c.id = d.campaign_id
+                 WHERE c.{$campaignOwnerColumn} = ?
+                 ORDER BY d.created_at DESC
+                 LIMIT 10",
+                [$userId]
+            ) ?: [];
+
+            foreach ($recentCampaignDonations as &$donation) {
+                $donation['relative_time'] = $this->diffForHumans($donation['created_at'] ?? null);
+            }
+            unset($donation);
+        }
+
+        $donorTrends = [];
+        if ($hasDonationsTable && $donationsHaveSupporter && $donationsHaveCreatedAt) {
+            $trendRows = $database->fetchAll(
+                "SELECT DATE_FORMAT(created_at, '%Y-%m') AS period,
+                        COALESCE(SUM(amount), 0) AS total_amount,
+                        COUNT(*) AS total_donations
+                 FROM donations
+                 WHERE {$supporterColumn} = ?
+                 GROUP BY period
+                 ORDER BY period DESC
+                 LIMIT 6",
+                [$userId]
+            ) ?: [];
+
+            $donorTrends = array_reverse($trendRows);
+        }
+
+        include VIEWS_PATH . '/user/statistics.php';
     }
 
     public function profile() {

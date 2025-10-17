@@ -9,7 +9,6 @@ $router = new Router();
 $router->get('/', 'HomeController@index');
 $router->get('/campanas', 'CampaignController@index');
 $router->get('/campana/crear', 'CampaignController@create');
-$router->get('/campana/{username}/{slug}', 'CampaignController@show');
 $router->get('/campana/{username}/{slug}/donaciones', 'DonationController@list');
 $router->get('/campana/{username}', 'CampaignController@showCreatorProfile');
 $router->get('/noticias', 'NewsController@index');
@@ -48,6 +47,8 @@ $router->group(['middleware' => 'auth'], function($router) {
     $router->get('/panel', 'UserController@dashboard');
     $router->get('/perfil', 'UserController@profile');
     $router->get('/mis-campanas', 'CampaignController@myCampaigns');
+    $router->get('/mis-donaciones', 'UserController@donations');
+    $router->get('/mis-estadisticas', 'UserController@statistics');
     $router->get('/campana/{id}/editar', 'CampaignController@edit');
     $router->get('/notificaciones', 'NotificationController@history');
     $router->get('/api/notifications', 'NotificationController@index');
@@ -75,12 +76,17 @@ $router->group(['middleware' => 'auth'], function($router) {
     $router->get('/file/ai/{id}', 'AIController@serveFile');
 });
 
+$router->get('/campana/{username}/{slug}', 'CampaignController@show');
+
 // === RUTAS DE ADMINISTRACIÓN ===
 $router->group(['middleware' => 'admin'], function($router) {
     $router->get('/admin', 'AdminController@dashboard');
     $router->get('/admin/campanas', 'AdminController@campaigns');
     $router->get('/admin/campana/{id}', 'AdminController@showCampaign');
     $router->get('/admin/campana/{id}/documento', 'AdminController@downloadCampaignDocument');
+    $router->get('/admin/apelaciones', 'AdminController@appeals');
+    $router->get('/admin/apelaciones/{id}', 'AdminController@showAppeal');
+    $router->get('/admin/apelaciones/{id}/archivo/{fileId}', 'AdminController@downloadAppealFile');
     $router->get('/admin/usuarios', 'AdminController@users');
     $router->get('/admin/usuarios/{id}', 'AdminController@showUser');
     $router->get('/admin/ia', 'AdminController@aiModeration');
@@ -97,6 +103,7 @@ $router->group(['middleware' => 'admin'], function($router) {
     $router->group(['middleware' => 'csrf'], function($router) {
         $router->post('/admin/campana/{id}/aprobar', 'AdminController@approveCampaign');
         $router->post('/admin/campana/{id}/rechazar', 'AdminController@rejectCampaign');
+        $router->post('/admin/apelaciones/{id}/resolver', 'AdminController@resolveAppeal');
         $router->post('/admin/notificaciones', 'NotificationAdminController@store');
         $router->post('/admin/newsletter/enviar', 'NewsletterAdminController@send');
         $router->post('/admin/usuarios/{id}/reset-password', 'AdminController@resetUserPassword');

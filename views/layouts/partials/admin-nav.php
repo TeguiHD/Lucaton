@@ -15,6 +15,13 @@ $admin_nav_items = [
         'badge' => $pending_campaigns_count ?? null
     ],
     [
+        'name' => 'Apelaciones',
+        'href' => '/admin/apelaciones',
+        'icon' => 'scales',
+        'current' => $current_page === 'admin-appeals',
+        'badge' => $pending_appeals_count ?? null
+    ],
+    [
         'name' => 'Noticias',
         'href' => '/admin/news',
         'icon' => 'newspaper',
@@ -79,6 +86,8 @@ $icons = [
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7h2M16 11h2M16 15h2M10 7h2M10 11h2M10 15h2" />'
     ,
     'help-circle' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10a4 4 0 118 0c0 1.657-1.343 3-3 3h-1v1m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />'
+    ,
+    'scales' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 0l-6 7h12l-6-7zm0 0V3m0 10v8m-6 0h12" />'
 ];
 ?>
 

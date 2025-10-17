@@ -62,26 +62,32 @@ $acceptingDonations = in_array($statusSlug, ['published', 'paused'], true)
     && !$campaign_time_over;
 
 $recent_supporters = $recent_supporters ?? [];
-$donationSidebarItems = array_slice($recent_supporters, 0, 4);
+$recent_supporters = array_slice($recent_supporters, 0, 10);
+$donationSidebarItems = array_slice($recent_supporters, 0, 5);
 $galleryMedia = $galleryMedia ?? [];
 $campaignUpdates = $campaignUpdates ?? [];
 $creatorProfileData = $creatorProfileData ?? [];
 $canManageUpdates = $canManageUpdates ?? false;
+$updatesLockedByStatus = isset($updatesLockedByStatus) ? (bool)$updatesLockedByStatus : false;
 $updateFormErrors = $updateFormErrors ?? [];
 $rawUpdateFormOld = isset($updateFormOld) && is_array($updateFormOld) ? $updateFormOld : [];
 $updateFormOld = array_merge([
     'title' => '',
     'body' => '',
-    'media_urls' => []
+    'social_links' => [],
+    'media_urls' => [],
 ], $rawUpdateFormOld);
-$updateMediaUrls = $updateFormOld['media_urls'];
-if (!is_array($updateMediaUrls)) {
-    $updateMediaUrls = [];
+$updateSocialLinks = $updateFormOld['social_links'];
+if (!is_array($updateSocialLinks) || empty($updateSocialLinks)) {
+    $updateSocialLinks = $updateFormOld['media_urls'] ?? [];
 }
-$updateMediaUrls = array_map(static function ($value) {
+if (!is_array($updateSocialLinks)) {
+    $updateSocialLinks = [];
+}
+$updateSocialLinks = array_map(static function ($value) {
     return trim((string)$value);
-}, array_slice($updateMediaUrls, 0, 3));
-$updateMediaUrls = array_pad($updateMediaUrls, 3, '');
+}, array_slice($updateSocialLinks, 0, 3));
+$updateSocialLinks = array_pad($updateSocialLinks, 3, '');
 $celebrationOverlay = $celebrationOverlay ?? null;
 $campaignIdentifier = (string)($campaign['slug'] ?? $campaign['id'] ?? '');
 $campaignUpdatePath = null;
@@ -160,16 +166,50 @@ $resolveYoutubeEmbed = static function (string $url): ?string {
 
 $video_embed_url = $resolveYoutubeEmbed($video_url);
 $donationOld = array_merge([
-    'amount' => '5000',
+    'amount' => '1000',
     'donor_name' => '',
     'donor_email' => '',
     'message' => '',
     'payment_method' => 'manual',
     'is_anonymous' => '0',
+    'payment_fields' => [],
 ], $donationFormOld);
-$donationAmountValue = preg_replace('/[^0-9]/', '', $donationOld['amount'] ?? '') ?: '5000';
+$donationAmountRaw = preg_replace('/[^0-9]/', '', $donationOld['amount'] ?? '');
+if ($donationAmountRaw === '') {
+    $donationAmountRaw = '1000';
+}
+$donationAmountDisplay = number_format((int)$donationAmountRaw, 0, ',', '.');
 $donationIsAnonymous = ($donationOld['is_anonymous'] ?? '0') === '1';
 $donationPaymentMethod = $donationOld['payment_method'] ?? 'manual';
+if ($donationPaymentMethod === 'manual') {
+    $donationPaymentMethod = 'bank_transfer';
+}
+$defaultPaymentFields = [
+    'card_holder' => '',
+    'card_number' => '',
+    'card_expiration' => '',
+    'card_cvv' => '',
+    'transfer_bank' => '',
+    'transfer_reference' => '',
+    'paypal_email' => '',
+    'webpay_rut' => '',
+    'webpay_bank' => '',
+];
+$donationPaymentFields = array_merge($defaultPaymentFields, is_array($donationOld['payment_fields'] ?? null) ? $donationOld['payment_fields'] : []);
+$paymentSectionVisibility = [
+    'card' => in_array($donationPaymentMethod, ['credit_card', 'debit_card'], true),
+    'transfer' => in_array($donationPaymentMethod, ['bank_transfer', 'manual'], true),
+    'paypal' => $donationPaymentMethod === 'paypal',
+    'webpay' => $donationPaymentMethod === 'webpay',
+];
+$webpayBanks = [
+    'BancoEstado',
+    'Banco de Chile',
+    'BCI',
+    'Scotiabank',
+    'Santander',
+    'Itaú',
+];
 $campaignShareSlug = $campaign['slug'] ?? $campaign['id'] ?? '';
 $donationRedirectTarget = $campaignPublicUrl . '#donar';
 $campaignDonationsUrl = $campaignPublicPath !== null
@@ -339,7 +379,14 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             <?php foreach ($galleryMedia as $index => $media): ?>
                                 <figure class="relative overflow-hidden rounded-2xl bg-gray-100 shadow-sm">
-                                    <button type="button" data-gallery-trigger data-gallery-index="<?= $index ?>" class="block w-full focus:outline-none focus:ring-2 focus:ring-copihue-500">
+                                    <button
+                                        type="button"
+                                        data-gallery-trigger
+                                        data-gallery-index="<?= $index ?>"
+                                        data-gallery-url="<?= htmlspecialchars($media['url']) ?>"
+                                        data-gallery-caption="<?= htmlspecialchars($media['caption'] ?? '') ?>"
+                                        class="block w-full focus:outline-none focus:ring-2 focus:ring-copihue-500"
+                                    >
                                         <img src="<?= htmlspecialchars($media['url']) ?>" alt="Imagen <?= $index + 1 ?> de la campaña <?= htmlspecialchars($campaign['title']) ?>" class="h-48 w-full object-cover transition duration-300 hover:scale-105">
                                     </button>
                                     <?php if (!empty($media['caption'])): ?>
@@ -388,6 +435,13 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                         </div>
                     <?php endif; ?>
 
+                    <?php if ($updatesLockedByStatus): ?>
+                        <div class="mb-8 rounded-2xl border border-sky-200 bg-sky-50 p-5">
+                            <h3 class="text-sm font-semibold text-sky-900">Actualizaciones deshabilitadas</h3>
+                            <p class="mt-1 text-xs text-sky-800">Tu campaña aún está en revisión. Cuando el equipo de Lucatón la apruebe podrás publicar novedades con fotos y redes sociales desde aquí.</p>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if ($canManageUpdates): ?>
                         <div class="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5" id="actualizaciones-form">
                             <h3 class="text-sm font-semibold text-emerald-900">
@@ -410,7 +464,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                 </div>
                             <?php endif; ?>
 
-                            <form method="POST" action="<?= htmlspecialchars($campaignUpdateAction) ?>" class="mt-4 space-y-4">
+                            <form method="POST" action="<?= htmlspecialchars($campaignUpdateAction) ?>" enctype="multipart/form-data" class="mt-4 space-y-4">
                                 <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
                                 <div>
                                     <label for="campaign-update-title" class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Título (opcional)</label>
@@ -435,16 +489,21 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                         placeholder="Comparte avances, próximas actividades o agradece a quienes apoyan tu causa."><?= htmlspecialchars($updateFormOld['body']) ?></textarea>
                                     <p class="mt-1 text-xs text-emerald-700">Consejo: Sé claro y agradece. Los enlaces se convierten automáticamente en hipervínculos.</p>
                                 </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Adjunta imágenes (opcional)</label>
+                                    <input type="file" name="update_images[]" accept="image/jpeg,image/png,image/webp" multiple class="mt-1 block w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                                    <p class="mt-1 text-xs text-emerald-700">Hasta 3 imágenes JPG, PNG o WebP (máx. 6&nbsp;MB cada una). Refuerza la transparencia con registros del avance.</p>
+                                </div>
                                 <div class="grid gap-3 sm:grid-cols-3">
-                                    <?php foreach ($updateMediaUrls as $mediaIndex => $mediaUrl): ?>
+                                    <?php foreach ($updateSocialLinks as $index => $socialLink): ?>
                                         <div>
-                                            <label class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Enlace multimedia <?= $mediaIndex + 1 ?> (opcional)</label>
+                                            <label class="block text-xs font-semibold text-emerald-900 uppercase tracking-wide">Red social <?= $index + 1 ?> (opcional)</label>
                                             <input
                                                 type="url"
-                                                name="media_urls[]"
-                                                value="<?= htmlspecialchars($mediaUrl) ?>"
+                                                name="social_links[]"
+                                                value="<?= htmlspecialchars($socialLink) ?>"
                                                 class="mt-1 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                                                placeholder="https://..."
+                                                placeholder="https://instagram.com/tu_cuenta"
                                             >
                                         </div>
                                     <?php endforeach; ?>
@@ -454,7 +513,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v8m4-4H8" />
                                         </svg>
-                                        Puedes agregar hasta tres enlaces de imágenes, videos o documentos públicos.
+                                        Comparte evidencia visual y tus canales oficiales para reforzar la transparencia con tu comunidad.
                                     </p>
                                     <button type="submit" class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400">
                                         Publicar actualización
@@ -489,20 +548,45 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                         <?php endif; ?>
                                     </header>
                                     <p class="text-sm text-gray-600 leading-relaxed"><?= nl2br(htmlspecialchars($update['body'] ?? '')) ?></p>
-                                    <?php if (!empty($update['media'])): ?>
+                                    <?php
+                                    $updateMediaItems = is_array($update['media'] ?? null) ? $update['media'] : [];
+                                    $updateMediaImages = array_values(array_filter($updateMediaItems, static function ($item) {
+                                        return ($item['type'] ?? 'image') === 'image' && !empty($item['url']);
+                                    }));
+                                    $updateSocialLinks = array_values(array_filter($updateMediaItems, static function ($item) {
+                                        return ($item['type'] ?? '') === 'link' && !empty($item['url']);
+                                    }));
+                                    ?>
+                                    <?php if (!empty($updateMediaImages)): ?>
                                         <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                            <?php foreach ($update['media'] as $mediaItem): ?>
-                                                <?php if (!empty($mediaItem['url'])): ?>
-                                                    <a href="<?= htmlspecialchars($mediaItem['url']) ?>" target="_blank" rel="noopener noreferrer" class="group relative block overflow-hidden rounded-xl border border-gray-200">
-                                                        <span class="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent opacity-0 transition group-hover:opacity-100"></span>
-                                                        <img src="<?= htmlspecialchars($mediaItem['url']) ?>" alt="Imagen de actualización" class="h-28 w-full object-cover transition group-hover:scale-105" loading="lazy">
-                                                        <?php if (!empty($mediaItem['caption'])): ?>
-                                                            <span class="absolute bottom-2 left-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
-                                                                <?= htmlspecialchars($mediaItem['caption']) ?>
-                                                            </span>
-                                                        <?php endif; ?>
-                                                    </a>
-                                                <?php endif; ?>
+                                            <?php foreach ($updateMediaImages as $mediaItem): ?>
+                                                <a href="<?= htmlspecialchars($mediaItem['url']) ?>" target="_blank" rel="noopener noreferrer" class="group relative block overflow-hidden rounded-xl border border-gray-200">
+                                                    <span class="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent opacity-0 transition group-hover:opacity-100"></span>
+                                                    <img src="<?= htmlspecialchars($mediaItem['url']) ?>" alt="Imagen de actualización" class="h-28 w-full object-cover transition group-hover:scale-105" loading="lazy">
+                                                    <?php if (!empty($mediaItem['caption'])): ?>
+                                                        <span class="absolute bottom-2 left-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
+                                                            <?= htmlspecialchars($mediaItem['caption']) ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($updateSocialLinks)): ?>
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            <?php foreach ($updateSocialLinks as $social): ?>
+                                                <?php
+                                                $platformLabel = trim((string)($social['label'] ?? ($social['platform'] ?? 'Enlace')));
+                                                if ($platformLabel === '') {
+                                                    $platformLabel = 'Enlace';
+                                                }
+                                                $initialSeed = $social['initial'] ?? mb_substr($platformLabel, 0, 2);
+                                                $badgeInitial = strtoupper(mb_substr($initialSeed, 0, 2));
+                                                ?>
+                                                <a href="<?= htmlspecialchars($social['url']) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-full border border-copihue-200 bg-white px-3 py-1 text-xs font-semibold text-copihue-700 transition hover:bg-copihue-50 focus:outline-none focus:ring-2 focus:ring-copihue-500">
+                                                    <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-copihue-100 text-copihue-600 text-[11px] font-bold"><?= htmlspecialchars($badgeInitial) ?></span>
+                                                    <span><?= htmlspecialchars($platformLabel) ?></span>
+                                                </a>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php endif; ?>
@@ -571,40 +655,9 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                     </dl>
                 </section>
 
-                <?php if (!empty($recent_supporters)): ?>
-                    <section class="bg-white shadow-soft rounded-3xl p-6">
-                        <h2 class="text-xl font-semibold text-gray-900 mb-4">Últimos aportes</h2>
-                        <ul class="space-y-4">
-                            <?php foreach ($recent_supporters as $supporter): ?>
-                                <li class="flex items-center justify-between">
-                                    <div>
-                                        <?php
-                                        $isAnonymousSupporter = !empty($supporter['is_anonymous']);
-                                        $supporterName = 'Aporte anónimo';
-                                        if (!$isAnonymousSupporter) {
-                                            $supporterName = trim(($supporter['first_name'] ?? '') . ' ' . ($supporter['last_name'] ?? ''));
-                                            if ($supporterName === '') {
-                                                $supporterName = $supporter['donor_name'] ?? $supporter['username'] ?? 'Colaborador';
-                                            }
-                                        }
-                                        ?>
-                                        <p class="font-medium text-gray-900"><?= htmlspecialchars($supporterName) ?></p>
-                                        <?php if (!empty($supporter['message'])): ?>
-                                            <p class="text-sm text-gray-500"><?php echo htmlspecialchars($supporter['message']); ?></p>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="text-sm font-semibold text-gray-900">$<?php echo number_format($supporter['amount'] ?? 0, 0, ',', '.'); ?></p>
-                                        <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($supporter['created_at'] ?? 'now')); ?></p>
-                                    </div>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </section>
-                <?php endif; ?>
             </div>
 
-            <aside class="space-y-6">
+            <aside class="space-y-6 lg:sticky lg:top-8">
                 <div class="bg-white shadow-soft rounded-3xl p-6 space-y-6">
                     <div class="space-y-3">
                         <p class="text-3xl font-semibold text-gray-900">$<?php echo number_format($stats['raised_amount'], 0, ',', '.'); ?></p>
@@ -659,63 +712,21 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                 </div>
                             <?php endif; ?>
 
-                            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                                <p class="font-medium text-gray-900">Aportarás como <?= htmlspecialchars($donorAccountName !== '' ? $donorAccountName : 'tu cuenta') ?></p>
-                                <?php if ($donorAccountEmail !== ''): ?>
-                                    <p class="text-xs text-gray-500">Confirmaremos el aporte en <?= htmlspecialchars($donorAccountEmail) ?>.</p>
-                                <?php endif; ?>
-                                <p class="text-xs text-gray-500 mt-2">Marca la opción de donación anónima si prefieres ocultar tu nombre públicamente (igual registraremos el aporte en tu historial).</p>
+                            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-700 space-y-2">
+                                <div>
+                                    <p class="font-medium text-gray-900">Aportarás como <?= htmlspecialchars($donorAccountName !== '' ? $donorAccountName : 'tu cuenta') ?></p>
+                                    <?php if ($donorAccountEmail !== ''): ?>
+                                        <p class="text-xs text-gray-500">Confirmaremos el aporte en tu correo. Si necesitas cambiarlo, actualízalo desde tu perfil.</p>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="text-xs text-gray-500">Puedes elegir mostrar tu nombre o mantenerlo oculto en la página pública. Los aportes por transferencia con comprobante quedarán en revisión manual.</p>
                             </div>
 
-                            <form method="POST" action="<?= Router::url('api/donate/' . ($campaign['id'] ?? 0)) ?>" class="space-y-4" novalidate>
-                                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
-
-                                <div>
-                                    <label for="donation-amount" class="block text-sm font-medium text-gray-700">Monto del aporte</label>
-                                    <input id="donation-amount" name="amount" type="number" min="1000" step="500" required value="<?= htmlspecialchars($donationAmountValue) ?>" class="mt-1 w-full rounded-md border <?= isset($donationFormErrors['amount']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
-                                    <?php if (isset($donationFormErrors['amount'])): ?>
-                                        <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['amount']) ?></p>
-                                    <?php else: ?>
-                                        <p class="mt-1 text-xs text-gray-500">Aportes simulados desde $1.000 CLP.</p>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div>
-                                    <label for="donation-payment-method" class="block text-sm font-medium text-gray-700">Método de aporte</label>
-                                    <select id="donation-payment-method" name="payment_method" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500">
-                                        <?php
-                                        $paymentOptions = [
-                                            'manual' => 'Transferencia simulada',
-                                            'credit_card' => 'Tarjeta de crédito (demo)',
-                                            'debit_card' => 'Tarjeta de débito (demo)',
-                                            'bank_transfer' => 'Transferencia bancaria',
-                                            'paypal' => 'PayPal (demo)',
-                                            'webpay' => 'Webpay (demo)'
-                                        ];
-                                        foreach ($paymentOptions as $method => $label):
-                                        ?>
-                                            <option value="<?= htmlspecialchars($method) ?>" <?= $donationPaymentMethod === $method ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label for="donation-message" class="block text-sm font-medium text-gray-700">Mensaje para la campaña (opcional)</label>
-                                    <textarea id="donation-message" name="message" rows="3" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-copihue-500 focus:ring-copihue-500" placeholder="Comparte unas palabras de apoyo."><?= htmlspecialchars($donationOld['message'] ?? '') ?></textarea>
-                                    <?php if (isset($donationFormErrors['message'])): ?>
-                                        <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['message']) ?></p>
-                                    <?php endif; ?>
-                                </div>
-
-                                <label class="flex items-center gap-2 text-sm text-gray-700">
-                                    <input id="donation-anonymous" name="is_anonymous" type="checkbox" value="1" <?= $donationIsAnonymous ? 'checked' : '' ?> class="h-4 w-4 rounded border-gray-300 text-copihue-600 focus:ring-copihue-500">
-                                    Donar de forma anónima en la página pública
-                                </label>
-
-                                <button type="submit" class="w-full inline-flex items-center justify-center rounded-md bg-copihue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-copihue-700 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-2">
-                                    Registrar aporte simulado
-                                </button>
-                            </form>
+                            <button type="button"
+                                class="w-full inline-flex items-center justify-center rounded-md bg-copihue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-copihue-700 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-2"
+                                data-donation-modal-open>
+                                Donar ahora
+                            </button>
                             <p class="text-xs text-gray-500 text-center">
                                 Las donaciones se registran de forma simulada para fines académicos.
                             </p>
@@ -733,7 +744,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                                     if (!$isAnonymousSidebar) {
                                         $sidebarName = trim(($sidebarDonation['first_name'] ?? '') . ' ' . ($sidebarDonation['last_name'] ?? ''));
                                         if ($sidebarName === '') {
-                                            $sidebarName = $sidebarDonation['donor_name'] ?? $sidebarDonation['username'] ?? 'Colaborador';
+                                            $sidebarName = $sidebarDonation['supporter_name'] ?? $sidebarDonation['donor_name'] ?? $sidebarDonation['username'] ?? 'Colaborador';
                                         }
                                     }
                                     $sidebarAmount = '$' . number_format((float)($sidebarDonation['amount'] ?? 0), 0, ',', '.');
@@ -763,6 +774,458 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
         </div>
     </main>
 
+    <?php
+$paymentOptionCards = [
+    'credit_card' => ['label' => 'Tarjeta crédito', 'description' => 'Visa, Mastercard demo · 4242 4242 4242 4242'],
+    'debit_card' => ['label' => 'Tarjeta débito', 'description' => 'Redcompra demo · 5222 2222 2222 2222'],
+    'bank_transfer' => ['label' => 'Transferencia / depósito', 'description' => 'Referencia simulada y comprobante ficticio'],
+    'paypal' => ['label' => 'PayPal', 'description' => 'Cuenta sandbox · demo@paypal.com'],
+    'webpay' => ['label' => 'Webpay', 'description' => 'RUT y banco de demostración'],
+];
+    ?>
+
+    <div class="fixed inset-0 z-50 hidden" data-donation-modal data-open-on-load="<?= !empty($donationFormErrors) ? 'true' : 'false' ?>">
+        <div class="absolute inset-0 bg-gray-900/70" data-donation-modal-close aria-hidden="true"></div>
+        <div class="relative z-10 mx-auto flex min-h-full w-full items-center justify-center px-4 py-8">
+            <form method="POST" action="<?= Router::url('api/donate/' . ($campaign['id'] ?? 0)) ?>" class="w-full max-w-2xl space-y-8 rounded-[28px] border border-slate-100 bg-white/95 p-6 shadow-strong backdrop-blur sm:p-8 lg:p-10 max-h-[90vh] overflow-y-auto" enctype="multipart/form-data" novalidate data-donation-form>
+                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= htmlspecialchars(SessionHelper::getCSRFToken()) ?>">
+                <input type="hidden" name="payment_method" id="donation-modal-method" value="<?= htmlspecialchars($donationPaymentMethod) ?>">
+
+                <div class="flex items-start justify-between gap-4">
+                    <div class="space-y-1">
+                        <span class="inline-flex items-center rounded-full border border-copihue-200/70 bg-copihue-50/70 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-copihue-600">Simulación Lucatón</span>
+                        <h2 class="text-2xl font-semibold text-slate-900">Registrar aporte</h2>
+                        <p class="text-sm text-slate-500">Campaña "<?= htmlspecialchars($campaign['title'] ?? 'Campaña') ?>"</p>
+                    </div>
+                    <button type="button" class="rounded-full border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-copihue-500" data-donation-modal-close>
+                        <span class="sr-only">Cerrar</span>
+                        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l8 8M6 14L14 6" stroke-linecap="round" /></svg>
+                    </button>
+                </div>
+
+                <div class="rounded-3xl border border-sky-100/80 bg-gradient-to-br from-sky-50 via-white to-white p-5 text-sm text-sky-900 shadow-sm">
+                    <div class="flex items-start gap-4">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11v2m0 4h.01M4.318 6.318a4.5 4.5 0 006.364 6.364L12 9.364l1.318 1.318a4.5 4.5 0 106.364-6.364A4.5 4.5 0 0012 2.5a4.5 4.5 0 00-7.682 3.818z" /></svg>
+                        </div>
+                        <div class="space-y-2">
+                            <p class="text-base font-semibold text-sky-900">Simulación segura de pago</p>
+                            <ul class="space-y-1 text-xs leading-relaxed text-sky-900/90">
+                                <li class="flex items-start gap-2">
+                                    <svg class="mt-0.5 h-3 w-3 flex-shrink-0 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    Usa datos ficticios; no generamos cargos reales ni guardamos tarjetas verdaderas.
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <svg class="mt-0.5 h-3 w-3 flex-shrink-0 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    Los comprobantes de transferencia quedan en revisión privada hasta su validación.
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <svg class="mt-0.5 h-3 w-3 flex-shrink-0 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    Confirmaremos el aporte en tu correo registrado para mantener trazabilidad.
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if (isset($donationFormErrors['general'])): ?>
+                    <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <?= htmlspecialchars($donationFormErrors['general']) ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="space-y-3">
+                    <label for="donation-modal-amount" class="block text-sm font-medium text-slate-800">Monto del aporte</label>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+                        <div class="sm:flex-1">
+                            <input id="donation-modal-amount" name="amount" type="text" inputmode="numeric" pattern="[0-9\.]*" autocomplete="off" required value="<?= htmlspecialchars($donationAmountDisplay) ?>" class="w-full rounded-2xl border <?= isset($donationFormErrors['amount']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> bg-white px-4 py-3 text-base font-medium text-slate-900 shadow-inner transition">
+                            <?php if (isset($donationFormErrors['amount'])): ?>
+                                <p class="mt-2 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['amount']) ?></p>
+                            <?php else: ?>
+                                <p class="mt-2 text-xs text-slate-500">Ingresa el monto en pesos chilenos. Aplicaremos los separadores automáticamente.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <label for="donation-modal-message" class="block text-sm font-medium text-slate-800">Mensaje (opcional)</label>
+                    <textarea id="donation-modal-message" name="message" rows="3" class="w-full rounded-2xl border <?= isset($donationFormErrors['message']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> bg-white px-4 py-2.5 text-sm text-slate-900 shadow-inner transition" placeholder="Comparte unas palabras de apoyo."><?= htmlspecialchars($donationOld['message'] ?? '') ?></textarea>
+                    <?php if (isset($donationFormErrors['message'])): ?>
+                        <p class="text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['message']) ?></p>
+                    <?php endif; ?>
+                </div>
+
+                <?php
+$methodBadges = [
+    'credit_card' => 'CC',
+    'debit_card' => 'DB',
+    'bank_transfer' => 'TR',
+    'paypal' => 'PP',
+    'webpay' => 'WP',
+];
+?>
+                <div class="space-y-3">
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Método de aporte</p>
+                    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-donation-method-buttons>
+                        <?php foreach ($paymentOptionCards as $methodKey => $option): ?>
+                            <?php $isActive = $donationPaymentMethod === $methodKey; ?>
+                            <button type="button"
+                                class="group relative flex items-start gap-3 rounded-2xl border <?= $isActive ? 'border-copihue-500 bg-copihue-50/60 text-copihue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-copihue-400 hover:text-copihue-600' ?> px-4 py-3 text-left text-sm transition"
+                                data-donation-method-button="<?= htmlspecialchars($methodKey) ?>">
+                                <span class="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border <?= $isActive ? 'border-copihue-500 bg-white text-copihue-600' : 'border-slate-200 bg-slate-50 text-slate-500' ?> text-[10px] font-semibold"><?= htmlspecialchars($methodBadges[$methodKey] ?? 'AP') ?></span>
+                                <span class="space-y-0.5">
+                                    <span class="block font-semibold"><?= htmlspecialchars($option['label']) ?></span>
+                                    <span class="block text-xs text-slate-500"><?= htmlspecialchars($option['description']) ?></span>
+                                </span>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if (isset($donationFormErrors['payment'])): ?>
+                        <p class="text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment']) ?></p>
+                    <?php else: ?>
+                        <p class="text-xs text-slate-500">Selecciona un método y completa los campos con datos de demostración para continuar.</p>
+                    <?php endif; ?>
+                </div>
+
+                <div class="space-y-4" data-donation-details>
+                    <div class="<?= $paymentSectionVisibility['card'] ? '' : 'hidden' ?> rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-4" data-donation-method-panel="credit_card,debit_card">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Datos de tarjeta (simulación)</p>
+                        <div class="mt-3 space-y-3">
+                            <div>
+                                <label for="donation-card-holder" class="block text-sm font-medium text-slate-800">Nombre del titular</label>
+                                <input id="donation-card-holder" name="card_holder" type="text" autocomplete="cc-name" value="<?= htmlspecialchars($donationPaymentFields['card_holder']) ?>" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_card_holder']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
+                                <?php if (isset($donationFormErrors['payment_card_holder'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_card_holder']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <label for="donation-card-number" class="block text-sm font-medium text-slate-800">Número de tarjeta</label>
+                                <input id="donation-card-number" name="card_number" type="text" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_card_number']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
+                                <?php if (isset($donationFormErrors['payment_card_number'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_card_number']) ?></p>
+                                <?php else: ?>
+                                    <p class="mt-1 text-xs text-gray-500">Ejemplo aceptado: 4242 4242 4242 4242.</p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label for="donation-card-expiration" class="block text-sm font-medium text-slate-800">Vencimiento (MM/AA)</label>
+                                    <input id="donation-card-expiration" name="card_expiration" type="text" inputmode="numeric" autocomplete="cc-exp" placeholder="08/28" value="<?= htmlspecialchars($donationPaymentFields['card_expiration']) ?>" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_card_expiration']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
+                                    <?php if (isset($donationFormErrors['payment_card_expiration'])): ?>
+                                        <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_card_expiration']) ?></p>
+                                    <?php endif; ?>
+                                </div>
+                                <div>
+                                    <label for="donation-card-cvv" class="block text-sm font-medium text-slate-800">CVV</label>
+                                    <input id="donation-card-cvv" name="card_cvv" type="text" inputmode="numeric" autocomplete="cc-csc" placeholder="123" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_card_cvv']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
+                                    <?php if (isset($donationFormErrors['payment_card_cvv'])): ?>
+                                        <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_card_cvv']) ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="<?= $paymentSectionVisibility['transfer'] ? '' : 'hidden' ?> rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-4" data-donation-method-panel="bank_transfer,manual">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Datos de transferencia simulada</p>
+                        <div class="mt-3 space-y-3">
+                            <div>
+                                <label for="donation-transfer-bank" class="block text-sm font-medium text-slate-800">Banco de origen</label>
+                                <input id="donation-transfer-bank" name="transfer_bank" type="text" value="<?= htmlspecialchars($donationPaymentFields['transfer_bank']) ?>" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_transfer_bank']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm" placeholder="BancoEstado, BCI, Santander...">
+                                <?php if (isset($donationFormErrors['payment_transfer_bank'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_transfer_bank']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <label for="donation-transfer-reference" class="block text-sm font-medium text-slate-800">Número de comprobante</label>
+                                <input id="donation-transfer-reference" name="transfer_reference" type="text" value="<?= htmlspecialchars($donationPaymentFields['transfer_reference']) ?>" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_transfer_reference']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm" placeholder="TRX-9981">
+                                <?php if (isset($donationFormErrors['payment_transfer_reference'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_transfer_reference']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <label for="donation-transfer-receipt" class="block text-sm font-medium text-slate-800">Adjuntar comprobante ficticio (opcional)</label>
+                                <input id="donation-transfer-receipt" name="transfer_receipt" type="file" accept="image/jpeg,image/png,application/pdf" class="mt-2 block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-copihue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-copihue-700">
+                                <?php if (isset($donationFormErrors['payment_transfer_receipt'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_transfer_receipt']) ?></p>
+                                <?php else: ?>
+                                    <p class="mt-1 text-xs text-gray-500">Sube un comprobante ficticio en JPG, PNG o PDF (máx. 2&nbsp;MB). Quedará almacenado de forma privada para revisión.</p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="<?= $paymentSectionVisibility['paypal'] ? '' : 'hidden' ?> rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-4" data-donation-method-panel="paypal">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cuenta PayPal demo</p>
+                        <div class="mt-3">
+                            <label for="donation-paypal-email" class="block text-sm font-medium text-slate-800">Correo electrónico</label>
+                            <input id="donation-paypal-email" name="paypal_email" type="email" value="<?= htmlspecialchars($donationPaymentFields['paypal_email']) ?>" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_paypal_email']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm" placeholder="demo@paypal.com">
+                            <?php if (isset($donationFormErrors['payment_paypal_email'])): ?>
+                                <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_paypal_email']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="<?= $paymentSectionVisibility['webpay'] ? '' : 'hidden' ?> rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-4" data-donation-method-panel="webpay">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Simulación Webpay</p>
+                        <div class="mt-3 space-y-3">
+                            <div>
+                                <label for="donation-webpay-rut" class="block text-sm font-medium text-slate-800">RUT del pagador</label>
+                                <input id="donation-webpay-rut" name="webpay_rut" type="text" value="<?= htmlspecialchars($donationPaymentFields['webpay_rut']) ?>" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_webpay_rut']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm" placeholder="11.111.111-1">
+                                <?php if (isset($donationFormErrors['payment_webpay_rut'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_webpay_rut']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <label for="donation-webpay-bank" class="block text-sm font-medium text-slate-800">Banco seleccionado</label>
+                                <select id="donation-webpay-bank" name="webpay_bank" class="mt-1 w-full rounded-lg border <?= isset($donationFormErrors['payment_webpay_bank']) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:border-copihue-500 focus:ring-copihue-500' ?> px-3 py-2 text-sm">
+                                    <option value="">Selecciona una opción</option>
+                                    <?php foreach ($webpayBanks as $bankOption): ?>
+                                        <option value="<?= htmlspecialchars($bankOption) ?>" <?= $donationPaymentFields['webpay_bank'] === $bankOption ? 'selected' : '' ?>><?= htmlspecialchars($bankOption) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <?php if (isset($donationFormErrors['payment_webpay_bank'])): ?>
+                                    <p class="mt-1 text-xs text-red-600"><?= htmlspecialchars($donationFormErrors['payment_webpay_bank']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                    <input id="donation-modal-anonymous" name="is_anonymous" type="checkbox" value="1" <?= $donationIsAnonymous ? 'checked' : '' ?> class="h-4 w-4 rounded border-slate-300 text-copihue-600 focus:ring-copihue-500">
+                    Publicar mi aporte como anónimo
+                </label>
+
+                <div class="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-xs text-slate-500">Los aportes con comprobante quedan en revisión manual antes de mostrarse públicamente.</p>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-copihue-500" data-donation-modal-close>Cancelar</button>
+                        <button type="submit" class="inline-flex items-center justify-center rounded-full bg-copihue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-copihue-700 focus:outline-none focus:ring-2 focus:ring-copihue-500 focus:ring-offset-2">Confirmar aporte</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const modal = document.querySelector('[data-donation-modal]');
+            if (!modal) {
+                return;
+            }
+
+            const openButtons = document.querySelectorAll('[data-donation-modal-open]');
+            const closeElements = modal.querySelectorAll('[data-donation-modal-close]');
+            const form = modal.querySelector('[data-donation-form]');
+            const amountInput = modal.querySelector('#donation-modal-amount');
+            const methodInput = modal.querySelector('#donation-modal-method');
+            const methodButtons = modal.querySelectorAll('[data-donation-method-button]');
+            const detailPanels = modal.querySelectorAll('[data-donation-method-panel]');
+            const cardNumberInput = modal.querySelector('#donation-card-number');
+            const sampleFactories = {
+                credit_card: function () {
+                    return {
+                        card_holder: 'María González',
+                        card_number: '4242 4242 4242 4242',
+                        card_expiration: '08/28',
+                        card_cvv: '123'
+                    };
+                },
+                debit_card: function () {
+                    return {
+                        card_holder: 'Carlos Díaz',
+                        card_number: '5222 2222 2222 2222',
+                        card_expiration: '10/27',
+                        card_cvv: '456'
+                    };
+                },
+                bank_transfer: function () {
+                    return {
+                        transfer_bank: 'BancoEstado',
+                        transfer_reference: 'TRX-' + (Math.floor(Math.random() * 900000) + 100000)
+                    };
+                },
+                paypal: function () {
+                    return {
+                        paypal_email: 'sandbox.cliente@example.com'
+                    };
+                },
+                webpay: function () {
+                    return {
+                        webpay_rut: '17.765.432-1',
+                        webpay_bank: 'BancoEstado'
+                    };
+                }
+            };
+
+            const applySampleData = function (method) {
+                if (!form) {
+                    return;
+                }
+                const normalizedMethod = method === 'manual' ? 'bank_transfer' : method;
+                const factory = sampleFactories[normalizedMethod];
+                if (typeof factory !== 'function') {
+                    return;
+                }
+                const sample = factory();
+                Object.keys(sample).forEach(function (fieldName) {
+                    const field = form.querySelector('[name=\"' + fieldName + '\"]');
+                    if (!field) {
+                        return;
+                    }
+                    if (field.tagName === 'SELECT') {
+                        if (!field.value) {
+                            field.value = sample[fieldName];
+                        }
+                        return;
+                    }
+                    if (field.value) {
+                        return;
+                    }
+                    field.value = sample[fieldName];
+                    try {
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                    } catch (error) {
+                        field.dispatchEvent(new Event('input'));
+                    }
+                });
+            };
+
+            const toggleBodyScroll = function (enabled) {
+                document.body.classList.toggle('overflow-hidden', enabled);
+            };
+
+            const openModal = function () {
+                modal.classList.remove('hidden');
+                modal.setAttribute('aria-hidden', 'false');
+                toggleBodyScroll(true);
+                const autofocusTarget = modal.querySelector('#donation-modal-amount');
+                if (autofocusTarget) {
+                    setTimeout(function () { autofocusTarget.focus({ preventScroll: true }); }, 60);
+                }
+            };
+
+            const closeModal = function () {
+                modal.classList.add('hidden');
+                modal.setAttribute('aria-hidden', 'true');
+                toggleBodyScroll(false);
+            };
+
+            openButtons.forEach(function (button) {
+                button.addEventListener('click', openModal);
+            });
+
+            closeElements.forEach(function (el) {
+                el.addEventListener('click', closeModal);
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    closeModal();
+                }
+            });
+
+            const formatThousands = function (value) {
+                const digits = (value || '').replace(/\D/g, '');
+                if (!digits) {
+                    return '';
+                }
+                return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            };
+
+            if (amountInput) {
+                amountInput.value = formatThousands(amountInput.value);
+
+                amountInput.addEventListener('input', function () {
+                    amountInput.value = formatThousands(amountInput.value);
+                });
+
+                amountInput.addEventListener('blur', function () {
+                    amountInput.value = formatThousands(amountInput.value);
+                });
+            }
+
+            const activateMethod = function (method) {
+                if (!methodInput) {
+                    return;
+                }
+                methodInput.value = method;
+
+                methodButtons.forEach(function (btn) {
+                    const isActive = btn.getAttribute('data-donation-method-button') === method;
+                    btn.classList.toggle('border-copihue-500', isActive);
+                    btn.classList.toggle('bg-copihue-50', isActive);
+                    btn.classList.toggle('text-copihue-700', isActive);
+                    btn.classList.toggle('border-gray-200', !isActive);
+                    btn.classList.toggle('bg-white', !isActive);
+                    btn.classList.toggle('text-gray-700', !isActive);
+                });
+
+                detailPanels.forEach(function (panel) {
+                    const methods = (panel.getAttribute('data-donation-method-panel') || '').split(',');
+                    const isVisible = methods.indexOf(method) !== -1;
+                    panel.classList.toggle('hidden', !isVisible);
+                    panel.querySelectorAll('input, select, textarea').forEach(function (field) {
+                        field.disabled = !isVisible;
+                        if (!isVisible && (field.name === 'card_number' || field.name === 'card_cvv')) {
+                            field.value = '';
+                        }
+                    });
+                });
+                applySampleData(method);
+            };
+
+            methodButtons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const targetMethod = btn.getAttribute('data-donation-method-button');
+                    activateMethod(targetMethod);
+                });
+            });
+
+            if (cardNumberInput) {
+                const formatCard = function (value) {
+                    const digits = (value || '').replace(/\D/g, '');
+                    return digits.replace(/(.{4})/g, '$1 ').trim();
+                };
+
+                cardNumberInput.addEventListener('input', function () {
+                    cardNumberInput.value = formatCard(cardNumberInput.value);
+                });
+
+                cardNumberInput.addEventListener('blur', function () {
+                    cardNumberInput.value = formatCard(cardNumberInput.value);
+                });
+            }
+
+            if (form) {
+                form.addEventListener('submit', function () {
+                    if (amountInput) {
+                        amountInput.value = (amountInput.value || '').replace(/\D/g, '');
+                    }
+                });
+            }
+
+            const initialMethod = methodInput ? methodInput.value : null;
+            if (initialMethod) {
+                activateMethod(initialMethod);
+            } else if (methodButtons.length > 0) {
+                activateMethod(methodButtons[0].getAttribute('data-donation-method-button'));
+            }
+
+            const openOnLoad = modal.getAttribute('data-open-on-load') === 'true';
+            if (openOnLoad) {
+                openModal();
+            }
+        })();
+    </script>
+
     <?php if (!empty($celebrationOverlay)): ?>
         <?php
         $overlayData = $celebrationOverlay;
@@ -772,7 +1235,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
 
     <div class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/80 px-4" data-gallery-lightbox aria-hidden="true" tabindex="-1">
         <button type="button" class="absolute inset-0 h-full w-full cursor-default" data-gallery-close tabindex="-1" aria-label="Cerrar galería"></button>
-        <div class="relative w-full max-w-4xl space-y-4 rounded-3xl bg-white p-6 shadow-strong">
+        <div class="relative w-full max-w-5xl space-y-4 rounded-3xl bg-white p-4 sm:p-6 lg:p-8 shadow-strong transition-all duration-300" data-gallery-modal-container>
             <div class="flex items-center justify-between">
                 <h3 class="text-sm font-semibold text-gray-500">Galería de la campaña</h3>
                 <div class="flex items-center gap-2">
@@ -784,7 +1247,7 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                 </div>
             </div>
             <div class="relative overflow-hidden rounded-2xl bg-gray-100">
-                <img src="" alt="" data-gallery-current-image class="max-h-[70vh] w-full object-contain">
+                <img src="" alt="" data-gallery-current-image class="w-full object-contain transition-all duration-300 ease-out">
                 <button type="button" class="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 text-gray-700 shadow hover:bg-white focus:outline-none focus:ring-2 focus:ring-copihue-500" data-gallery-prev>
                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5l-5 5 5 5" stroke-linecap="round" stroke-linejoin="round" /></svg>
                     <span class="sr-only">Imagen anterior</span>
@@ -794,7 +1257,10 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                     <span class="sr-only">Imagen siguiente</span>
                 </button>
             </div>
-            <p class="text-sm text-gray-600" data-gallery-current-caption></p>
+            <div class="space-y-1 text-sm text-gray-600">
+                <p data-gallery-current-caption></p>
+                <p class="text-xs text-gray-500">Usa las flechas del teclado o los botones laterales para recorrer la galería.</p>
+            </div>
         </div>
     </div>
 
@@ -820,6 +1286,10 @@ $loginRedirectUrl = Router::url('login') . '?redirect=' . urlencode($donationRed
                 </div>
             </div>
             <p class="text-xs text-gray-500">Respetamos la privacidad del creador. Solo compartimos información pública autorizada.</p>
+            <div class="hidden space-y-2" data-creator-profile-socials-wrapper>
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Redes verificadas</p>
+                <div class="flex flex-wrap gap-2" data-creator-profile-socials></div>
+            </div>
         </div>
     </div>
 

@@ -4,11 +4,13 @@ class CampaignUpdateController
 {
     private Campaign $campaigns;
     private CampaignUpdate $updates;
+    private CampaignMediaUploadService $mediaUploads;
 
     public function __construct()
     {
         $this->campaigns = new Campaign();
         $this->updates = new CampaignUpdate();
+        $this->mediaUploads = new CampaignMediaUploadService();
     }
 
     public function store($username, $identifier): void
@@ -65,7 +67,13 @@ class CampaignUpdateController
             }
         }
         $timeOver = $endTimestamp !== null && $endTimestamp < time();
-        $campaignStatus = strtolower((string)($campaign['status'] ?? ''));
+        $campaignStatus = strtolower(trim((string)($campaign['status'] ?? '')));
+        $approvedStatuses = ['published', 'paused', 'completed'];
+        if (!in_array($campaignStatus, $approvedStatuses, true)) {
+            SessionHelper::setFlash('warning', 'Tu campaña aún está en revisión. Podrás compartir actualizaciones cuando el equipo la apruebe.');
+            Router::redirect($campaignUpdatesTarget);
+            return;
+        }
         $campaignFinalized = in_array($campaignStatus, ['completed', 'cancelled', 'archived'], true) || $goalReached || $timeOver;
         $finalUpdateAlreadyPosted = !empty($campaign['funding_celebrated_at']);
 
@@ -85,11 +93,24 @@ class CampaignUpdateController
             return;
         }
 
+        $storedMediaUrls = [];
+        try {
+            $mediaPayloadData = $this->prepareMediaPayload($input, (int)$campaign['id'], $currentUserId);
+            $mediaPayload = $mediaPayloadData['items'];
+            $storedMediaUrls = $mediaPayloadData['cleanup'];
+        } catch (RuntimeException $exception) {
+            $errors[] = $exception->getMessage();
+            $_SESSION['campaign_update_errors'] = $errors;
+            $_SESSION['campaign_update_old'] = $input;
+            Router::redirect($campaignUpdatesTarget);
+            return;
+        }
+
         try {
             $this->updates->create((int)$campaign['id'], $currentUserId, [
                 'title' => $input['title'],
                 'body' => $input['body'],
-                'media' => $this->parseMedia($input),
+                'media' => $mediaPayload,
                 'status' => 'published',
                 'visibility' => 'public'
             ]);
@@ -101,6 +122,17 @@ class CampaignUpdateController
                 ]);
             }
         } catch (Throwable $exception) {
+            foreach ($storedMediaUrls as $url) {
+                try {
+                    $this->mediaUploads->deletePublicUrl($url);
+                } catch (Throwable $cleanupException) {
+                    Logger::warning('No se pudo eliminar un archivo de actualización tras error', [
+                        'campaign_id' => $campaign['id'] ?? null,
+                        'url' => $url,
+                        'error' => $cleanupException->getMessage(),
+                    ]);
+                }
+            }
             Logger::error('No se pudo crear la actualización de campaña', [
                 'campaign_id' => $campaign['id'] ?? null,
                 'user_id' => $currentUserId,
@@ -146,10 +178,19 @@ class CampaignUpdateController
 
     private function collectInput(): array
     {
+        $socialLinks = $_POST['social_links'] ?? [];
+        if (!is_array($socialLinks)) {
+            $socialLinks = [];
+        }
+        $socialLinks = array_map(static function ($value) {
+            return trim((string)$value);
+        }, array_slice($socialLinks, 0, 3));
+
         return [
             'title' => trim((string)($_POST['title'] ?? '')),
             'body' => trim((string)($_POST['body'] ?? '')),
-            'media_urls' => $_POST['media_urls'] ?? []
+            'social_links' => $socialLinks,
+            'media_urls' => [] // legado
         ];
     }
 
@@ -167,36 +208,113 @@ class CampaignUpdateController
             $errors[] = 'La actualización debe tener al menos 20 caracteres.';
         }
 
-        if (!empty($input['media_urls']) && is_array($input['media_urls'])) {
-            $validUrls = array_filter($input['media_urls'], function ($url) {
-                $url = trim((string)$url);
-                return $url === '' || filter_var($url, FILTER_VALIDATE_URL);
-            });
-
-            if (count($validUrls) !== count($input['media_urls'])) {
-                $errors[] = 'Una o más URLs de medios no tienen un formato válido.';
+        if (!empty($input['social_links']) && is_array($input['social_links'])) {
+            foreach ($input['social_links'] as $link) {
+                $link = trim((string)$link);
+                if ($link === '') {
+                    continue;
+                }
+                if (!filter_var($link, FILTER_VALIDATE_URL)) {
+                    $errors[] = 'Una o más redes sociales no tienen un formato válido.';
+                    break;
+                }
             }
         }
 
         return $errors;
     }
 
-    private function parseMedia(array $input): array
+    private function prepareMediaPayload(array $input, int $campaignId, int $userId): array
     {
-        if (empty($input['media_urls']) || !is_array($input['media_urls'])) {
-            return [];
+        $storedImages = [];
+        if (isset($_FILES['update_images'])) {
+            $storedImages = $this->mediaUploads->storeUpdateImages($_FILES['update_images'], $campaignId, $userId);
         }
 
         $media = [];
-        foreach ($input['media_urls'] as $url) {
-            $url = trim((string)$url);
-            if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
-                continue;
-            }
-
-            $media[] = ['url' => $url];
+        foreach ($storedImages as $image) {
+            $media[] = [
+                'type' => 'image',
+                'url' => $image['url'],
+                'mime' => $image['mime'] ?? null,
+            ];
         }
 
-        return $media;
+        if (!empty($input['social_links']) && is_array($input['social_links'])) {
+            foreach ($input['social_links'] as $link) {
+                $link = trim((string)$link);
+                if ($link === '' || !filter_var($link, FILTER_VALIDATE_URL)) {
+                    continue;
+                }
+                $platformMeta = $this->detectSocialPlatform($link);
+                $media[] = [
+                    'type' => 'link',
+                    'url' => $link,
+                    'platform' => $platformMeta['platform'],
+                    'label' => $platformMeta['label'],
+                    'initial' => $platformMeta['initial'],
+                ];
+            }
+        }
+
+        return [
+            'items' => $media,
+            'cleanup' => array_column($storedImages, 'url'),
+        ];
+    }
+
+    private function detectSocialPlatform(string $url): array
+    {
+        $host = strtolower((string)parse_url($url, PHP_URL_HOST));
+        $platformDomains = [
+            'instagram' => ['instagram.com'],
+            'facebook' => ['facebook.com', 'fb.com'],
+            'x' => ['twitter.com', 'x.com'],
+            'tiktok' => ['tiktok.com'],
+            'youtube' => ['youtube.com', 'youtu.be'],
+            'linkedin' => ['linkedin.com'],
+            'whatsapp' => ['wa.me', 'whatsapp.com'],
+        ];
+
+        $platformLabels = [
+            'instagram' => 'Instagram',
+            'facebook' => 'Facebook',
+            'x' => 'X (Twitter)',
+            'tiktok' => 'TikTok',
+            'youtube' => 'YouTube',
+            'linkedin' => 'LinkedIn',
+            'whatsapp' => 'WhatsApp',
+            'website' => 'Sitio web',
+            'linktree' => 'Linktree',
+        ];
+
+        foreach ($platformDomains as $platform => $domains) {
+            foreach ($domains as $domain) {
+                if ($host === $domain || substr($host, -strlen($domain)) === $domain) {
+                    $label = $platformLabels[$platform] ?? ucfirst($platform);
+                    $initial = strtoupper(mb_substr($label, 0, 2));
+                    return [
+                        'platform' => $platform,
+                        'label' => $label,
+                        'initial' => $initial !== '' ? $initial : 'EN',
+                    ];
+                }
+            }
+        }
+
+        if ($host === 'linktr.ee' || substr($host, -strlen('linktr.ee')) === 'linktr.ee') {
+            return [
+                'platform' => 'linktree',
+                'label' => $platformLabels['linktree'],
+                'initial' => 'LT',
+            ];
+        }
+
+        $label = $platformLabels['website'];
+        return [
+            'platform' => 'website',
+            'label' => $label,
+            'initial' => 'WEB',
+        ];
     }
 }

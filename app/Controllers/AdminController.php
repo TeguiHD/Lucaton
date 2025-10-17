@@ -17,6 +17,9 @@ class AdminController {
     private ?int $pendingCampaignsCache = null;
     private ?int $aiPendingModerationCache = null;
     private bool $campaignHasAiAssisted = false;
+    private CampaignAppeal $appeals;
+    private bool $appealsTableExists = false;
+    private ?int $pendingAppealsCache = null;
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -26,6 +29,8 @@ class AdminController {
         $this->notifications = new Notification();
         $this->auditReader = new AuditLogReader();
         $this->supportTicketStore = new SupportTicketStore();
+        $this->appeals = new CampaignAppeal();
+        $this->appealsTableExists = $this->db->tableExists('campaign_appeals');
         $this->detectCampaignSchema();
     }
 
@@ -40,6 +45,7 @@ class AdminController {
         $page_title = 'Panel de Administración';
         $current_page = 'admin-dashboard';
         $pending_campaigns_count = $metrics['pending_campaigns'];
+        $pending_appeals_count = $metrics['pending_appeals'];
         $ai_pending_count = $metrics['awaiting_peer_review'];
 
         include VIEWS_PATH . '/admin/dashboard.php';
@@ -229,11 +235,263 @@ class AdminController {
         if ($serveInline) {
             header('Content-Disposition: inline; filename="' . rawurlencode($filename) . '"');
         } else {
-            header('Content-Disposition: attachment; filename="' . rawurlencode($filename) . '"');
+        header('Content-Disposition: attachment; filename="' . rawurlencode($filename) . '"');
+    }
+
+    readfile($absolute);
+    exit;
+}
+
+    public function appeals(): void {
+        $this->ensureAdmin();
+
+        if (!$this->appealsTableExists) {
+            SessionHelper::setFlash('info', 'El módulo de apelaciones aún no está disponible en este entorno.');
+            Router::redirect('/admin');
+            return;
         }
+
+        $status = strtolower(trim((string)($_GET['status'] ?? 'open')));
+        $search = trim((string)($_GET['search'] ?? ''));
+        $page = max(1, (int)($_GET['page'] ?? 1));
+
+        try {
+            $result = $this->appeals->paginateForAdmin(
+                [
+                    'status' => $status,
+                    'search' => $search,
+                ],
+                25,
+                $page
+            );
+            $appeals = $result['items'];
+            $pagination = $result['pagination'];
+        } catch (Throwable $exception) {
+            Logger::error('No se pudieron obtener las apelaciones', [
+                'status' => $status,
+                'search' => $search,
+                'error' => $exception->getMessage(),
+            ]);
+            SessionHelper::setFlash('error', 'No pudimos cargar las apelaciones. Intenta nuevamente.');
+            $appeals = [];
+            $pagination = [
+                'total' => 0,
+                'page' => $page,
+                'per_page' => 25,
+                'total_pages' => 1,
+            ];
+        }
+
+        $filters = [
+            'status' => $status,
+            'search' => $search,
+        ];
+
+        $page_title = 'Apelaciones de campañas';
+        $current_page = 'admin-appeals';
+        $pending_campaigns_count = $this->getPendingCampaignCount();
+        $pending_appeals_count = $this->getPendingAppealsCount();
+        $ai_pending_count = $this->getAiPendingCount();
+
+        include VIEWS_PATH . '/admin/appeals.php';
+    }
+
+    public function showAppeal($id): void {
+        $this->ensureAdmin();
+
+        if (!$this->appealsTableExists) {
+            SessionHelper::setFlash('info', 'El módulo de apelaciones aún no está disponible en este entorno.');
+            Router::redirect('/admin/apelaciones');
+            return;
+        }
+
+        $appealId = (int)$id;
+        if ($appealId <= 0) {
+            SessionHelper::setFlash('error', 'Apelación inválida.');
+            Router::redirect('/admin/apelaciones');
+            return;
+        }
+
+        $appeal = $this->appeals->findForAdmin($appealId);
+        if (!$appeal) {
+            SessionHelper::setFlash('error', 'No encontramos la apelación indicada.');
+            Router::redirect('/admin/apelaciones');
+            return;
+        }
+
+        $campaign = null;
+        $campaignView = null;
+        $campaignId = (int)($appeal['campaign_id'] ?? 0);
+        if ($campaignId > 0) {
+            try {
+                $campaign = $this->campaigns->findById($campaignId);
+                if ($campaign) {
+                    $campaignView = array_merge($campaign, CampaignPresenter::present($campaign));
+                }
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo recuperar la campaña asociada a la apelación', [
+                    'appeal_id' => $appealId,
+                    'campaign_id' => $campaignId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $page_title = 'Apelación #' . $appealId;
+        $current_page = 'admin-appeals';
+        $pending_campaigns_count = $this->getPendingCampaignCount();
+        $pending_appeals_count = $this->getPendingAppealsCount();
+        $ai_pending_count = $this->getAiPendingCount();
+
+        include VIEWS_PATH . '/admin/appeal-show.php';
+    }
+
+    public function downloadAppealFile($appealId, $fileId): void {
+        $this->ensureAdmin();
+
+        if (!$this->appealsTableExists) {
+            http_response_code(404);
+            echo 'Archivo no disponible.';
+            return;
+        }
+
+        $appealId = (int)$appealId;
+        $fileId = (int)$fileId;
+        if ($appealId <= 0 || $fileId <= 0) {
+            http_response_code(404);
+            echo 'Archivo no disponible.';
+            return;
+        }
+
+        $file = $this->appeals->findFile($appealId, $fileId);
+        if (!$file || empty($file['path'])) {
+            http_response_code(404);
+            echo 'Archivo no disponible.';
+            return;
+        }
+
+        $relativePath = $file['path'];
+        $campaignId = (int)($file['campaign_id'] ?? 0);
+        $expectedPrefix = '/storage/private/campaigns/' . $campaignId . '/appeals/' . $appealId;
+        if ($campaignId <= 0 || strpos($relativePath, $expectedPrefix) !== 0) {
+            http_response_code(403);
+            echo 'No autorizado.';
+            return;
+        }
+
+        $absolute = rtrim(ROOT_PATH, '/') . $relativePath;
+        if (!is_file($absolute)) {
+            http_response_code(404);
+            echo 'Archivo no disponible.';
+            return;
+        }
+
+        $mode = strtolower(trim($_GET['mode'] ?? 'download'));
+        $filename = $file['original_name'] ?: basename($absolute);
+        $safeFilename = str_replace('"', '', $filename);
+        $mime = $file['mime_type'] ?? (function_exists('mime_content_type') ? mime_content_type($absolute) : null);
+        if (!$mime) {
+            $mime = 'application/octet-stream';
+        }
+
+        $disposition = $mode === 'inline' ? 'inline' : 'attachment';
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: ' . $disposition . '; filename="' . $safeFilename . '"');
+        header('Content-Length: ' . filesize($absolute));
+        header('X-Content-Type-Options: nosniff');
 
         readfile($absolute);
         exit;
+    }
+
+    public function resolveAppeal($id): void {
+        $this->ensureAdmin();
+
+        if (!$this->appealsTableExists) {
+            SessionHelper::setFlash('info', 'El módulo de apelaciones aún no está disponible en este entorno.');
+            Router::redirect('/admin/apelaciones');
+            return;
+        }
+
+        $appealId = (int)$id;
+        if ($appealId <= 0) {
+            SessionHelper::setFlash('error', 'Apelación inválida.');
+            Router::redirect('/admin/apelaciones');
+            return;
+        }
+
+        $appeal = $this->appeals->findForAdmin($appealId);
+        if (!$appeal) {
+            SessionHelper::setFlash('error', 'No encontramos la apelación indicada.');
+            Router::redirect('/admin/apelaciones');
+            return;
+        }
+
+        $status = strtolower(trim((string)($_POST['status'] ?? '')));
+        $response = trim((string)($_POST['response'] ?? ''));
+        $notifyOwner = isset($_POST['notify_owner']);
+
+        $allowed = ['under_review', 'approved', 'rejected', 'closed'];
+        if (!in_array($status, $allowed, true)) {
+            SessionHelper::setFlash('error', 'Selecciona un estado válido.');
+            Router::redirect('/admin/apelaciones/' . $appealId);
+            return;
+        }
+
+        if ($status === 'rejected' && strlen($response) < 40) {
+            SessionHelper::setFlash('error', 'Explica con mayor detalle los motivos para rechazar la apelación (mínimo 40 caracteres).');
+            Router::redirect('/admin/apelaciones/' . $appealId . '#resolver');
+            return;
+        }
+
+        $adminId = (int)(SessionHelper::getUserId() ?? 0);
+        $payload = [
+            'admin_response' => $response !== '' ? $response : null,
+            'reviewed_by' => $adminId,
+        ];
+
+        if ($status === 'under_review') {
+            $payload['reviewed_at'] = null;
+        }
+
+        try {
+            $this->appeals->updateStatus($appealId, $status, $payload);
+            $this->pendingAppealsCache = null;
+        } catch (Throwable $exception) {
+            Logger::error('No se pudo actualizar la apelación', [
+                'appeal_id' => $appealId,
+                'status' => $status,
+                'error' => $exception->getMessage(),
+            ]);
+            SessionHelper::setFlash('error', 'No pudimos actualizar la apelación. Intenta nuevamente.');
+            Router::redirect('/admin/apelaciones/' . $appealId);
+            return;
+        }
+
+        if ($status === 'approved') {
+            $this->reinstateCampaignAfterAppeal($appeal, $response);
+        }
+
+        if (in_array($status, ['approved', 'rejected', 'closed'], true) && $notifyOwner) {
+            $this->notifyAppealResolution($appeal, $status, $response);
+        }
+
+        Logger::audit('campaign_appeal_resolved', $adminId, [
+            'appeal_id' => $appealId,
+            'campaign_id' => $appeal['campaign_id'] ?? null,
+            'status' => $status,
+        ]);
+
+        $message = match ($status) {
+            'under_review' => 'La apelación quedó marcada en revisión y asignada a tu usuario.',
+            'approved' => 'La apelación fue aprobada y la campaña quedó disponible.',
+            'rejected' => 'Registramos el rechazo de la apelación.',
+            'closed' => 'Marcaste la apelación como cerrada.',
+            default => 'Se actualizó el estado de la apelación.',
+        };
+        SessionHelper::setFlash('success', $message);
+
+        Router::redirect('/admin/apelaciones/' . $appealId);
     }
 
     public function aiModeration(): void {
@@ -407,11 +665,21 @@ class AdminController {
             Router::redirect('/admin/usuarios');
         }
 
+        $userEmail = null;
+        if (!empty($user['email'])) {
+            $emailCandidate = strtolower(trim((string)$user['email']));
+            if ($emailCandidate !== '') {
+                $userEmail = $emailCandidate;
+            }
+        }
+
         $campaignStats = $this->fetchUserCampaignStats($userId);
         $donationStats = $this->fetchUserDonationStats($userId);
 
         $recentCampaigns = $this->campaigns->findByUserId($userId, 5);
-        $recentDonations = $this->canQueryUserDonations() ? $this->donations->findByUserId($userId, 5) : [];
+        $recentDonations = $this->canQueryUserDonations()
+            ? $this->donations->findByUserId($userId, 5, 0, [], $userEmail)
+            : [];
         $recentAuditEvents = $this->auditReader->getRecentEventsForUser($userId, 8);
 
         $page_title = 'Perfil de ' . ($user['first_name'] ?? $user['email'] ?? 'Usuario');
@@ -659,6 +927,7 @@ class AdminController {
     private function buildDashboardMetrics(): array {
         $metrics = [
             'pending_campaigns' => $this->getPendingCampaignCount(),
+            'pending_appeals' => $this->getPendingAppealsCount(),
             'active_campaigns' => 0,
             'private_campaigns' => 0,
             'awaiting_peer_review' => 0,
@@ -774,10 +1043,30 @@ class AdminController {
                 'tag' => 'Gemini',
                 'accent' => 'bg-emerald-100 text-emerald-700',
             ],
+            'gemini' => [
+                'label' => 'Google AI (Gemini)',
+                'tag' => 'Gemini',
+                'accent' => 'bg-emerald-100 text-emerald-700',
+            ],
             'openrouter' => [
                 'label' => 'OpenRouter (DeepSeek)',
                 'tag' => 'DeepSeek',
                 'accent' => 'bg-copihue-100 text-copihue-700',
+            ],
+            'openai' => [
+                'label' => 'OpenAI',
+                'tag' => 'OpenAI',
+                'accent' => 'bg-indigo-100 text-indigo-700',
+            ],
+            'anthropic' => [
+                'label' => 'Anthropic',
+                'tag' => 'Claude',
+                'accent' => 'bg-amber-100 text-amber-700',
+            ],
+            'stability' => [
+                'label' => 'Stability AI',
+                'tag' => 'Stability',
+                'accent' => 'bg-sky-100 text-sky-700',
             ],
             'fallback' => [
                 'label' => 'Fallback',
@@ -2408,6 +2697,123 @@ class AdminController {
 
         $this->pendingCampaignsCache = 0;
         return 0;
+    }
+
+    private function reinstateCampaignAfterAppeal(array $appeal, ?string $response): void {
+        $campaignId = (int)($appeal['campaign_id'] ?? 0);
+        if ($campaignId <= 0) {
+            return;
+        }
+
+        try {
+            $campaign = $this->campaigns->findById($campaignId);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo obtener la campaña para reactivar tras apelación', [
+                'campaign_id' => $campaignId,
+                'appeal_id' => $appeal['id'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+            return;
+        }
+
+        if (!$campaign) {
+            return;
+        }
+
+        $adminId = (int)(SessionHelper::getUserId() ?? 0) ?: null;
+        $currentStatus = strtolower((string)($campaign['status'] ?? ''));
+
+        if ($this->campaignHasStatus && $currentStatus !== 'published') {
+            try {
+                $this->campaigns->changeStatus(
+                    $campaignId,
+                    'published',
+                    $adminId,
+                    'Reactivada tras apelación aprobada'
+                );
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudo actualizar el estado de la campaña tras la apelación', [
+                    'campaign_id' => $campaignId,
+                    'appeal_id' => $appeal['id'] ?? null,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        try {
+            $this->applyApprovalMetadata($campaignId, [
+                'visibility' => 'public',
+                'approved_by' => $adminId,
+                'approved_at' => date('Y-m-d H:i:s'),
+            ]);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo actualizar la visibilidad de la campaña tras la apelación', [
+                'campaign_id' => $campaignId,
+                'appeal_id' => $appeal['id'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyAppealResolution(array $appeal, string $status, ?string $response): void {
+        $ownerId = (int)($appeal['campaign_owner_id'] ?? $appeal['user_id'] ?? 0);
+        if ($ownerId <= 0) {
+            return;
+        }
+
+        $campaignTitle = trim((string)($appeal['campaign_title'] ?? 'tu campaña'));
+        $baseMessage = match ($status) {
+            'approved' => "Buenas noticias: aprobamos tu apelación y {$campaignTitle} vuelve a estar disponible para recibir apoyo.",
+            'rejected' => "Revisamos tu apelación para {$campaignTitle}, pero necesitamos información adicional antes de poder publicarla.",
+            'closed' => "Cerramos la apelación asociada a {$campaignTitle}. Si necesitas continuar el proceso, abre un nuevo caso con información adicional.",
+            default => "Actualizamos el estado de la apelación para {$campaignTitle}.",
+        };
+
+        $message = $baseMessage;
+        if ($response !== null && trim($response) !== '') {
+            $message .= "\n\nNotas del equipo:\n" . trim($response);
+        }
+
+        try {
+            $this->notifications->createSystem([
+                'title' => 'Actualización de tu apelación',
+                'message' => $message,
+                'audience' => 'users',
+                'user_ids' => [$ownerId],
+                'meta' => [
+                    'campaign_id' => $appeal['campaign_id'] ?? null,
+                    'appeal_id' => $appeal['id'] ?? null,
+                    'status' => $status,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo enviar la notificación de resolución de apelación', [
+                'appeal_id' => $appeal['id'] ?? null,
+                'campaign_id' => $appeal['campaign_id'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function getPendingAppealsCount(): int {
+        if (!$this->appealsTableExists) {
+            return 0;
+        }
+
+        if ($this->pendingAppealsCache !== null) {
+            return $this->pendingAppealsCache;
+        }
+
+        try {
+            $this->pendingAppealsCache = $this->appeals->countByStatuses(['pending', 'under_review']);
+        } catch (Throwable $exception) {
+            Logger::warning('No se pudo calcular el total de apelaciones pendientes', [
+                'error' => $exception->getMessage(),
+            ]);
+            $this->pendingAppealsCache = 0;
+        }
+
+        return $this->pendingAppealsCache;
     }
 
     private function countCampaignsByStatus(array $statuses): int {
