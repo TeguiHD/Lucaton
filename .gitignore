@@ -85,3 +85,11 @@ clover.xml
 # Pendientes and task files (local development only)
 /Pendientes/
 pendientes*.txt
+
+# Public storage news (uploaded media)
+/public/storage/news/*
+!public/storage/news/.gitkeep
+
+# Feedback data (runtime)
+/storage/feedback/*
+!storage/feedback/.gitkeep
