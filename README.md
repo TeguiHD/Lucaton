@@ -185,7 +185,7 @@ Tesis/
 
 5. **Configurar base de datos**
    ```bash
-   mysql -u root -p < database/migrations/schema.sql
+   mysql -u lucaton -p lucaton < database/migrations/run_migrations.php
    ```
 
 6. **Configurar permisos**
@@ -238,6 +238,11 @@ pnpm run build-css
 | `MAIL_PASSWORD`      | `tu_api_key`                    | Contraseña o API key SMTP.                                                 |
 | `MAIL_FROM_ADDRESS`  | `notificaciones@tu-dominio.com` | Remitente por defecto.                                                     |
 | `OPENROUTER_API_KEY` | `tu_api_key_openrouter`         | Clave para IA (opcional si aún no usas IA).                                |
+| `SESSION_SIGNATURE_KEY` | `hex_64_caracteres`          | Genera con `php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"` para firmar sesiones. |
+| `ROLE_SIGNATURE_KEY` | `otro_hex_64`                   | Genera otro valor distinto para la firma de roles.                         |
+| `APP_SUPERADMIN_AUTO_PROMOTE` | `false`                | Déjalo en `false` salvo que necesites auto-promocionar correos a superadmin. |
+| `SUPERADMIN_SEEDS_SECRET` | `deja_vacío_o_tu_secreto`  | Si activas la promoción, coloca aquí un secreto largo (no lo publiques).   |
+| `SUPERADMIN_SEEDS_HASHED` | `hash_generado`            | Hash(es) creados con `php scripts/generate_superadmin_seed.php correo@ejemplo.com`. |
 
 Guarda el archivo `.env` y **no lo subas a GitHub**.
 
