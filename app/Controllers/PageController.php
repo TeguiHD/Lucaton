@@ -46,5 +46,10 @@ class PageController {
         $page_context = 'help';
         include VIEWS_PATH . '/public/centro-de-ayuda.php';
     }
+
+    public function vision() {
+        $current_page = 'vision';
+        include VIEWS_PATH . '/public/vision.php';
+    }
 }
 ?>

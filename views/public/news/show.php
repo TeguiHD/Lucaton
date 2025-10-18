@@ -37,22 +37,30 @@ if ($author === '') {
 $category_name = $article['category_name'] ?? null;
 $category_slug = $article['category_slug'] ?? null;
 $gallery = $article['gallery'] ?? [];
+$canonical_url = $article_url ?: Router::url('noticias');
+$sanitized_title = htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8');
+$sanitized_description = htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8');
+$sanitized_canonical = htmlspecialchars($canonical_url, ENT_QUOTES, 'UTF-8');
+$sanitized_cover = htmlspecialchars($cover_image, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($page_title) ?></title>
-    <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
-    <meta property="og:title" content="<?= htmlspecialchars($page_title) ?>">
-    <meta property="og:description" content="<?= htmlspecialchars($page_description) ?>">
-    <meta property="og:url" content="<?= htmlspecialchars($article_url) ?>">
-    <meta property="og:image" content="<?= htmlspecialchars($cover_image) ?>">
+    <title><?= $sanitized_title ?></title>
+    <meta name="description" content="<?= $sanitized_description ?>">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="<?= $sanitized_canonical ?>">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="<?= $sanitized_title ?>">
+    <meta property="og:description" content="<?= $sanitized_description ?>">
+    <meta property="og:url" content="<?= $sanitized_canonical ?>">
+    <meta property="og:image" content="<?= $sanitized_cover ?>">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="<?= htmlspecialchars($page_title) ?>">
-    <meta name="twitter:description" content="<?= htmlspecialchars($page_description) ?>">
-    <meta name="twitter:image" content="<?= htmlspecialchars($cover_image) ?>">
+    <meta name="twitter:title" content="<?= $sanitized_title ?>">
+    <meta name="twitter:description" content="<?= $sanitized_description ?>">
+    <meta name="twitter:image" content="<?= $sanitized_cover ?>">
     <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
     <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
     <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">
@@ -90,9 +98,9 @@ $gallery = $article['gallery'] ?? [];
                                     <?= htmlspecialchars($published_date) ?>
                                 </span>
                             <?php endif; ?>
-                            <span class="inline-flex items-center gap-2 text-white/80">
+                            <span class="inline-flex items-center gap-2 news-author-chip">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A3 3 0 017 12h10a3 3 0 011.879 5.303L12 22.118l-6.879-4.314z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14c3.866 0 7 2.239 7 5v1.5H5V19c0-2.761 3.134-5 7-5zm0-2a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
                                 </svg>
                                 <?= htmlspecialchars($author) ?>
                             </span>

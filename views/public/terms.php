@@ -74,7 +74,8 @@ $last_updated = '29 de septiembre de 2025';
                         <a href="#termination" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">11. Terminación</a>
                         <a href="#modifications" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">12. Modificaciones</a>
                         <a href="#governing" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">13. Ley Aplicable</a>
-                        <a href="#contact" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">14. Contacto</a>
+                        <a href="#data-protection" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">14. Protección de Datos y Derechos ARCO</a>
+                        <a href="#contact" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">15. Contacto</a>
                     </nav>
                 </div>
             </div>
@@ -299,9 +300,31 @@ $last_updated = '29 de septiembre de 2025';
                             </p>
                         </section>
 
-                        <!-- 14. Contacto -->
+                        <!-- 14. Protección de Datos y Derechos ARCO -->
+                        <section id="data-protection" class="mb-8">
+                            <h2 class="text-2xl font-semibold text-gray-900 mb-4">14. Protección de Datos y Derechos ARCO</h2>
+                            <p class="text-gray-700 mb-4">
+                                Lucatón trata datos personales conforme a la Ley N.º 19.628 sobre Protección de la Vida Privada y a los estándares internacionales de gobernanza de datos. Al utilizar la Plataforma, usted acepta la <a class="text-copihue-600 font-medium" href="<?= Router::url('privacidad') ?>">Política de Privacidad</a>, donde se detalla el ciclo de vida de la información y las salvaguardas aplicadas.
+                            </p>
+                            <p class="text-gray-700 mb-4">
+                                Las personas usuarias pueden ejercer sus derechos de acceso, rectificación, cancelación y oposición (ARCO), además de solicitar portabilidad o limitación del tratamiento, enviando un correo con el asunto “Solicitud Derechos ARCO” a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>. El mensaje debe incluir:
+                            </p>
+                            <ul class="list-disc pl-6 space-y-2 text-gray-700 mb-4">
+                                <li>Nombre completo y documento de identidad.</li>
+                                <li>Una descripción precisa del derecho que desea ejercer y el dato involucrado.</li>
+                                <li>Antecedentes de respaldo, cuando corresponda (por ejemplo, copia de identificación o evidencia de la inexactitud).</li>
+                            </ul>
+                            <p class="text-gray-700 mb-3">
+                                Acusaremos recibo dentro de 2 días hábiles y emitiremos respuesta fundada dentro de un máximo de 10 días hábiles, de acuerdo con la normativa vigente. El historial de solicitudes se conserva en un registro interno auditado para fines de trazabilidad.
+                            </p>
+                            <p class="text-gray-700">
+                                Estamos desarrollando un módulo de autoservicio para presentar y dar seguimiento a solicitudes ARCO desde el panel de usuario. Anunciaremos su disponibilidad a través del Centro de Ayuda y comunicaciones en la plataforma.
+                            </p>
+                        </section>
+
+                        <!-- 15. Contacto -->
                         <section id="contact" class="mb-8">
-                            <h2 class="text-2xl font-semibold text-gray-900 mb-4">14. Contacto</h2>
+                            <h2 class="text-2xl font-semibold text-gray-900 mb-4">15. Contacto</h2>
                             <p class="text-gray-700 mb-4">
                                 Para preguntas sobre estos Términos y Condiciones, puede contactarnos:
                             </p>

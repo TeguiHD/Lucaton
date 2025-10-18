@@ -1,0 +1,15 @@
+User-agent: *
+Disallow: /login
+Disallow: /registro
+Disallow: /recuperar
+Disallow: /recuperar/restablecer
+Disallow: /campana/crear
+Disallow: /panel
+Disallow: /perfil
+Disallow: /mis-campanas
+Disallow: /mis-donaciones
+Disallow: /mis-estadisticas
+Disallow: /admin
+Allow: /
+
+Sitemap: https://www.lucaton.org/sitemap.xml

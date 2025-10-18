@@ -14,6 +14,7 @@ $router->get('/campana/{username}', 'CampaignController@showCreatorProfile');
 $router->get('/noticias', 'NewsController@index');
 $router->get('/noticias/{slug}', 'NewsController@show');
 $router->get('/faq', 'PageController@faq');
+$router->get('/vision', 'PageController@vision');
 $router->get('/terminos', 'PageController@terms');
 $router->get('/privacidad', 'PageController@privacy');
 $router->get('/cookies', 'PageController@cookies');

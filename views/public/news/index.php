@@ -17,13 +17,31 @@ $max_date_from = $date_to !== '' ? min($date_to, $today) : $today;
 $max_date_to = $today;
 $min_date_to = $date_from !== '' ? $date_from : '';
 ?>
+<?php
+$canonical_url = Router::url('noticias');
+$sanitized_title = htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8');
+$sanitized_description = htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8');
+$sanitized_canonical = htmlspecialchars($canonical_url, ENT_QUOTES, 'UTF-8');
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($page_title) ?></title>
-    <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
+    <title><?= $sanitized_title ?></title>
+    <meta name="description" content="<?= $sanitized_description ?>">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="<?= $sanitized_canonical ?>">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="<?= $sanitized_canonical ?>">
+    <meta property="og:title" content="<?= $sanitized_title ?>">
+    <meta property="og:description" content="<?= $sanitized_description ?>">
+    <meta property="og:image" content="<?= asset_url('images/og-image.jpg') ?>">
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="<?= $sanitized_canonical ?>">
+    <meta property="twitter:title" content="<?= $sanitized_title ?>">
+    <meta property="twitter:description" content="<?= $sanitized_description ?>">
+    <meta property="twitter:image" content="<?= asset_url('images/og-image.jpg') ?>">
     <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">
     <link href="<?= asset_url('css/app.css') ?>" rel="stylesheet">
     <link href="<?= asset_url('css/aliases.css') ?>" rel="stylesheet">

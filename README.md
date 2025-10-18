@@ -196,6 +196,73 @@ Tesis/
    chmod 755 public/storage/uploads/
    ```
 
+## ☁️ Despliegue usando GitHub (clone + configuración)
+
+Esta guía está pensada para subir el código a GitHub y luego clonar el repositorio en tu servidor (o hosting compartido con acceso a git).
+
+### 1. Clonar el repositorio en el servidor
+```bash
+cd /ruta/donde/quieres/instalar
+git clone https://github.com/TeguiHD/Lucaton.git lucaton
+cd lucaton
+```
+
+### 2. Instalar dependencias en el servidor
+```bash
+composer install --no-dev --optimize-autoloader
+pnpm install
+pnpm run build-css
+```
+> Si tu hosting no soporta pnpm/Node.js, puedes compilar el CSS en tu máquina local y subir la carpeta `public/assets/css`.
+
+### 3. Configurar `.env`
+
+1. Copia el archivo de ejemplo:
+   ```bash
+   cp .env.example .env
+   ```
+2. Abre `.env` y completa los campos esenciales:
+
+| Clave                | Ejemplo                         | Descripción                                                                 |
+|----------------------|---------------------------------|-----------------------------------------------------------------------------|
+| `APP_ENV`            | `production`                    | Entorno de ejecución (`local`, `staging`, `production`).                   |
+| `APP_URL`            | `https://tu-dominio.com`        | URL pública del proyecto.                                                  |
+| `DB_HOST`            | `localhost`                     | Host de la base de datos (en hosting suele ser `localhost` o `127.0.0.1`). |
+| `DB_PORT`            | `3306`                          | Puerto de MySQL/MariaDB.                                                   |
+| `DB_NAME`            | `lucaton_db`                    | Nombre de la base de datos que crearás en phpMyAdmin.                      |
+| `DB_USER`            | `usuario_mysql`                 | Usuario con permisos sobre la base.                                        |
+| `DB_PASS`            | `tu_password_segura`            | Contraseña del usuario.                                                    |
+| `MAIL_HOST`          | `smtp.sendgrid.net`             | Host SMTP para envío de correos (ajusta según tu proveedor).               |
+| `MAIL_PORT`          | `587`                           | Puerto SMTP.                                                               |
+| `MAIL_USERNAME`      | `apikey`                        | Usuario SMTP.                                                              |
+| `MAIL_PASSWORD`      | `tu_api_key`                    | Contraseña o API key SMTP.                                                 |
+| `MAIL_FROM_ADDRESS`  | `notificaciones@tu-dominio.com` | Remitente por defecto.                                                     |
+| `OPENROUTER_API_KEY` | `tu_api_key_openrouter`         | Clave para IA (opcional si aún no usas IA).                                |
+
+Guarda el archivo `.env` y **no lo subas a GitHub**.
+
+### 4. Crear y cargar la base de datos con phpMyAdmin
+1. Accede a phpMyAdmin de tu servidor.
+2. Crea una base de datos nueva con el mismo nombre que definiste en `DB_NAME`.
+3. Selecciona la base y ve a la pestaña **Importar**.
+4. En “Seleccionar archivo”, carga `database/migrations/schema.sql` (o ejecuta las migraciones con `php database/migrations/run_migrations.php` si tienes acceso a la terminal).
+5. Haz clic en **Continuar**. Cuando termine, deberías ver las tablas creadas.
+6. Verifica que las credenciales (`DB_USER`, `DB_PASS`) tengan permisos sobre esa base.
+
+### 5. Ajustar permisos de escritura
+```bash
+chmod -R 775 storage/ public/storage/uploads/
+```
+Si tu hosting requiere un usuario/grupo específico (por ejemplo `www-data`), ajusta con:
+```bash
+chown -R www-data:www-data storage/ public/storage/uploads/
+```
+
+### 6. Probar la instalación
+- Abre la URL configurada en `APP_URL`. Deberías ver la página pública.
+- Accede a `/admin` para validar el panel de administración.
+- Revisa `storage/logs/` si aparece algún error inesperado.
+
 ### Variables de Entorno Importantes
 
 ```env

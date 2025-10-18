@@ -55,7 +55,8 @@ $last_updated = '29 de septiembre de 2025';
                         <a href="#management" class="block text-gray-600 hover:text-copihue-600">5. Cómo gestionarlas</a>
                         <a href="#third-parties" class="block text-gray-600 hover:text-copihue-600">6. Servicios de terceros</a>
                         <a href="#updates" class="block text-gray-600 hover:text-copihue-600">7. Cambios a esta política</a>
-                        <a href="#contact" class="block text-gray-600 hover:text-copihue-600">8. Contacto</a>
+                        <a href="#arco" class="block text-gray-600 hover:text-copihue-600">8. Derechos ARCO y controles adicionales</a>
+                        <a href="#contact" class="block text-gray-600 hover:text-copihue-600">9. Contacto</a>
                     </nav>
                 </div>
             </aside>
@@ -155,8 +156,20 @@ $last_updated = '29 de septiembre de 2025';
                             <p>Actualizaremos esta política si agregamos nuevos tipos de cookies o cambiamos su finalidad. Publicaremos la nueva versión con fecha de actualización y, si la modificación es relevante, te enviaremos una notificación en el panel.</p>
                         </section>
 
+                        <section id="arco" class="mb-10">
+                            <h2 class="text-2xl font-semibold text-gray-900">8. Derechos ARCO y controles adicionales</h2>
+                            <p>Además de las opciones de navegador descritas, puedes ejercer tus derechos de acceso, rectificación, cancelación u oposición respecto de la información recolectada mediante cookies y tecnologías similares. Para ello:</p>
+                            <ol class="mt-4 space-y-2 list-decimal pl-6">
+                                <li>Envía un correo a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a> con el asunto “Solicitud Derechos ARCO – Cookies”.</li>
+                                <li>Indica tu nombre completo, medio de contacto y detalla la acción solicitada (por ejemplo, acceso al registro de cookies o eliminación de identificadores persistentes).</li>
+                                <li>Señala el dispositivo o navegador asociado para ayudarnos a localizar los identificadores técnicos.</li>
+                            </ol>
+                            <p class="mt-3">Confirmaremos recepción en 2 días hábiles y responderemos en un máximo de 10 días hábiles. Mientras procesamos tu solicitud, podremos desactivar preventivamente identificadores asociados a tu cuenta.</p>
+                            <p class="mt-3">Estamos construyendo un panel de preferencias donde podrás gestionar cookies consentidas y descargar el historial vinculado a tu usuario, alineado con las obligaciones ARCO. Anunciaremos su lanzamiento oportunamente.</p>
+                        </section>
+
                         <section id="contact" class="mb-6">
-                            <h2 class="text-2xl font-semibold text-gray-900">8. Contacto</h2>
+                            <h2 class="text-2xl font-semibold text-gray-900">9. Contacto</h2>
                             <p>Si tienes dudas sobre el uso de cookies o quieres ejercer tus derechos de privacidad, escríbenos a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>. <?= htmlspecialchars(PROJECT_DISCLAIMER) ?></p>
                         </section>
                     </div>

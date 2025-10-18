@@ -233,6 +233,66 @@ if (empty($testimonial_cards) && !empty($testimonial_showcase['count'])) {
     $testimonial_cards = array_slice($testimonial_secondary, 0, 3);
 }
 
+$category_badge_palette = [
+    'salud' => ['bg' => 'rgba(220, 38, 38, 0.85)', 'text' => '#ffffff', 'shadow' => 'rgba(220, 38, 38, 0.32)'],
+    'salud-y-bienestar' => ['bg' => 'rgba(220, 38, 38, 0.85)', 'text' => '#ffffff', 'shadow' => 'rgba(220, 38, 38, 0.32)'],
+    'educacion' => ['bg' => 'rgba(59, 130, 246, 0.85)', 'text' => '#f8fafc', 'shadow' => 'rgba(59, 130, 246, 0.28)'],
+    'educacion-de-calidad' => ['bg' => 'rgba(59, 130, 246, 0.85)', 'text' => '#f8fafc', 'shadow' => 'rgba(59, 130, 246, 0.28)'],
+    'tecnologia' => ['bg' => 'rgba(14, 165, 233, 0.85)', 'text' => '#f8fafc', 'shadow' => 'rgba(14, 165, 233, 0.28)'],
+    'innovacion' => ['bg' => 'rgba(14, 165, 233, 0.85)', 'text' => '#f8fafc', 'shadow' => 'rgba(14, 165, 233, 0.28)'],
+    'medio-ambiente' => ['bg' => 'rgba(34, 197, 94, 0.82)', 'text' => '#0f172a', 'shadow' => 'rgba(34, 197, 94, 0.28)'],
+    'medio_ambiente' => ['bg' => 'rgba(34, 197, 94, 0.82)', 'text' => '#0f172a', 'shadow' => 'rgba(34, 197, 94, 0.28)'],
+    'medioambiente' => ['bg' => 'rgba(34, 197, 94, 0.82)', 'text' => '#0f172a', 'shadow' => 'rgba(34, 197, 94, 0.28)'],
+    'emprendimiento' => ['bg' => 'rgba(249, 115, 22, 0.85)', 'text' => '#fff7ed', 'shadow' => 'rgba(249, 115, 22, 0.32)'],
+    'trabajo-decente' => ['bg' => 'rgba(249, 115, 22, 0.85)', 'text' => '#fff7ed', 'shadow' => 'rgba(249, 115, 22, 0.32)'],
+    'inclusion' => ['bg' => 'rgba(168, 85, 247, 0.82)', 'text' => '#faf5ff', 'shadow' => 'rgba(168, 85, 247, 0.32)'],
+    'comunidad' => ['bg' => 'rgba(8, 145, 178, 0.85)', 'text' => '#f0fdfa', 'shadow' => 'rgba(8, 145, 178, 0.28)'],
+    'ayuda-social' => ['bg' => 'rgba(244, 114, 182, 0.82)', 'text' => '#1f2937', 'shadow' => 'rgba(244, 114, 182, 0.28)'],
+    'default' => ['bg' => 'rgba(15, 118, 110, 0.85)', 'text' => '#ecfeff', 'shadow' => 'rgba(15, 118, 110, 0.32)'],
+];
+
+if (!function_exists('lucaton_normalize_category_slug')) {
+    function lucaton_normalize_category_slug(?string $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = mb_strtolower($normalized, 'UTF-8');
+        $normalized = strtr($normalized, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ñ' => 'n',
+        ]);
+
+        $normalized = preg_replace('/[^a-z0-9]+/u', '-', $normalized);
+        return trim((string)$normalized, '-');
+    }
+}
+
+if (!function_exists('lucaton_category_badge_style')) {
+    /**
+     * @param array<string, array{bg:string,text:string,shadow:string}> $palette
+     * @return array{bg:string,text:string,shadow:string}
+     */
+    function lucaton_category_badge_style(string $slug, array $palette): array
+    {
+        if ($slug !== '' && isset($palette[$slug])) {
+            return $palette[$slug];
+        }
+
+        return $palette['default'] ?? ['bg' => 'rgba(15, 118, 110, 0.85)', 'text' => '#ecfeff', 'shadow' => 'rgba(15, 118, 110, 0.32)'];
+    }
+}
+
 $meta_description = $meta_description ?? $page_description;
 $current_page = $current_page ?? 'home';
 $body_classes = $body_classes ?? 'h-full bg-white text-neutral-900 font-sans antialiased';
@@ -375,7 +435,7 @@ ob_start();
             <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
                 <header class="space-y-3 text-center fade-up" data-animate="fade-up">
                     <p class="inline-flex items-center gap-2 rounded-full bg-copihue-100 px-3 py-1 text-xs font-semibold text-copihue-700 uppercase tracking-wide">Necesitamos actuar</p>
-                    <h2 class="text-3xl font-bold text-marino-900">Esta causa nos necesita hoy</h2>
+                    <h2 class="text-3xl font-bold text-marino-900 heading-urgency">Esta causa nos necesita hoy</h2>
                     <p class="text-sm text-neutral-600 max-w-2xl mx-auto">Cada segundo cuenta. Súmate y acompaña a quienes están viviendo momentos críticos.</p>
                 </header>
 
@@ -392,6 +452,15 @@ ob_start();
                         $campaign_raised_label = ($campaign_currency === 'CLP' ? '$' : $campaign_currency . ' ') . number_format($campaign_raised, 0, ',', '.');
                         $campaign_progress_display = number_format($campaign_progress, 1, ',', '.');
                         $campaign_image = $highlight_campaign['image_url'] ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg';
+                        $highlight_category_name = $highlight_campaign['category_name'] ?? 'Causa solidaria';
+                        $highlight_category_slug = $highlight_campaign['category_slug'] ?? lucaton_normalize_category_slug($highlight_category_name);
+                        $highlight_badge_tokens = lucaton_category_badge_style($highlight_category_slug, $category_badge_palette);
+                        $highlight_badge_style = sprintf(
+                            'background:%s;color:%s;box-shadow:0 16px 36px %s;',
+                            $highlight_badge_tokens['bg'],
+                            $highlight_badge_tokens['text'],
+                            $highlight_badge_tokens['shadow']
+                        );
                     ?>
                     <article class="grid gap-0 lg:grid-cols-[1.2fr_1fr] overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-soft hover:-translate-y-1 hover:shadow-strong transition-transform duration-500 fade-up" data-animate="fade-up" data-animate-delay="120">
                         <div class="relative h-72 lg:h-full">
@@ -399,13 +468,13 @@ ob_start();
                             <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
                             <div class="absolute top-4 left-4 flex flex-wrap items-center gap-2">
                                 <?php if ($highlight_is_urgent): ?>
-                                    <span class="inline-flex items-center gap-2 rounded-full bg-copihue-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white animate-heartbeat-urgent">
+                                    <span class="inline-flex items-center gap-2 rounded-full bg-copihue-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white animate-heartbeat-urgent category-chip urgency-chip">
                                         <span class="h-2 w-2 rounded-full bg-white"></span>
                                         Urgente
                                     </span>
                                 <?php endif; ?>
-                                <span class="inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
-                                    <?= htmlspecialchars($highlight_campaign['category_name'] ?? 'Causa solidaria'); ?>
+                                <span class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide category-chip" style="<?= htmlspecialchars($highlight_badge_style, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?= htmlspecialchars($highlight_category_name); ?>
                                 </span>
                             </div>
                         </div>
@@ -520,12 +589,21 @@ ob_start();
                             $campaign_time_over = !empty($campaign['time_over']);
                             $campaign_status = $campaign['status'] ?? 'draft';
                             $campaign_time_label = $campaign['time_remaining_label'] ?? null;
+                            $category_label = $campaign['category_name'] ?? ($campaign['category'] ?? 'Campaña');
+                            $category_slug = $campaign['category_slug'] ?? lucaton_normalize_category_slug($category_label);
+                            $category_badge_tokens = lucaton_category_badge_style($category_slug, $category_badge_palette);
+                            $category_badge_style = sprintf(
+                                'background:%s;color:%s;box-shadow:0 12px 28px %s;',
+                                $category_badge_tokens['bg'],
+                                $category_badge_tokens['text'],
+                                $category_badge_tokens['shadow']
+                            );
                         ?>
                         <article class="group relative overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-soft transition duration-500 hover:-translate-y-2 hover:shadow-strong fade-up" data-animate="fade-up" data-animate-delay="<?= $animate_delay; ?>">
                             <div class="relative h-48 overflow-hidden">
                                 <img src="<?= htmlspecialchars($campaign['image_url'] ?? APP_URL . '/public/assets/images/campaigns/escuela-rural.svg'); ?>" alt="<?= htmlspecialchars($campaign['title']); ?>" class="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy">
-                                <div class="absolute top-4 left-4 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
-                                    <?= htmlspecialchars($campaign['category_name'] ?? 'Campaña'); ?>
+                                <div class="absolute top-4 left-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide category-chip" style="<?= htmlspecialchars($category_badge_style, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?= htmlspecialchars($category_label); ?>
                                 </div>
                                 <?php if (($campaign['ai_assisted'] ?? false)): ?>
                                     <div class="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-marino-700">
@@ -631,9 +709,9 @@ ob_start();
                                 <article class="rounded-3xl border border-white/15 bg-white/10 p-8 backdrop-blur transition duration-500 hover:-translate-y-1 hover:border-white/25" data-testimonial-card>
                                     <div class="flex items-center gap-4">
                                         <?php if (!empty($card['avatar'])): ?>
-                                            <img src="<?= htmlspecialchars($card['avatar']); ?>" alt="<?= htmlspecialchars($card['name']); ?>" class="h-12 w-12 rounded-full object-cover border border-white/40" loading="lazy">
+                                            <img src="<?= htmlspecialchars($card['avatar']); ?>" alt="<?= htmlspecialchars($card['name']); ?>" class="h-12 w-12 object-cover rounded-full shadow-avatar ring-4 ring-white/25" loading="lazy">
                                         <?php else: ?>
-                                            <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-base font-semibold text-white/85">
+                                            <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-base font-semibold text-white/85 shadow-avatar ring-4 ring-white/15">
                                                 <?= htmlspecialchars(lucaton_avatar_initials($card['name'] ?? 'Amigo')); ?>
                                             </span>
                                         <?php endif; ?>

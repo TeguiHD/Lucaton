@@ -20,6 +20,8 @@ $existing_gallery_media = $draft_media['gallery'] ?? [];
 $existing_attachments_media = $draft_media['attachments'] ?? [];
 
 $page_title = $page_title ?? 'Crear nueva campaña';
+$meta_description = $meta_description ?? 'Crea una campaña en Lucatón con verificación, asistencia de IA y herramientas de transparencia.';
+$meta_robots = 'noindex, nofollow';
 $current_page = $current_page ?? 'create-campaign';
 $ai_improve_endpoint = parse_url(Router::url('api/ai/improve-text'), PHP_URL_PATH) ?: '/api/ai/improve-text';
 

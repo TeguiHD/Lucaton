@@ -1,5 +1,13 @@
 RewriteEngine On
 
+# Forzar dominio y HTTPS solo en producción (lucaton.org)
+RewriteCond %{HTTP_HOST} ^lucaton\.org$ [NC]
+RewriteRule ^ https://www.lucaton.org%{REQUEST_URI} [L,R=301]
+
+RewriteCond %{HTTP_HOST} ^(?:www\.)?lucaton\.org$ [NC]
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://www.lucaton.org%{REQUEST_URI} [L,R=301]
+
 # Redirigir todas las solicitudes que no sean archivos o directorios existentes a index.php
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

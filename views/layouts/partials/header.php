@@ -44,6 +44,11 @@ if ($is_admin) {
     ];
 }
 
+// Asegurar que la página de Visión no aparezca en el navbar principal
+$nav_items = array_values(array_filter($nav_items, static function ($item) {
+    return ($item['href'] ?? '') !== 'vision';
+}));
+
 // Verificar si el usuario está autenticado
 $is_authenticated = SessionHelper::isAuthenticated();
 $user_name = $_SESSION['user_name'] ?? '';
@@ -66,6 +71,13 @@ $notification_summary_url = $is_authenticated ? Router::url('api/notifications/s
 $notification_delete_url = $is_authenticated ? Router::url('api/notifications/delete') : null;
 $notification_history_url = $is_authenticated ? Router::url('notificaciones') : Router::url('login');
 $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
+
+$desktopBaseLinkClass = 'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200';
+$desktopActiveLinkClass = 'border-copihue-500 text-marino-900';
+$desktopInactiveLinkClass = 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700';
+$mobileBaseLinkClass = 'block pl-3 pr-4 py-2 border-l-4 text-sm font-medium transition-colors duration-200';
+$mobileActiveLinkClass = 'bg-copihue-50 border-copihue-500 text-copihue-700';
+$mobileInactiveLinkClass = 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800';
 ?>
 
 <header data-sticky-header class="sticky top-0 inset-x-0 z-50 transform transition-transform duration-300 ease-out will-change-transform backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 shadow-sm border-b border-gray-200">
@@ -96,9 +108,13 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                             continue;
                         }
                         ?>
+                        <?php
+                        $isCurrent = $item['current'] ?? false;
+                        $linkClasses = $desktopBaseLinkClass . ' ' . ($isCurrent ? $desktopActiveLinkClass : $desktopInactiveLinkClass);
+                        ?>
                         <a href="<?= Router::url($item['href']) ?>"
-                           class="<?= $item['current'] ? 'border-copihue-500 text-marino-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' ?> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
-                           <?= $item['current'] ? 'aria-current="page"' : '' ?>>
+                           class="<?= $linkClasses ?>"
+                           <?= $isCurrent ? 'aria-current="page"' : '' ?>>
                             <?= $item['name'] ?>
                         </a>
                     <?php endforeach; ?>
@@ -258,9 +274,13 @@ $notification_csrf = $is_authenticated ? SessionHelper::getCSRFToken() : null;
                     continue;
                 }
                 ?>
+                <?php
+                $isCurrent = $item['current'] ?? false;
+                $mobileLinkClasses = $mobileBaseLinkClass . ' ' . ($isCurrent ? $mobileActiveLinkClass : $mobileInactiveLinkClass);
+                ?>
                 <a href="<?= Router::url($item['href']) ?>"
-                   class="<?= $item['current'] ? 'bg-copihue-50 border-copihue-500 text-copihue-700' : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800' ?> block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors duration-200"
-                   <?= $item['current'] ? 'aria-current="page"' : '' ?>>
+                   class="<?= $mobileLinkClasses ?>"
+                   <?= $isCurrent ? 'aria-current="page"' : '' ?>>
                     <?= $item['name'] ?>
                 </a>
             <?php endforeach; ?>

@@ -6,6 +6,10 @@
 
 class Donation {
     private const STATUS_VALUES = ['pending', 'processing', 'completed', 'failed', 'refunded'];
+    /**
+     * Estados que deben considerarse para estadísticas agregadas (por ejemplo, campañas con transferencias en revisión).
+     */
+    private const COUNTABLE_STATUSES = ['completed', 'processing'];
 
     private Database $db;
     private static $schemaCapabilities = null;
@@ -52,8 +56,14 @@ class Donation {
                 'raised_amount' => $this->db->columnExists('campaigns', 'raised_amount'),
                 'current_amount' => $this->db->columnExists('campaigns', 'current_amount'),
                 'donor_count' => $this->db->columnExists('campaigns', 'donor_count'),
+                'donors_count' => $this->db->columnExists('campaigns', 'donors_count'),
                 'supporters_count' => $this->db->columnExists('campaigns', 'supporters_count'),
+                'supporter_count' => $this->db->columnExists('campaigns', 'supporter_count'),
                 'donation_count' => $this->db->columnExists('campaigns', 'donation_count'),
+                'share_count' => $this->db->columnExists('campaigns', 'share_count'),
+                'shares_count' => $this->db->columnExists('campaigns', 'shares_count'),
+                'view_count' => $this->db->columnExists('campaigns', 'view_count'),
+                'views_count' => $this->db->columnExists('campaigns', 'views_count'),
                 'status' => $this->db->columnExists('campaigns', 'status'),
                 'goal_amount' => $this->db->columnExists('campaigns', 'goal_amount'),
                 'progress' => $this->db->columnExists('campaigns', 'progress'),
@@ -119,6 +129,31 @@ class Donation {
 
     private function supportsColumn(string $column): bool {
         return self::$schemaCapabilities[$column] ?? false;
+    }
+
+    private function getCountableStatuses(): array {
+        return $this->supportsColumn('status') ? self::COUNTABLE_STATUSES : [];
+    }
+
+    /**
+     * Construye un fragmento SQL y los parámetros para filtrar por estados contables.
+     *
+     * @param string|null $alias Prefijo/alias para la columna status (por ejemplo, 'd' o 'd.')
+     * @return array [cláusula SQL sin prefijo AND, parámetros para prepared statement]
+     */
+    private function buildStatusFilter(?string $alias = null): array {
+        $statuses = $this->getCountableStatuses();
+        if ($statuses === []) {
+            return ['', []];
+        }
+
+        $aliasPrefix = '';
+        if ($alias !== null && $alias !== '') {
+            $aliasPrefix = rtrim($alias, '.') . '.';
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($statuses), '?'));
+        return ["{$aliasPrefix}status IN ({$placeholders})", $statuses];
     }
 
     private function campaignSupports(string $column): bool {
@@ -494,9 +529,10 @@ class Donation {
                 WHERE d.campaign_id = ?";
 
         $params = [$campaignId];
-
-        if ($this->supportsColumn('status')) {
-            $sql .= " AND d.status = 'completed'";
+        [$statusClause, $statusParams] = $this->buildStatusFilter('d');
+        if ($statusClause !== '') {
+            $sql .= " AND {$statusClause}";
+            $params = array_merge($params, $statusParams);
         }
 
         if ($supportsAnonymous) {
@@ -533,9 +569,10 @@ class Donation {
 
         $sql = 'SELECT COUNT(*) AS total FROM donations WHERE campaign_id = ?';
         $params = [$campaignId];
-
-        if ($this->supportsColumn('status')) {
-            $sql .= " AND status = 'completed'";
+        [$statusClause, $statusParams] = $this->buildStatusFilter();
+        if ($statusClause !== '') {
+            $sql .= " AND {$statusClause}";
+            $params = array_merge($params, $statusParams);
         }
 
         if (!$supportsAnonymous && $visibility === 'anonymous') {
@@ -593,7 +630,7 @@ class Donation {
             $this->db->update('donations', $updateData, 'id = ?', [$id]);
         }
 
-        if ($status === 'completed') {
+        if (in_array($status, $this->getCountableStatuses(), true)) {
             $this->updateCampaignMetrics($id, false);
         } elseif ($status === 'refunded') {
             $this->updateCampaignMetrics($id, true);
@@ -767,6 +804,56 @@ class Donation {
         $this->syncCampaignProgress($campaignId, $isRefund);
     }
 
+    public function rebuildCampaignAggregates(?int $campaignId = null): void
+    {
+        $campaignIds = [];
+        if ($campaignId !== null && $campaignId > 0) {
+            $campaignIds = [$campaignId];
+        } else {
+            $baseSql = 'SELECT DISTINCT campaign_id FROM donations';
+            $params = [];
+            [$statusClause, $statusParams] = $this->buildStatusFilter();
+            if ($statusClause !== '') {
+                $baseSql .= ' WHERE ' . $statusClause;
+                $params = array_merge($params, $statusParams);
+            }
+
+            try {
+                $rows = $this->db->fetchAll($baseSql, $params) ?: [];
+            } catch (Throwable $exception) {
+                Logger::warning('No se pudieron obtener campañas para recalcular agregados', [
+                    'error' => $exception->getMessage(),
+                ]);
+                $rows = [];
+            }
+
+            foreach ($rows as $row) {
+                $id = (int)($row['campaign_id'] ?? 0);
+                if ($id > 0) {
+                    $campaignIds[$id] = $id;
+                }
+            }
+            $campaignIds = array_values($campaignIds);
+        }
+
+        if (empty($campaignIds)) {
+            return;
+        }
+
+        foreach ($campaignIds as $id) {
+            $totals = $this->calculateCampaignDonationTotals($id);
+
+            if ($this->hasCampaignMetrics() && $this->ensureCampaignMetricsRowExists($id)) {
+                $this->persistCampaignMetricsSnapshot($id, $totals);
+                $this->finalizeCampaignIfEligible($id, $totals['total_amount']);
+                $this->syncCampaignProgress($id, false);
+            } else {
+                $this->updateCampaignAggregateFields($id, $totals);
+                $this->finalizeCampaignIfEligible($id, $totals['total_amount']);
+            }
+        }
+    }
+
     private function ensureCampaignMetricsRowExists(int $campaignId): bool
     {
         if ($campaignId <= 0) {
@@ -899,6 +986,10 @@ class Donation {
 
         $metricsRaised = (float)($snapshot['metrics_raised'] ?? 0.0);
         $metricsDonors = (int)($snapshot['metrics_donors'] ?? 0);
+        $metricsShares = (int)($snapshot['metrics_shares'] ?? 0);
+        $metricsViews = (int)($snapshot['metrics_views'] ?? 0);
+        $legacyShares = (int)($snapshot['legacy_shares'] ?? 0);
+        $legacyViews = (int)($snapshot['legacy_views'] ?? 0);
 
         if ($this->hasCampaignMetrics()
             && (abs($metricsRaised - $amountForProgress) > 0.01 || $metricsDonors !== $uniqueDonors)
@@ -907,6 +998,10 @@ class Donation {
             $snapshot = $this->fetchCampaignSnapshot($campaignId) ?? $snapshot;
             $metricsRaised = (float)($snapshot['metrics_raised'] ?? $metricsRaised);
             $metricsDonors = (int)($snapshot['metrics_donors'] ?? $metricsDonors);
+            $metricsShares = (int)($snapshot['metrics_shares'] ?? $metricsShares);
+            $metricsViews = (int)($snapshot['metrics_views'] ?? $metricsViews);
+            $legacyShares = (int)($snapshot['legacy_shares'] ?? $legacyShares);
+            $legacyViews = (int)($snapshot['legacy_views'] ?? $legacyViews);
         }
 
         $raised = $amountForProgress;
@@ -918,6 +1013,9 @@ class Donation {
         if ($donors <= 0 && $metricsDonors > 0) {
             $donors = $metricsDonors;
         }
+
+        $shareCount = max(0, max($metricsShares, $legacyShares));
+        $viewCount = max(0, max($metricsViews, $legacyViews));
 
         $goal = (float)($snapshot['goal_amount'] ?? 0);
         if ($goal <= 0 && $this->campaignSupports('goal_amount')) {
@@ -947,6 +1045,18 @@ class Donation {
         }
         if ($this->campaignSupports('donation_count')) {
             $updatePayload['donation_count'] = max(0, $donationTotal);
+        }
+        if ($this->campaignSupports('share_count')) {
+            $updatePayload['share_count'] = $shareCount;
+        }
+        if ($this->campaignSupports('shares_count')) {
+            $updatePayload['shares_count'] = $shareCount;
+        }
+        if ($this->campaignSupports('view_count')) {
+            $updatePayload['view_count'] = $viewCount;
+        }
+        if ($this->campaignSupports('views_count')) {
+            $updatePayload['views_count'] = $viewCount;
         }
 
         $progress = 0.0;
@@ -1017,12 +1127,32 @@ class Donation {
             $selectParts[] = 'NULL AS legacy_donors';
         }
 
+        if ($this->campaignSupports('share_count')) {
+            $selectParts[] = 'c.share_count AS legacy_shares';
+        } elseif ($this->campaignSupports('shares_count')) {
+            $selectParts[] = 'c.shares_count AS legacy_shares';
+        } else {
+            $selectParts[] = 'NULL AS legacy_shares';
+        }
+
+        if ($this->campaignSupports('view_count')) {
+            $selectParts[] = 'c.view_count AS legacy_views';
+        } elseif ($this->campaignSupports('views_count')) {
+            $selectParts[] = 'c.views_count AS legacy_views';
+        } else {
+            $selectParts[] = 'NULL AS legacy_views';
+        }
+
         if ($this->hasCampaignMetrics()) {
             $selectParts[] = 'cm.raised_amount AS metrics_raised';
             $selectParts[] = 'cm.donor_count AS metrics_donors';
+            $selectParts[] = 'cm.share_count AS metrics_shares';
+            $selectParts[] = 'cm.view_count AS metrics_views';
         } else {
             $selectParts[] = 'NULL AS metrics_raised';
             $selectParts[] = 'NULL AS metrics_donors';
+            $selectParts[] = 'NULL AS metrics_shares';
+            $selectParts[] = 'NULL AS metrics_views';
         }
 
         $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM campaigns c';
@@ -1141,17 +1271,23 @@ class Donation {
             return [];
         }
 
+        $statuses = $this->getCountableStatuses();
         $selects = [];
+        $params = [];
         foreach ($columns as $column) {
-            $condition = "campaign_id = ? AND {$column} IS NOT NULL";
-            if ($this->supportsColumn('status')) {
-                $condition .= " AND status = 'completed'";
+            $conditionParts = ["campaign_id = ?", "{$column} IS NOT NULL"];
+            $selectParams = [$campaignId];
+
+            if ($statuses !== []) {
+                $placeholders = implode(', ', array_fill(0, count($statuses), '?'));
+                $conditionParts[] = "status IN ({$placeholders})";
+                $selectParams = array_merge($selectParams, $statuses);
             }
-            $selects[] = "SELECT DISTINCT {$column} AS supporter_id FROM donations WHERE {$condition}";
+            $selects[] = "SELECT DISTINCT {$column} AS supporter_id FROM donations WHERE " . implode(' AND ', $conditionParts);
+            $params = array_merge($params, $selectParams);
         }
 
         $sql = implode(' UNION ', $selects);
-        $params = array_fill(0, count($columns), $campaignId);
 
         $rows = $this->db->fetchAll($sql, $params) ?: [];
 
@@ -1294,10 +1430,8 @@ class Donation {
 
     private function calculateCampaignDonationTotals(int $campaignId): array
     {
-        $statusCondition = '';
-        if ($this->supportsColumn('status')) {
-            $statusCondition = " AND status = 'completed'";
-        }
+        [$statusClause, $statusParams] = $this->buildStatusFilter();
+        $statusCondition = $statusClause !== '' ? " AND {$statusClause}" : '';
 
         $selectParts = [
             'COALESCE(SUM(amount), 0) AS total_amount',
@@ -1312,7 +1446,8 @@ class Donation {
             . ' FROM donations WHERE campaign_id = ?' . $statusCondition;
 
         try {
-            $row = $this->db->fetch($sql, [$campaignId]) ?: [];
+            $fetchParams = array_merge([$campaignId], $statusParams);
+            $row = $this->db->fetch($sql, $fetchParams) ?: [];
         } catch (Throwable $exception) {
             Logger::warning('No se pudieron calcular los totales de donaciones', [
                 'campaign_id' => $campaignId,
@@ -1617,11 +1752,14 @@ class Donation {
             $caseSql = 'CASE ' . implode(' ', $caseParts) . ' ELSE ' . $fallback . ' END';
         }
 
-        $condition = 'campaign_id = ?';
+        $conditionParts = ['campaign_id = ?'];
         $params = [$campaignId];
-        if ($this->supportsColumn('status')) {
-            $condition .= " AND status = 'completed'";
+        [$statusClause, $statusParams] = $this->buildStatusFilter();
+        if ($statusClause !== '') {
+            $conditionParts[] = $statusClause;
+            $params = array_merge($params, $statusParams);
         }
+        $condition = implode(' AND ', $conditionParts);
 
         $sql = "SELECT COUNT(*) AS donors FROM (
                     SELECT {$caseSql} AS donor_key

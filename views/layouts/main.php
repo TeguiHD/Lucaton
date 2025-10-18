@@ -22,32 +22,51 @@ $body_classes = trim((string)$body_classes);
 if ($body_classes === '') {
     $body_classes = 'h-full bg-gray-50 font-sans antialiased';
 }
+
+$meta_description_value = $meta_description ?? 'Lucatón - Plataforma de crowdfunding ética con asistencia de IA para campañas de impacto social en Chile';
+$meta_robots_value = $meta_robots ?? 'index, follow';
+$page_title_value = $page_title ?? 'Lucatón';
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+$parsedUri = parse_url($requestUri);
+$canonicalPath = $parsedUri['path'] ?? '/';
+if ($canonicalPath === '') {
+    $canonicalPath = '/';
+}
+$canonicalUrl = rtrim(APP_URL, '/') . $canonicalPath;
+
+$escapedTitle = htmlspecialchars($page_title_value, ENT_QUOTES, 'UTF-8');
+$escapedFullTitle = htmlspecialchars($page_title_value . ' - Crowdfunding Ético con IA', ENT_QUOTES, 'UTF-8');
+$escapedDescription = htmlspecialchars($meta_description_value, ENT_QUOTES, 'UTF-8');
+$escapedRobots = htmlspecialchars($meta_robots_value, ENT_QUOTES, 'UTF-8');
+$escapedCanonical = htmlspecialchars($canonicalUrl, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="es" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="<?= $meta_description ?? 'Lucatón - Plataforma de crowdfunding ética con asistencia de IA para campañas de impacto social en Chile' ?>">
+    <meta name="description" content="<?= $escapedDescription ?>">
     <meta name="keywords" content="crowdfunding, chile, inteligencia artificial, campañas sociales, donaciones">
     <meta name="author" content="Lucatón">
+    <meta name="robots" content="<?= $escapedRobots ?>">
+    <link rel="canonical" href="<?= $escapedCanonical ?>">
     <meta name="csrf-token" content="<?= $csrfToken ?>">
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="<?= APP_URL . $_SERVER['REQUEST_URI'] ?>">
-    <meta property="og:title" content="<?= $page_title ?? 'Lucatón' ?>">
-    <meta property="og:description" content="<?= $meta_description ?? 'Plataforma de crowdfunding ética con IA' ?>">
+    <meta property="og:url" content="<?= $escapedCanonical ?>">
+    <meta property="og:title" content="<?= $escapedTitle ?>">
+    <meta property="og:description" content="<?= $escapedDescription ?>">
     <meta property="og:image" content="<?= asset_url('images/og-image.jpg') ?>">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="<?= APP_URL . $_SERVER['REQUEST_URI'] ?>">
-    <meta property="twitter:title" content="<?= $page_title ?? 'Lucatón' ?>">
-    <meta property="twitter:description" content="<?= $meta_description ?? 'Plataforma de crowdfunding ética con IA' ?>">
+    <meta property="twitter:url" content="<?= $escapedCanonical ?>">
+    <meta property="twitter:title" content="<?= $escapedTitle ?>">
+    <meta property="twitter:description" content="<?= $escapedDescription ?>">
     <meta property="twitter:image" content="<?= asset_url('images/og-image.jpg') ?>">
 
-    <title><?= $page_title ?? 'Lucatón' ?> - Crowdfunding Ético con IA</title>
+    <title><?= $escapedFullTitle ?></title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="<?= asset_url('images/favicon.svg') ?>">

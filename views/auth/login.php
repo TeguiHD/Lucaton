@@ -31,6 +31,7 @@ $initialErrors = json_encode($serverErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TA
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($page_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($page_description) ?>">
+    <meta name="robots" content="noindex, nofollow">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">

@@ -19,7 +19,8 @@ $page_description = 'Establece una nueva contraseña para tu cuenta de Lucatón.
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $page_title; ?></title>
     <meta name="description" content="<?php echo $page_description; ?>">
-    
+    <meta name="robots" content="noindex, nofollow">
+
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="<?php echo $_SERVER['REQUEST_URI']; ?>">

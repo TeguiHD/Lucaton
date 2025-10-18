@@ -2012,6 +2012,36 @@ class AdminController {
         $topCampaigns = [];
         $donationSeries = [];
 
+        $goalProgress = [
+            'series' => [],
+            'total_campaigns' => 0,
+            'total_goal' => 0.0,
+            'total_raised' => 0.0,
+            'average_attainment' => null,
+        ];
+
+        $donorSegments = [
+            'series' => [],
+            'total_donors' => 0,
+            'total_amount' => 0.0,
+        ];
+
+        $paymentMix = [
+            'series' => [],
+            'total_donations' => 0,
+            'total_amount' => 0.0,
+        ];
+
+        $processingMetrics = [
+            'avg_hours' => null,
+            'median_hours' => null,
+            'p90_hours' => null,
+            'avg_hours_30d' => null,
+            'within_24h_percentage' => null,
+        ];
+
+        $insights = [];
+
         $hasCampaignMetricsTable = $this->db->tableExists('campaign_metrics');
 
         $categoryLeaders = [];
@@ -2025,6 +2055,11 @@ class AdminController {
                 'engagement' => $engagementStats,
                 'category_leaders' => $categoryLeaders,
                 'ai_by_category' => $aiByCategory,
+                'goal_progress' => $goalProgress,
+                'donor_segments' => $donorSegments,
+                'payment_mix' => $paymentMix,
+                'processing_metrics' => $processingMetrics,
+                'insights' => $insights,
             ];
         }
 
@@ -2122,54 +2157,80 @@ class AdminController {
             }
         }
 
-        if (($engagementStats['total_visitantes'] === 0 || $engagementStats['total_compartidos'] === 0) && !empty($this->campaignColumns)) {
+        if (!empty($this->campaignColumns)) {
             $viewCols = array_intersect(['view_count', 'views_count'], $this->campaignColumns);
             $shareCols = array_intersect(['share_count', 'shares_count'], $this->campaignColumns);
+            $donorCols = array_intersect(['donor_count', 'donors_count', 'supporters_count', 'supporter_count'], $this->campaignColumns);
 
-            if ($engagementStats['total_visitantes'] === 0 && !empty($viewCols)) {
-                $sumParts = array_map(static fn ($col) => "COALESCE(c.{$col},0)", $viewCols);
-                $sql = 'SELECT SUM(' . implode(' + ', $sumParts) . ') AS total_views FROM campaigns c';
-                $row = $this->db->fetch($sql);
-                $engagementStats['total_visitantes'] = (int)($row['total_views'] ?? 0);
-            }
-
-            if ($engagementStats['total_compartidos'] === 0 && !empty($shareCols)) {
-                $sumParts = array_map(static fn ($col) => "COALESCE(c.{$col},0)", $shareCols);
-                $sql = 'SELECT SUM(' . implode(' + ', $sumParts) . ') AS total_shares FROM campaigns c';
-                $row = $this->db->fetch($sql);
-                $engagementStats['total_compartidos'] = (int)($row['total_shares'] ?? 0);
-            }
-        }
-
-        if ($engagementStats['visitas_30_dias'] === 0) {
-            $viewsWhere = [];
-            if (in_array('view_count', $this->campaignColumns, true)) {
-                $sumCols = ['COALESCE(c.view_count,0)'];
-                if (in_array('views_count', $this->campaignColumns, true)) {
-                    $sumCols[] = 'COALESCE(c.views_count,0)';
+            if (!empty($viewCols)) {
+                $totalViewsRow = $this->db->fetch(
+                    'SELECT SUM(' . implode(' + ', array_map(static fn ($col) => "COALESCE(c.{$col},0)", $viewCols)) . ') AS total_views
+                     FROM campaigns c'
+                );
+                $campaignViews = (int)($totalViewsRow['total_views'] ?? 0);
+                if ($campaignViews > 0) {
+                    $engagementStats['total_visitantes'] = max($engagementStats['total_visitantes'], $campaignViews);
                 }
-                $sql = 'SELECT SUM(' . implode(' + ', $sumCols) . ') AS views FROM campaigns c';
-                if ($this->campaignHasCreatedAt && in_array('updated_at', $this->campaignColumns, true)) {
-                    $viewsWhere[] = 'c.updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
-                }
-                if (!empty($viewsWhere)) {
-                    $sql .= ' WHERE ' . implode(' AND ', $viewsWhere);
-                }
-                $row = $this->db->fetch($sql);
-                $engagementStats['visitas_30_dias'] = (int)($row['views'] ?? 0);
-            }
-        }
 
-        if ($engagementStats['compartidos_30_dias'] === 0) {
-            $shareCols = array_intersect(['share_count', 'shares_count'], $this->campaignColumns);
-            if (!empty($shareCols)) {
-                $sumCols = array_map(static fn ($col) => "COALESCE(c.{$col},0)", $shareCols);
-                $sql = 'SELECT SUM(' . implode(' + ', $sumCols) . ') AS shares FROM campaigns c';
+                $recentViewsConditions = [];
                 if (in_array('updated_at', $this->campaignColumns, true)) {
-                    $sql .= ' WHERE c.updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                    $recentViewsConditions[] = 'c.updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                } elseif ($this->campaignHasCreatedAt) {
+                    $recentViewsConditions[] = 'c.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
                 }
-                $row = $this->db->fetch($sql);
-                $engagementStats['compartidos_30_dias'] = (int)($row['shares'] ?? 0);
+
+                if (!empty($recentViewsConditions)) {
+                    $recentViewsSql = 'SELECT SUM(' . implode(' + ', array_map(static fn ($col) => "COALESCE(c.{$col},0)", $viewCols)) . ') AS views
+                                       FROM campaigns c
+                                       WHERE ' . implode(' AND ', $recentViewsConditions);
+                    $recentViewsRow = $this->db->fetch($recentViewsSql);
+                    $recentViews = (int)($recentViewsRow['views'] ?? 0);
+                    if ($recentViews > 0) {
+                        $engagementStats['visitas_30_dias'] = max($engagementStats['visitas_30_dias'], $recentViews);
+                    }
+                }
+            }
+
+            if (!empty($shareCols)) {
+                $totalSharesRow = $this->db->fetch(
+                    'SELECT SUM(' . implode(' + ', array_map(static fn ($col) => "COALESCE(c.{$col},0)", $shareCols)) . ') AS total_shares
+                     FROM campaigns c'
+                );
+                $campaignShares = (int)($totalSharesRow['total_shares'] ?? 0);
+                if ($campaignShares > 0) {
+                    $engagementStats['total_compartidos'] = max($engagementStats['total_compartidos'], $campaignShares);
+                }
+
+                $recentSharesConditions = [];
+                if (in_array('updated_at', $this->campaignColumns, true)) {
+                    $recentSharesConditions[] = 'c.updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                } elseif ($this->campaignHasCreatedAt) {
+                    $recentSharesConditions[] = 'c.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                }
+
+                if (!empty($recentSharesConditions)) {
+                    $recentSharesSql = 'SELECT SUM(' . implode(' + ', array_map(static fn ($col) => "COALESCE(c.{$col},0)", $shareCols)) . ') AS shares
+                                       FROM campaigns c
+                                       WHERE ' . implode(' AND ', $recentSharesConditions);
+                    $recentSharesRow = $this->db->fetch($recentSharesSql);
+                    $recentShares = (int)($recentSharesRow['shares'] ?? 0);
+                    if ($recentShares > 0) {
+                        $engagementStats['compartidos_30_dias'] = max($engagementStats['compartidos_30_dias'], $recentShares);
+                    }
+                }
+            }
+
+            if ($engagementStats['total_donantes'] === 0 && !empty($donorCols)) {
+                $primaryDonorColumn = reset($donorCols);
+                if ($primaryDonorColumn) {
+                    $donorRow = $this->db->fetch(
+                        'SELECT SUM(COALESCE(c.' . $primaryDonorColumn . ',0)) AS donors FROM campaigns c'
+                    );
+                    $fallbackDonors = (int)($donorRow['donors'] ?? 0);
+                    if ($fallbackDonors > 0) {
+                        $engagementStats['total_donantes'] = $fallbackDonors;
+                    }
+                }
             }
         }
 
@@ -2376,6 +2437,439 @@ class AdminController {
             }, $this->db->fetchAll($topCampaignSql) ?: []);
         }
 
+        if ($hasCampaignMetricsTable && $this->db->columnExists('campaigns', 'goal_amount')) {
+            $goalConditions = ['c.goal_amount > 0'];
+            if ($this->campaignHasStatus) {
+                $goalConditions[] = "c.status IN ('published','active','under_review','paused','completed')";
+            }
+            if ($this->campaignHasVisibility) {
+                $goalConditions[] = "c.visibility <> 'archived'";
+            }
+
+            $goalSql = "SELECT c.id, c.goal_amount, c.title, cm.raised_amount
+                        FROM campaigns c
+                        LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id";
+            if (!empty($goalConditions)) {
+                $goalSql .= ' WHERE ' . implode(' AND ', $goalConditions);
+            }
+
+            $goalRows = $this->db->fetchAll($goalSql);
+            if ($goalRows) {
+                $buckets = [
+                    [
+                        'key' => 'seed',
+                        'label' => '0% - 25%',
+                        'min' => 0.0,
+                        'max' => 0.25,
+                        'count' => 0,
+                        'raised' => 0.0,
+                        'color' => '#BAE6FD',
+                    ],
+                    [
+                        'key' => 'momentum',
+                        'label' => '25% - 50%',
+                        'min' => 0.25,
+                        'max' => 0.5,
+                        'count' => 0,
+                        'raised' => 0.0,
+                        'color' => '#7DD3FC',
+                    ],
+                    [
+                        'key' => 'traction',
+                        'label' => '50% - 75%',
+                        'min' => 0.5,
+                        'max' => 0.75,
+                        'count' => 0,
+                        'raised' => 0.0,
+                        'color' => '#38BDF8',
+                    ],
+                    [
+                        'key' => 'closing',
+                        'label' => '75% - 100%',
+                        'min' => 0.75,
+                        'max' => 1.0,
+                        'count' => 0,
+                        'raised' => 0.0,
+                        'color' => '#0EA5E9',
+                    ],
+                    [
+                        'key' => 'surpassed',
+                        'label' => '100%+',
+                        'min' => 1.0,
+                        'max' => null,
+                        'count' => 0,
+                        'raised' => 0.0,
+                        'color' => '#0369A1',
+                    ],
+                ];
+
+                foreach ($goalRows as $row) {
+                    $goalAmount = (float)($row['goal_amount'] ?? 0);
+                    if ($goalAmount <= 0) {
+                        continue;
+                    }
+
+                    $raisedAmount = (float)($row['raised_amount'] ?? 0);
+                    $ratio = $goalAmount > 0 ? ($raisedAmount / $goalAmount) : 0.0;
+
+                    $goalProgress['total_campaigns']++;
+                    $goalProgress['total_goal'] += $goalAmount;
+                    $goalProgress['total_raised'] += $raisedAmount;
+
+                    foreach ($buckets as &$bucket) {
+                        $max = $bucket['max'];
+                        $min = $bucket['min'];
+                        $matches = $max === null ? $ratio >= $min : ($ratio >= $min && $ratio < $max);
+                        if ($matches) {
+                            $bucket['count']++;
+                            $bucket['raised'] += $raisedAmount;
+                            break;
+                        }
+                    }
+                    unset($bucket);
+                }
+
+                if ($goalProgress['total_goal'] > 0) {
+                    $goalProgress['average_attainment'] = round(($goalProgress['total_raised'] / $goalProgress['total_goal']) * 100, 1);
+                }
+
+                foreach ($buckets as $bucket) {
+                    if ($bucket['count'] === 0 && $bucket['raised'] === 0.0) {
+                        continue;
+                    }
+
+                    $goalProgress['series'][] = [
+                        'key' => $bucket['key'],
+                        'label' => $bucket['label'],
+                        'count' => $bucket['count'],
+                        'raised' => round($bucket['raised'], 2),
+                        'count_percentage' => $goalProgress['total_campaigns'] > 0
+                            ? round(($bucket['count'] / $goalProgress['total_campaigns']) * 100, 1)
+                            : 0.0,
+                        'raised_percentage' => $goalProgress['total_raised'] > 0
+                            ? round(($bucket['raised'] / $goalProgress['total_raised']) * 100, 1)
+                            : 0.0,
+                        'color' => $bucket['color'],
+                    ];
+                }
+            }
+        }
+
+        if ($this->db->tableExists('donations')) {
+            $statusConditions = [];
+            if ($this->db->columnExists('donations', 'status')) {
+                $statusConditions[] = "status IN ('completed','processing')";
+            }
+            $statusFilter = !empty($statusConditions) ? 'WHERE ' . implode(' AND ', $statusConditions) : '';
+
+            $identifierExpressions = [];
+            if ($this->db->columnExists('donations', 'supporter_id')) {
+                $identifierExpressions[] = "CASE WHEN supporter_id IS NOT NULL THEN CONCAT('user#', supporter_id) END";
+            }
+            if ($this->db->columnExists('donations', 'supporter_email')) {
+                $identifierExpressions[] = "CASE WHEN supporter_email IS NOT NULL AND supporter_email <> '' THEN CONCAT('email#', LOWER(supporter_email)) END";
+            }
+            if ($this->db->columnExists('donations', 'donor_ip')) {
+                $identifierExpressions[] = "CASE WHEN donor_ip IS NOT NULL AND donor_ip <> '' THEN CONCAT('ip#', donor_ip) END";
+            }
+
+            $anonymousIdentifier = "CONCAT('anon#', id)";
+            $donorKeyExpression = !empty($identifierExpressions)
+                ? 'COALESCE(' . implode(', ', $identifierExpressions) . ", {$anonymousIdentifier})"
+                : $anonymousIdentifier;
+
+            $segmentSql = "SELECT
+                    {$donorKeyExpression} AS donor_key,
+                    COUNT(*) AS total,
+                    SUM(amount) AS monto
+                 FROM donations
+                 {$statusFilter}
+                 GROUP BY donor_key";
+
+            $segmentRows = $this->db->fetchAll($segmentSql);
+
+            if ($segmentRows) {
+                $segmentBuckets = [
+                    'first_time' => [
+                        'label' => 'Primer aporte',
+                        'count' => 0,
+                        'amount' => 0.0,
+                        'color' => '#38BDF8',
+                    ],
+                    'returning' => [
+                        'label' => 'Recurrentes',
+                        'count' => 0,
+                        'amount' => 0.0,
+                        'color' => '#0EA5E9',
+                    ],
+                    'champions' => [
+                        'label' => 'Embajadores (3+)',
+                        'count' => 0,
+                        'amount' => 0.0,
+                        'color' => '#0369A1',
+                    ],
+                ];
+
+                foreach ($segmentRows as $row) {
+                    $total = (int)($row['total'] ?? 0);
+                    if ($total <= 0) {
+                        continue;
+                    }
+
+                    $amount = (float)($row['monto'] ?? 0);
+                    $donorSegments['total_donors']++;
+                    $donorSegments['total_amount'] += $amount;
+
+                    if ($total === 1) {
+                        $segmentBuckets['first_time']['count']++;
+                        $segmentBuckets['first_time']['amount'] += $amount;
+                    } elseif ($total === 2) {
+                        $segmentBuckets['returning']['count']++;
+                        $segmentBuckets['returning']['amount'] += $amount;
+                    } else {
+                        $segmentBuckets['champions']['count']++;
+                        $segmentBuckets['champions']['amount'] += $amount;
+                    }
+                }
+
+                foreach ($segmentBuckets as $key => $bucket) {
+                    if ($bucket['count'] === 0) {
+                        continue;
+                    }
+
+                    $donorSegments['series'][] = [
+                        'key' => $key,
+                        'label' => $bucket['label'],
+                        'count' => $bucket['count'],
+                        'amount' => round($bucket['amount'], 2),
+                        'count_percentage' => $donorSegments['total_donors'] > 0
+                            ? round(($bucket['count'] / $donorSegments['total_donors']) * 100, 1)
+                            : 0.0,
+                        'amount_percentage' => $donorSegments['total_amount'] > 0
+                            ? round(($bucket['amount'] / $donorSegments['total_amount']) * 100, 1)
+                            : 0.0,
+                        'color' => $bucket['color'],
+                    ];
+                }
+            }
+
+            $paymentRows = [];
+            if ($this->db->columnExists('donations', 'payment_method')) {
+                $paymentRows = $this->db->fetchAll(
+                    "SELECT payment_method, COUNT(*) AS total, SUM(amount) AS monto
+                     FROM donations
+                     {$statusFilter}
+                     GROUP BY payment_method
+                     ORDER BY monto DESC"
+                );
+            }
+
+            if ($paymentRows) {
+                $labels = [
+                    'credit_card' => 'Tarjeta de crédito',
+                    'debit_card' => 'Tarjeta de débito',
+                    'bank_transfer' => 'Transferencia',
+                    'paypal' => 'PayPal',
+                    'webpay' => 'Webpay',
+                    'manual' => 'Registro manual',
+                ];
+
+                $colors = ['#0284C7', '#0EA5E9', '#38BDF8', '#7DD3FC', '#BAE6FD', '#1D4ED8', '#60A5FA'];
+                $colorIndex = 0;
+
+                foreach ($paymentRows as $row) {
+                    $count = (int)($row['total'] ?? 0);
+                    $amount = (float)($row['monto'] ?? 0);
+                    if ($count === 0 && $amount === 0.0) {
+                        continue;
+                    }
+
+                    $paymentMix['total_donations'] += $count;
+                    $paymentMix['total_amount'] += $amount;
+
+                    $method = (string)($row['payment_method'] ?? 'Otro');
+                    $label = $labels[$method] ?? ucfirst(str_replace('_', ' ', $method));
+                    $color = $colors[$colorIndex % count($colors)];
+                    $colorIndex++;
+
+                    $paymentMix['series'][] = [
+                        'key' => $method,
+                        'label' => $label,
+                        'count' => $count,
+                        'amount' => round($amount, 2),
+                        'color' => $color,
+                    ];
+                }
+
+                foreach ($paymentMix['series'] as &$entry) {
+                    $entry['count_percentage'] = $paymentMix['total_donations'] > 0
+                        ? round(($entry['count'] / $paymentMix['total_donations']) * 100, 1)
+                        : 0.0;
+                    $entry['amount_percentage'] = $paymentMix['total_amount'] > 0
+                        ? round(($entry['amount'] / $paymentMix['total_amount']) * 100, 1)
+                        : 0.0;
+                }
+                unset($entry);
+            }
+
+            if ($this->db->columnExists('donations', 'processed_at') && $this->db->columnExists('donations', 'created_at')) {
+                $processingConditions = $statusConditions;
+                $processingConditions[] = 'processed_at IS NOT NULL';
+                $processingConditions[] = 'created_at IS NOT NULL';
+
+                $processingSql = 'SELECT TIMESTAMPDIFF(MINUTE, created_at, processed_at) AS diff_minutes FROM donations';
+                if (!empty($processingConditions)) {
+                    $processingSql .= ' WHERE ' . implode(' AND ', $processingConditions);
+                }
+
+                $processingRows = $this->db->fetchAll($processingSql);
+
+                $diffs = [];
+                foreach ($processingRows as $row) {
+                    $minutes = isset($row['diff_minutes']) ? (int)$row['diff_minutes'] : null;
+                    if ($minutes === null || $minutes < 0) {
+                        continue;
+                    }
+                    $diffs[] = $minutes;
+                }
+
+                if (!empty($diffs)) {
+                    sort($diffs);
+                    $countDiffs = count($diffs);
+                    $sumDiffs = array_sum($diffs);
+                    $processingMetrics['avg_hours'] = round(($sumDiffs / $countDiffs) / 60, 1);
+
+                    $medianIndex = (int)floor(($countDiffs - 1) / 2);
+                    if ($countDiffs % 2 === 0) {
+                        $medianMinutes = ($diffs[$medianIndex] + $diffs[$medianIndex + 1]) / 2;
+                    } else {
+                        $medianMinutes = $diffs[$medianIndex];
+                    }
+                    $processingMetrics['median_hours'] = round($medianMinutes / 60, 1);
+
+                    $p90Index = (int)floor(0.9 * ($countDiffs - 1));
+                    $processingMetrics['p90_hours'] = round($diffs[$p90Index] / 60, 1);
+
+                    $within24 = 0;
+                    foreach ($diffs as $minutes) {
+                        if ($minutes <= 1440) {
+                            $within24++;
+                        }
+                    }
+                    $processingMetrics['within_24h_percentage'] = $countDiffs > 0
+                        ? round(($within24 / $countDiffs) * 100, 1)
+                        : null;
+                }
+
+                $recentProcessingConditions = $statusConditions;
+                $recentProcessingConditions[] = 'processed_at IS NOT NULL';
+                $recentProcessingConditions[] = 'created_at IS NOT NULL';
+                $recentProcessingConditions[] = 'created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+
+                $recentSql = 'SELECT TIMESTAMPDIFF(MINUTE, created_at, processed_at) AS diff_minutes FROM donations';
+                if (!empty($recentProcessingConditions)) {
+                    $recentSql .= ' WHERE ' . implode(' AND ', $recentProcessingConditions);
+                }
+
+                $recentProcessingRows = $this->db->fetchAll($recentSql);
+
+                $recentDiffs = [];
+                foreach ($recentProcessingRows as $row) {
+                    $minutes = isset($row['diff_minutes']) ? (int)$row['diff_minutes'] : null;
+                    if ($minutes === null || $minutes < 0) {
+                        continue;
+                    }
+                    $recentDiffs[] = $minutes;
+                }
+
+                if (!empty($recentDiffs)) {
+                    $processingMetrics['avg_hours_30d'] = round((array_sum($recentDiffs) / count($recentDiffs)) / 60, 1);
+                }
+            }
+        }
+
+        if (empty($insights)) {
+            if (!empty($goalProgress['series'])) {
+                $surpassed = 0;
+                foreach ($goalProgress['series'] as $entry) {
+                    if (($entry['key'] ?? '') === 'surpassed') {
+                        $surpassed = $entry['count'];
+                        break;
+                    }
+                }
+
+                $insights[] = [
+                    'title' => 'Cumplimiento de metas',
+                    'description' => $goalProgress['average_attainment'] !== null
+                        ? sprintf(
+                            'Las campañas activas alcanzan en promedio el %.1f%% de su meta. %s ya superaron el 100%%.',
+                            $goalProgress['average_attainment'],
+                            number_format($surpassed, 0, ',', '.')
+                        )
+                        : 'Aún no hay datos suficientes para calcular el avance de las metas.',
+                ];
+            }
+
+            if (!empty($donorSegments['series'])) {
+                $champions = null;
+                $firstTimeShare = null;
+                foreach ($donorSegments['series'] as $entry) {
+                    if (($entry['key'] ?? '') === 'champions') {
+                        $champions = $entry;
+                    }
+                    if (($entry['key'] ?? '') === 'first_time') {
+                        $firstTimeShare = $entry['count_percentage'] ?? null;
+                    }
+                }
+
+                if ($champions) {
+                    $insights[] = [
+                        'title' => 'Lealtad de donantes',
+                        'description' => sprintf(
+                            '%s donantes han contribuido tres o más veces y representan el %.1f%% del monto recaudado.',
+                            number_format($champions['count'] ?? 0, 0, ',', '.'),
+                            $champions['amount_percentage'] ?? 0.0
+                        ),
+                    ];
+                }
+
+                if ($firstTimeShare !== null) {
+                    $insights[] = [
+                        'title' => 'Nuevos donantes',
+                        'description' => sprintf(
+                            'El %.1f%% de los donantes son primerizos; refuerza la estrategia de onboarding para aumentar retención.',
+                            $firstTimeShare
+                        ),
+                    ];
+                }
+            }
+
+            if ($processingMetrics['within_24h_percentage'] !== null) {
+                $insights[] = [
+                    'title' => 'Tiempo de procesamiento',
+                    'description' => sprintf(
+                        'El %.1f%% de los aportes se procesa en menos de 24 horas; el tiempo promedio reciente es de %s horas.',
+                        $processingMetrics['within_24h_percentage'],
+                        $processingMetrics['avg_hours_30d'] !== null
+                            ? number_format($processingMetrics['avg_hours_30d'], 1, ',', '.')
+                            : ($processingMetrics['avg_hours'] !== null
+                                ? number_format($processingMetrics['avg_hours'], 1, ',', '.')
+                                : 'N/D')
+                    ),
+                ];
+            }
+
+            if (empty($insights) && $montoTotal > 0) {
+                $insights[] = [
+                    'title' => 'Recaudación total',
+                    'description' => sprintf(
+                        'La plataforma ha recaudado $%s a la fecha; revisa la distribución por categoría para priorizar campañas.',
+                        number_format($montoTotal, 0, ',', '.')
+                    ),
+                ];
+            }
+        }
+
         return [
             'supported' => true,
             'campaign' => $campaignStats,
@@ -2386,6 +2880,11 @@ class AdminController {
             'status_breakdown' => $statusBreakdown,
             'donation_series' => $donationSeries,
             'top_campaigns' => $topCampaigns,
+            'goal_progress' => $goalProgress,
+            'donor_segments' => $donorSegments,
+            'payment_mix' => $paymentMix,
+            'processing_metrics' => $processingMetrics,
+            'insights' => $insights,
         ];
     }
 

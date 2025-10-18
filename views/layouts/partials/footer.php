@@ -5,6 +5,7 @@ $footer_sections = [
         ['name' => 'Inicio', 'href' => Router::url('/')],
         ['name' => 'Campañas', 'href' => Router::url('campanas')],
         ['name' => 'Noticias', 'href' => Router::url('noticias')],
+        ['name' => 'Visión y ODS', 'href' => Router::url('vision')],
         ['name' => 'Crear Campaña', 'href' => Router::url('campana/crear')],
         ['name' => 'Centro de Ayuda y FAQ', 'href' => Router::url('ayuda')]
     ],

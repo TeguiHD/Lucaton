@@ -122,7 +122,19 @@ $last_updated = '29 de septiembre de 2025';
                 </section>
 
                 <section>
-                    <h2 class="text-2xl font-semibold text-gray-900 mb-4">7. Cómo solicitar ayuda o hacer observaciones</h2>
+                    <h2 class="text-2xl font-semibold text-gray-900 mb-4">7. Protección de datos personales y derechos ARCO</h2>
+                    <p>La comunidad de Lucatón debe resguardar la privacidad de todas las personas involucradas. Esto implica:</p>
+                    <ul class="mt-4 space-y-3 list-disc pl-6">
+                        <li>Recopilar o compartir datos personales solo cuando cuentes con consentimiento informado y sea estrictamente necesario para la campaña.</li>
+                        <li>Eliminar documentos, capturas o listados que contengan información sensible una vez cumplida la finalidad para la que fueron enviados.</li>
+                        <li>Respetar los derechos de acceso, rectificación, cancelación y oposición (ARCO) de donantes, beneficiarios y colaboradores. Si recibes una solicitud, notifícanos inmediatamente.</li>
+                    </ul>
+                    <p class="mt-3 text-gray-700">Puedes ejercer tus propios derechos ARCO escribiendo a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a> con el asunto “Solicitud Derechos ARCO”. Responderemos en los plazos legales y mantendremos trazabilidad del requerimiento.</p>
+                    <p class="mt-3 text-sm text-gray-600">El detalle del procedimiento está disponible en la Política de Privacidad y en el Centro de Ayuda. Cualquier represalia contra quienes ejerzan sus derechos está estrictamente prohibida.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-2xl font-semibold text-gray-900 mb-4">8. Cómo solicitar ayuda o hacer observaciones</h2>
                     <div class="space-y-3">
                         <p>Queremos mejorar este código junto a la comunidad. Si tienes comentarios o necesitas orientación:</p>
                         <ul class="list-disc pl-6 space-y-2">

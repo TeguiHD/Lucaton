@@ -67,7 +67,7 @@ $last_updated = '29 de septiembre de 2025';
                         <a href="#sharing" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">4. Compartir Información</a>
                         <a href="#security" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">5. Seguridad de Datos</a>
                         <a href="#retention" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">6. Retención de Datos</a>
-                        <a href="#rights" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">7. Sus Derechos</a>
+                        <a href="#rights" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">7. Derechos ARCO y otras facultades</a>
                         <a href="#cookies" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">8. Cookies y Tecnologías</a>
                         <a href="#minors" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">9. Menores de Edad</a>
                         <a href="#international" class="block text-sm text-gray-600 hover:text-copihue-600 transition-colors">10. Transferencias Internacionales</a>
@@ -243,20 +243,33 @@ $last_updated = '29 de septiembre de 2025';
 
                         <!-- 7. Sus Derechos -->
                         <section id="rights" class="mb-8">
-                            <h2 class="text-2xl font-semibold text-gray-900 mb-4">7. Sus Derechos</h2>
+                            <h2 class="text-2xl font-semibold text-gray-900 mb-4">7. Sus Derechos y la Solicitud ARCO</h2>
                             <p class="text-gray-700 mb-4">
-                                Usted tiene los siguientes derechos respecto a su información personal:
+                                En cumplimiento de la Ley N.º 19.628 sobre Protección de la Vida Privada y los lineamientos de la Agenda Digital Chile, usted puede ejercer los siguientes derechos sobre sus datos personales almacenados en Lucatón:
                             </p>
                             <ul class="list-disc pl-6 space-y-2 text-gray-700 mb-4">
-                                <li><strong>Acceso:</strong> Solicitar una copia de su información personal</li>
-                                <li><strong>Rectificación:</strong> Corregir información inexacta o incompleta</li>
-                                <li><strong>Eliminación:</strong> Solicitar la eliminación de su información (sujeto a limitaciones legales)</li>
-                                <li><strong>Portabilidad:</strong> Recibir sus datos en formato estructurado</li>
-                                <li><strong>Oposición:</strong> Oponerse al procesamiento para ciertos propósitos</li>
-                                <li><strong>Limitación:</strong> Solicitar la restricción del procesamiento</li>
+                                <li><strong>Acceso:</strong> Conocer si tratamos sus datos, el origen, destinatarios y finalidad del tratamiento.</li>
+                                <li><strong>Rectificación:</strong> Solicitar la actualización o corrección de información incompleta, inexacta o desactualizada.</li>
+                                <li><strong>Cancelación (Supresión):</strong> Pedir la eliminación o bloqueo cuando los datos carezcan de fundamento legal o ya no sean necesarios para la finalidad declarada.</li>
+                                <li><strong>Oposición:</strong> Resistirse al tratamiento en casos de finalidades de marketing, perfilamiento o cuando existan motivos fundados relacionados con su situación particular.</li>
+                                <li><strong>Portabilidad y limitación:</strong> Recibir sus datos en formato interoperable y pedir que se suspenda temporalmente el tratamiento mientras se revisa una reclamación.</li>
                             </ul>
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-3 mb-4">
+                                <p class="text-sm text-gray-700 font-semibold uppercase tracking-wide">Cómo presentar una solicitud ARCO</p>
+                                <ol class="list-decimal pl-5 space-y-2 text-gray-700 text-sm">
+                                    <li>Envíe un correo a <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a> con el asunto “Solicitud Derechos ARCO”.</li>
+                                    <li>Incluya su nombre completo, RUT o documento de identidad, datos de contacto y una descripción clara del derecho que desea ejercer.</li>
+                                    <li>Adjunte documentación que respalde la solicitud (por ejemplo, copia de identificación o antecedentes que acrediten la inexactitud de los datos).</li>
+                                </ol>
+                                <p class="text-sm text-gray-600">
+                                    Acusaremos recibo dentro de 2 días hábiles y gestionaremos la respuesta definitiva en un máximo de 10 días hábiles. Si necesitamos información adicional para verificar su identidad, se lo solicitaremos dentro del mismo plazo.
+                                </p>
+                            </div>
+                            <p class="text-gray-700 mb-3">
+                                Todas las solicitudes quedan registradas en nuestro libro de control de privacidad y recibirá seguimiento vía correo electrónico. Si la respuesta no satisface sus expectativas, puede escalarla ante el Consejo para la Transparencia o la Dirección de Protección de Datos una vez entre en vigor la nueva normativa chilena.
+                            </p>
                             <p class="text-gray-700">
-                                Para ejercer estos derechos, contáctenos a través de <a class="text-copihue-600 font-medium" href="mailto:<?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?>"><?= htmlspecialchars(PROJECT_OWNER_EMAIL) ?></a>. Responderemos a su solicitud dentro de 30 días.
+                                También estamos habilitando un panel de autoservicio en el perfil de usuario para que puedas iniciar y monitorear solicitudes ARCO sin salir de la plataforma. Informaremos su disponibilidad a través del Centro de Ayuda.
                             </p>
                         </section>
 
